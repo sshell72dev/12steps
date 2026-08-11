@@ -25,4 +25,7 @@ fix_resentment.py
 patch_ui_ru.py
 patch_ui_ru2.py
 restore_ru.py
-fix_encoding_report.txt
+tools/sergey_obidy.csv
+tools/dup_report.txt
+tools/xlsx_probe.txt
+tools/xlsx_sample.json
