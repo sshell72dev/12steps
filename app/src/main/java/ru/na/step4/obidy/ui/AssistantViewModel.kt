@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.Ru
@@ -103,13 +102,12 @@ class AssistantViewModel(
     private suspend fun loadQuestionFocus(situationId: Long, key: String) {
         val situation = repository.getSituation(situationId) ?: return
         val resentment = repository.getById(situation.resentmentId)
-        val types = repository.observeTypesForSituation(situationId).first()
         val title = QuestionFocus.titleOf(key)
         val hint = QuestionFocus.hintOf(key)
         val answers = QuestionFocus.buildSituationAnswersText(
             target = resentment?.target.orEmpty(),
             situation = situation,
-            typeNames = types.map { it.name }
+            typeNames = emptyList()
         )
         val current = QuestionFocus.currentAnswer(situation, key)
         questionAssist.value = QuestionAssistState(
@@ -198,8 +196,6 @@ class AssistantViewModel(
                     categoryId = repository.defaultCategoryId()
                 )
             )
-            val typeName = s.draftSituationType.ifBlank { "\u041e\u0431\u0449\u0430\u044f" }
-            val typeId = repository.addType(resentmentId, typeName)
             var situation = Situation(
                 resentmentId = resentmentId,
                 whatHappened = s.draftWhat,
@@ -207,8 +203,7 @@ class AssistantViewModel(
                 iDid = s.draftDid
             )
             s.draftAnswers.forEach { (number, value) -> situation = situation.withAnswer(number, value) }
-            val situationId = repository.saveSituation(situation)
-            if (typeId > 0) repository.linkSituationToType(situationId, typeId)
+            repository.saveSituation(situation)
             onCreated(resentmentId)
         }
     }

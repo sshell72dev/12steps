@@ -4,8 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,7 +51,7 @@ import ru.na.step4.obidy.ui.theme.Danger
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SituationEditScreen(
     viewModel: SituationEditViewModel,
@@ -63,7 +60,6 @@ fun SituationEditScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showDelete by remember { mutableStateOf(false) }
-    var showTypePick by remember { mutableStateOf(false) }
 
     fun openAssist(focusKey: String) {
         viewModel.saveThen { situationId ->
@@ -128,20 +124,6 @@ fun SituationEditScreen(
                     HintIcon(InventoryStructure.SITUATION_SECTION_HINT)
                 }
 
-                Text(Ru.situationTypesLabel, style = MaterialTheme.typography.titleSmall, color = Forest)
-                if (state.linkedTypes.isEmpty()) {
-                    Text(Ru.untaggedSituation, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        state.linkedTypes.forEach { type ->
-                            AssistChip(onClick = { showTypePick = true }, label = { Text(type.name) })
-                        }
-                    }
-                }
-                TextButton(onClick = { showTypePick = true }) {
-                    Text(Ru.suggestTypes, color = Forest)
-                }
-
                 FieldBlock(
                     "",
                     Ru.situationTitle,
@@ -199,19 +181,6 @@ fun SituationEditScreen(
                 }
             }
         }
-    }
-
-    if (showTypePick) {
-        TypePickDialog(
-            situationText = state.suggestText,
-            existingTypes = state.allTypes.ifEmpty { state.linkedTypes },
-            initiallySelectedIds = state.linkedTypes.map { it.id }.toSet(),
-            onDismiss = { showTypePick = false },
-            onConfirm = { existing, proposed ->
-                viewModel.applyTypes(existing, proposed)
-                showTypePick = false
-            }
-        )
     }
 
     if (showDelete) {

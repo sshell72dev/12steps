@@ -4,16 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.ResentmentRepository
 import ru.na.step4.obidy.data.Situation
-import ru.na.step4.obidy.data.SituationType
 
 data class SituationEditUiState(
     val id: Long = 0,
@@ -23,15 +19,10 @@ data class SituationEditUiState(
     val iFelt: String = "",
     val iDid: String = "",
     val answers: Map<Int, String> = emptyMap(),
-    val linkedTypes: List<SituationType> = emptyList(),
-    val allTypes: List<SituationType> = emptyList(),
     val loaded: Boolean = false
 ) {
     val progress: Int
         get() = toSituation().progressSteps
-
-    val suggestText: String
-        get() = listOf(title, whatHappened, iFelt).filter { it.isNotBlank() }.joinToString(" ")
 
     fun toSituation() = Situation(
         id = id,
@@ -50,23 +41,12 @@ class SituationEditViewModel(
     private val situationId: Long
 ) : ViewModel() {
     private val form = MutableStateFlow(SituationEditUiState(id = situationId))
-
-    val uiState: StateFlow<SituationEditUiState> = combine(
-        form,
-        repository.observeTypesForSituation(situationId)
-    ) { state, linked ->
-        state.copy(linkedTypes = linked)
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        SituationEditUiState(id = situationId)
-    )
+    val uiState: StateFlow<SituationEditUiState> = form.asStateFlow()
 
     init {
         viewModelScope.launch {
             repository.getSituation(situationId)?.let { item ->
-                val types = repository.observeTypes(item.resentmentId).first()
-                form.value = item.toUiState(types)
+                form.value = item.toUiState()
             }
         }
     }
@@ -77,17 +57,6 @@ class SituationEditViewModel(
     fun updateIDid(value: String) = form.update { it.copy(iDid = value) }
     fun updateAnswer(number: Int, value: String) =
         form.update { it.copy(answers = it.answers + (number to value)) }
-
-    fun applyTypes(selectedExistingIds: Set<Long>, selectedProposedNames: Set<String>) {
-        viewModelScope.launch {
-            val rid = form.value.resentmentId
-            repository.applyTypeSelection(
-                rid, situationId, selectedExistingIds, selectedProposedNames
-            )
-            val types = repository.observeTypes(rid).first()
-            form.update { it.copy(allTypes = types) }
-        }
-    }
 
     fun saveThen(onSaved: (Long) -> Unit) {
         viewModelScope.launch {
@@ -107,7 +76,7 @@ class SituationEditViewModel(
         }
     }
 
-    private fun Situation.toUiState(allTypes: List<SituationType>) = SituationEditUiState(
+    private fun Situation.toUiState() = SituationEditUiState(
         id = id,
         resentmentId = resentmentId,
         title = title,
@@ -115,7 +84,6 @@ class SituationEditViewModel(
         iFelt = iFelt,
         iDid = iDid,
         answers = (1..13).associateWith(::answerFor),
-        allTypes = allTypes,
         loaded = true
     )
 
