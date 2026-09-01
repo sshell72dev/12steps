@@ -6,6 +6,16 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import ru.na.step4.obidy.data.analysis.AnalysisDao
+import ru.na.step4.obidy.data.analysis.AnalysisRecord
+import ru.na.step4.obidy.data.psych.PsychAiCache
+import ru.na.step4.obidy.data.psych.PsychAiUsage
+import ru.na.step4.obidy.data.psych.PsychAnswer
+import ru.na.step4.obidy.data.psych.PsychDao
+import ru.na.step4.obidy.data.psych.PsychSession
+import ru.na.step4.obidy.data.psych.PsychSituation
+import ru.na.step4.obidy.data.psych.PsychSituationTopic
+import ru.na.step4.obidy.data.psych.PsychTopic
 
 @Database(
     entities = [
@@ -13,15 +23,25 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Category::class,
         SituationType::class,
         Situation::class,
-        SituationTypeLink::class
+        SituationTypeLink::class,
+        AnalysisRecord::class,
+        PsychSituation::class,
+        PsychSession::class,
+        PsychAnswer::class,
+        PsychTopic::class,
+        PsychSituationTopic::class,
+        PsychAiCache::class,
+        PsychAiUsage::class
     ],
-    version = 5,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun resentmentDao(): ResentmentDao
     abstract fun categoryDao(): CategoryDao
     abstract fun situationDao(): SituationDao
+    abstract fun analysisDao(): AnalysisDao
+    abstract fun psychDao(): PsychDao
 
     companion object {
         @Volatile
@@ -244,6 +264,145 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS self_analysis_records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        catalogId TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        answersJson TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS psych_situations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        text TEXT NOT NULL,
+                        summary TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        viaVoice INTEGER NOT NULL,
+                        noHistory INTEGER NOT NULL,
+                        topicId INTEGER
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS psych_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        situationId INTEGER NOT NULL,
+                        sessionUid TEXT NOT NULL,
+                        status INTEGER NOT NULL,
+                        sequentialWork INTEGER NOT NULL,
+                        questionsJson TEXT NOT NULL,
+                        currentIndex INTEGER NOT NULL,
+                        postponed INTEGER NOT NULL,
+                        analyzeText TEXT NOT NULL,
+                        analyzeSpeakable TEXT NOT NULL,
+                        recommendText TEXT NOT NULL,
+                        recommendSpeakable TEXT NOT NULL,
+                        assistantText TEXT NOT NULL,
+                        assistantSpeakable TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        completedAt INTEGER
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_psych_sessions_sessionUid ON psych_sessions(sessionUid)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_psych_sessions_situationId ON psych_sessions(situationId)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS psych_answers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        sessionUid TEXT NOT NULL,
+                        questionIndex INTEGER NOT NULL,
+                        questionText TEXT NOT NULL,
+                        answerText TEXT NOT NULL,
+                        viaVoice INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_psych_answers_sessionUid_questionIndex ON psych_answers(sessionUid, questionIndex)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS psych_topics (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        summaryText TEXT NOT NULL,
+                        useCount INTEGER NOT NULL,
+                        lastUsedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_psych_topics_name ON psych_topics(name)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS psych_ai_cache (
+                        cacheKey TEXT NOT NULL PRIMARY KEY,
+                        requestType TEXT NOT NULL,
+                        responseText TEXT NOT NULL,
+                        promptText TEXT NOT NULL,
+                        lockUntil INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS psych_ai_usage (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        requestType TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        viaVoice INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS psych_situation_topics (
+                        situationId INTEGER NOT NULL,
+                        topicId INTEGER NOT NULL,
+                        PRIMARY KEY(situationId, topicId)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_psych_situation_topics_topicId ON psych_situation_topics(topicId)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_psych_situation_topics_situationId ON psych_situation_topics(situationId)"
+                )
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO psych_situation_topics (situationId, topicId)
+                    SELECT id, topicId FROM psych_situations WHERE topicId IS NOT NULL
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -251,7 +410,15 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "step4_obidy.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8
+                    )
                     .build()
                     .also { instance = it }
             }

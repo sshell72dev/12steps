@@ -29,8 +29,7 @@ data class EditUiState(
     val notes: String = "",
     val isCompleted: Boolean = false,
     val loaded: Boolean = false,
-    val saved: Boolean = false,
-    val quickSituation: String = ""
+    val saved: Boolean = false
 ) {
     val progress: Int
         get() {
@@ -104,7 +103,6 @@ class EditViewModel(
 
     fun updateTarget(value: String) = form.update { it.copy(target = value, saved = false) }
     fun updateNotes(value: String) = form.update { it.copy(notes = value, saved = false) }
-    fun updateQuickSituation(value: String) = form.update { it.copy(quickSituation = value) }
 
     fun setCategory(categoryId: Long?) {
         form.update { it.copy(categoryId = categoryId, saved = false) }
@@ -118,17 +116,6 @@ class EditViewModel(
         viewModelScope.launch {
             val rid = ensureResentmentId()
             val id = repository.addSituation(rid)
-            onCreated(id)
-        }
-    }
-
-    fun addSituationFromQuick(onCreated: (Long) -> Unit) {
-        viewModelScope.launch {
-            val text = form.value.quickSituation.trim()
-            if (text.isEmpty()) return@launch
-            val rid = ensureResentmentId()
-            val id = repository.addSituation(rid, whatHappened = text)
-            form.update { it.copy(quickSituation = "") }
             onCreated(id)
         }
     }

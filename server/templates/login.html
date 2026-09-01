@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Вход · 12 шагов</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --danger: #8b3a3a;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: var(--sand);
+        color: var(--ink);
+      }
+      .wrap { max-width: 440px; margin: 0 auto; padding: 72px 18px; }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 28px;
+        box-shadow: 0 12px 40px rgba(27, 46, 36, 0.06);
+      }
+      h1 { margin: 0 0 8px; font-size: 24px; color: var(--forest); }
+      .muted { color: var(--muted); font-size: 14px; line-height: 1.45; }
+      label { display: block; margin-top: 16px; font-size: 13px; color: var(--forest); }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 6px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: #fbfaf7;
+        color: var(--ink);
+        font-size: 15px;
+      }
+      button {
+        margin-top: 18px;
+        width: 100%;
+        padding: 12px 14px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--forest);
+        color: var(--sand);
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .error {
+        margin-top: 14px;
+        background: rgba(139, 58, 58, 0.08);
+        border: 1px solid rgba(139, 58, 58, 0.28);
+        color: var(--danger);
+        padding: 10px 12px;
+        border-radius: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Вход в админку</h1>
+        <div class="muted">{{ domain }} · панель настроек приложения «12 шагов»</div>
+        {% if error %}
+          <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="{{ url_for('login') }}">
+          <label for="username">Логин</label>
+          <input id="username" name="username" autocomplete="username" required />
+          <label for="password">Пароль</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+          <button type="submit">Войти</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

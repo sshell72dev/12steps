@@ -1,5 +1,7 @@
 package ru.na.step4.obidy.data
 
+import ru.na.step4.obidy.data.i18n.I18n
+
 data class InventoryQuestion(
     val number: Int,
     val title: String,
@@ -7,52 +9,154 @@ data class InventoryQuestion(
 )
 
 object InventoryStructure {
-    const val POINT_A = "\u041f\u0443\u043d\u043a\u0442 \u0410"
-    const val POINT_B = "\u041f\u0443\u043d\u043a\u0442 \u0411"
-    const val POINT_V = "\u041f\u0443\u043d\u043a\u0442 \u0412"
-    const val TARGET_TITLE = "\u041a\u043e\u043c\u0443 \u0438\u043b\u0438 \u0447\u0435\u043c\u0443 \u044f \u043e\u0431\u0438\u0436\u0435\u043d?"
-    const val TARGET_HINT = "\u0427\u0435\u043b\u043e\u0432\u0435\u043a, \u0443\u0447\u0440\u0435\u0436\u0434\u0435\u043d\u0438\u0435 \u0438\u043b\u0438 \u043a\u043e\u043d\u0446\u0435\u043f\u0446\u0438\u044f"
-    const val TYPE_SECTION = "\u0422\u0438\u043f\u044b \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0439"
-    const val TYPE_SECTION_HINT = "\u041e\u0434\u043d\u0430 \u043e\u0431\u0438\u0434\u0430 \u043c\u043e\u0436\u0435\u0442 \u0432\u043a\u043b\u044e\u0447\u0430\u0442\u044c \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0442\u0438\u043f\u043e\u0432 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0439."
-    const val SITUATION_SECTION = "\u0421\u0438\u0442\u0443\u0430\u0446\u0438\u0438"
-    const val SITUATION_SECTION_HINT = "\u0414\u043b\u044f \u043a\u0430\u0436\u0434\u043e\u0439 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438 \u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435, \u0447\u0443\u0432\u0441\u0442\u0432\u0430, \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f \u0438 13 \u0432\u043e\u043f\u0440\u043e\u0441\u043e\u0432."
-    const val TYPE_CUSTOM = "\u0421\u0432\u043e\u0439 \u0442\u0438\u043f\u2026"
-    val suggestedSituationTypes = listOf(
-        "\u041a\u0440\u0438\u0442\u0438\u043a\u0430 / \u0443\u043d\u0438\u0436\u0435\u043d\u0438\u0435",
-        "\u041f\u0440\u0435\u0434\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e",
-        "\u0418\u0433\u043d\u043e\u0440",
-        "\u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c",
-        "\u041d\u0435\u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u044b\u0435 \u043e\u0431\u0435\u0449\u0430\u043d\u0438\u044f",
-        "\u041d\u0430\u0441\u0438\u043b\u0438\u0435 / \u0443\u0433\u0440\u043e\u0437\u0430",
-        "\u0420\u0430\u0437\u043e\u0447\u0430\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u0432 \u043e\u0436\u0438\u0434\u0430\u043d\u0438\u044f\u0445"
-    )
-    const val WHAT_TITLE = "\u0427\u0442\u043e \u043f\u0440\u043e\u0438\u0437\u043e\u0448\u043b\u043e?"
-    const val WHAT_HINT = "\u041a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u0430\u044f \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u044f \u043e\u0431\u0438\u0434\u044b \u0441\u0432\u043e\u0438\u043c\u0438 \u0441\u043b\u043e\u0432\u0430\u043c\u0438"
-    const val FELT_TITLE = "\u042f \u0447\u0443\u0432\u0441\u0442\u0432\u043e\u0432\u0430\u043b"
-    const val FELT_HINT = "\u041a\u0430\u043a\u0438\u0435 \u0447\u0443\u0432\u0441\u0442\u0432\u0430 \u0431\u044b\u043b\u0438 \u0442\u043e\u0433\u0434\u0430 \u0438 \u043a\u0430\u043a\u0438\u0435 \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u044e\u0442\u0441\u044f"
-    const val DID_TITLE = "\u042f \u0434\u0435\u043b\u0430\u043b"
-    const val DID_HINT = "\u041a\u0430\u043a \u044f \u0440\u0435\u0430\u0433\u0438\u0440\u043e\u0432\u0430\u043b: \u0447\u0442\u043e \u0433\u043e\u0432\u043e\u0440\u0438\u043b, \u0434\u0435\u043b\u0430\u043b \u0438\u043b\u0438 \u043d\u0435 \u0434\u0435\u043b\u0430\u043b"
-    const val Q_SECTION = "13 \u0432\u043e\u043f\u0440\u043e\u0441\u043e\u0432 \u043a \u043e\u0431\u0438\u0434\u0435"
-    const val Q_SECTION_HINT = "\u041f\u0443\u043d\u043a\u0442\u044b \u0411 (1\u20134) \u0438 \u0412 (5\u201313). \u041c\u043e\u0436\u043d\u043e \u0437\u0430\u043f\u043e\u043b\u043d\u044f\u0442\u044c \u043f\u043e \u0447\u0430\u0441\u0442\u044f\u043c."
-    val questions = listOf(
-        InventoryQuestion(1, "\u0411\u044b\u043b\u0438 \u043b\u0438 \u043c\u043e\u0438 \u0447\u0443\u0432\u0441\u0442\u0432\u0430 \u0437\u0430\u0434\u0435\u0442\u044b \u0438\u0437-\u0437\u0430 \u0443\u0434\u0430\u0440\u0430 \u043f\u043e \u043c\u043e\u0435\u0439 \u0433\u043e\u0440\u0434\u043e\u0441\u0442\u0438 (\u0447\u0443\u0432\u0441\u0442\u0432\u0443 \u0441\u043e\u0431\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0433\u043e \u0434\u043e\u0441\u0442\u043e\u0438\u043d\u0441\u0442\u0432\u0430)?", "\u0413\u043e\u0440\u0434\u043e\u0441\u0442\u044c / \u0434\u043e\u0441\u0442\u043e\u0438\u043d\u0441\u0442\u0432\u043e: \u0443\u043d\u0438\u0436\u0435\u043d\u0438\u0435, \u043e\u0431\u0435\u0441\u0446\u0435\u043d\u0438\u0432\u0430\u043d\u0438\u0435, \u0438\u0433\u043d\u043e\u0440, \u043f\u0440\u0435\u0434\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e."),
-        InventoryQuestion(2, "\u0423\u0433\u0440\u043e\u0436\u0430\u043b\u043e \u043b\u0438 \u0447\u0442\u043e-\u043b\u0438\u0431\u043e \u043c\u043e\u0435\u0439 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 \u0438\u043b\u0438 \u043c\u043e\u0435\u043c\u0443 \u0431\u043b\u0430\u0433\u043e\u043f\u043e\u043b\u0443\u0447\u0438\u044e?", "\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u044c \u0438 \u0431\u043b\u0430\u0433\u043e\u043f\u043e\u043b\u0443\u0447\u0438\u0435: \u0441\u0442\u0440\u0430\u0445, \u0443\u0433\u0440\u043e\u0437\u0430, \u043f\u043e\u0442\u0435\u0440\u044f \u043e\u043f\u043e\u0440\u044b."),
-        InventoryQuestion(3, "\u0411\u044b\u043b\u0438 \u043b\u0438 \u0437\u0430\u0434\u0435\u0442\u044b \u0438\u043b\u0438 \u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u044b \u043f\u043e\u0434 \u0443\u0433\u0440\u043e\u0437\u0443 \u043b\u0438\u0447\u043d\u044b\u0435 \u043e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u044f?", "\u041b\u0438\u0447\u043d\u044b\u0435 \u043e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u044f: \u0431\u043b\u0438\u0437\u043e\u0441\u0442\u044c, \u0434\u043e\u0432\u0435\u0440\u0438\u0435, \u0441\u0432\u044f\u0437\u044c \u0441 \u043b\u044e\u0434\u044c\u043c\u0438."),
-        InventoryQuestion(4, "\u041f\u0440\u0438\u0432\u0435\u043b\u0438 \u043b\u0438 \u043f\u043e\u043f\u044b\u0442\u043a\u0438 \u0440\u0435\u0430\u043b\u0438\u0437\u043e\u0432\u0430\u0442\u044c \u0441\u0432\u043e\u0438 \u0436\u0435\u043b\u0430\u043d\u0438\u044f \u043a \u043a\u043e\u043d\u0444\u043b\u0438\u043a\u0442\u0443 \u0441 \u043a\u0435\u043c-\u043b\u0438\u0431\u043e \u0438\u043b\u0438 \u0441 \u0441\u0430\u043c\u0438\u043c \u0441\u043e\u0431\u043e\u0439?", "\u0416\u0435\u043b\u0430\u043d\u0438\u044f / \u0430\u043c\u0431\u0438\u0446\u0438\u0438 \u0438 \u043a\u043e\u043d\u0444\u043b\u0438\u043a\u0442 \u0432\u043e\u043a\u0440\u0443\u0433 \u043d\u0438\u0445."),
-        InventoryQuestion(5, "\u0413\u0434\u0435 \u0432 \u043e\u0441\u043d\u043e\u0432\u0435 \u043c\u043e\u0438\u0445 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0439 \u0431\u044b\u043b\u0438 \u0436\u0430\u0434\u043d\u043e\u0441\u0442\u044c \u0438\u043b\u0438 \u0432\u043e\u0436\u0434\u0435\u043b\u0435\u043d\u0438\u0435?", "\u0416\u0430\u0434\u043d\u043e\u0441\u0442\u044c, \u0432\u043e\u0436\u0434\u0435\u043b\u0435\u043d\u0438\u0435, \u0445\u043e\u0447\u0443 \u043b\u044e\u0431\u043e\u0439 \u0446\u0435\u043d\u043e\u0439."),
-        InventoryQuestion(6, "\u0414\u043e \u043a\u0430\u043a\u0438\u0445 \u043a\u0440\u0430\u0439\u043d\u043e\u0441\u0442\u0435\u0439 \u044f \u0434\u043e\u0445\u043e\u0434\u0438\u043b \u0432 \u044d\u0442\u043e\u0439 \u043e\u0431\u0438\u0434\u0435?", "\u041a\u0440\u0430\u0439\u043d\u043e\u0441\u0442\u0438: \u0438\u0437\u043e\u043b\u044f\u0446\u0438\u044f, \u043c\u0435\u0441\u0442\u044c, \u0443\u043f\u043e\u0442\u0440\u0435\u0431\u043b\u0435\u043d\u0438\u0435, \u0441\u0430\u043c\u043e\u0440\u0430\u0437\u0440\u0443\u0448\u0435\u043d\u0438\u0435."),
-        InventoryQuestion(7, "\u041a\u0430\u043a\u0438\u043c \u043e\u0431\u0440\u0430\u0437\u043e\u043c \u044f \u043c\u0430\u043d\u0438\u043f\u0443\u043b\u0438\u0440\u043e\u0432\u0430\u043b \u0434\u0440\u0443\u0433\u0438\u043c\u0438, \u0438 \u0437\u0430\u0447\u0435\u043c?", "\u041c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0446\u0438\u0438 \u0438 \u0446\u0435\u043b\u044c \u043c\u0430\u043d\u0438\u043f\u0443\u043b\u044f\u0446\u0438\u0438."),
-        InventoryQuestion(8, "\u0412 \u0447\u0451\u043c \u0431\u044b\u043b \u044d\u0433\u043e\u0446\u0435\u043d\u0442\u0440\u0438\u0437\u043c \u043c\u043e\u0435\u0433\u043e \u043f\u043e\u0432\u0435\u0434\u0435\u043d\u0438\u044f?", "\u042d\u0433\u043e\u0446\u0435\u043d\u0442\u0440\u0438\u0437\u043c: \u043c\u0438\u0440 \u043a\u0440\u0443\u0442\u0438\u0442\u0441\u044f \u0432\u043e\u043a\u0440\u0443\u0433 \u043c\u0435\u043d\u044f."),
-        InventoryQuestion(9, "\u0414\u0443\u043c\u0430\u043b \u043b\u0438 \u044f, \u0447\u0442\u043e \u0436\u0438\u0437\u043d\u044c \u043c\u043d\u0435 \u0447\u0442\u043e-\u0442\u043e \u0434\u043e\u043b\u0436\u043d\u0430?", "\u041e\u0436\u0438\u0434\u0430\u043d\u0438\u0435 \u0434\u043e\u043b\u0433\u0430 \u043e\u0442 \u0436\u0438\u0437\u043d\u0438 / \u043b\u044e\u0434\u0435\u0439."),
-        InventoryQuestion(10, "\u041a\u0430\u043a\u0438\u043c \u043e\u0431\u0440\u0430\u0437\u043e\u043c \u043c\u043e\u0438 \u043e\u0436\u0438\u0434\u0430\u043d\u0438\u044f \u043e\u0442 \u0434\u0440\u0443\u0433\u0438\u0445 \u043b\u044e\u0434\u0435\u0439 \u043f\u0440\u0438\u0432\u043e\u0434\u0438\u043b\u0438 \u043c\u0435\u043d\u044f \u043a \u0440\u0430\u0437\u043e\u0447\u0430\u0440\u043e\u0432\u0430\u043d\u0438\u044e?", "\u0417\u0430\u0432\u044b\u0448\u0435\u043d\u043d\u044b\u0435 \u043e\u0436\u0438\u0434\u0430\u043d\u0438\u044f \u0438 \u0440\u0430\u0437\u043e\u0447\u0430\u0440\u043e\u0432\u0430\u043d\u0438\u0435."),
-        InventoryQuestion(11, "\u041a\u0430\u043a \u0432 \u044d\u0442\u043e\u0439 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438 \u043f\u0440\u043e\u044f\u0432\u0438\u043b\u0430\u0441\u044c \u0433\u043e\u0440\u0434\u044b\u043d\u044f?", "\u0413\u043e\u0440\u0434\u044b\u043d\u044f \u043a\u0430\u043a \u0440\u0435\u0430\u043a\u0446\u0438\u044f \u043d\u0430 \u0443\u0434\u0430\u0440 \u043f\u043e \u0433\u043e\u0440\u0434\u043e\u0441\u0442\u0438."),
-        InventoryQuestion(12, "\u041a\u0430\u043a\u0438\u043c \u043e\u0431\u0440\u0430\u0437\u043e\u043c \u0441\u0442\u0440\u0430\u0445 \u043f\u043e\u0432\u043b\u0438\u044f\u043b \u043d\u0430 \u043c\u043e\u0438 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f?", "\u0421\u0442\u0440\u0430\u0445 \u0438 \u0442\u043e, \u043a\u0430\u043a \u043e\u043d \u0432\u0435\u043b \u043c\u043e\u0438 \u043f\u043e\u0441\u0442\u0443\u043f\u043a\u0438."),
-        InventoryQuestion(13, "\u041a\u0430\u043a\u0438\u0435 \u0447\u0443\u0432\u0441\u0442\u0432\u0430 \u044f \u043d\u0435 \u0443\u043c\u0435\u043b \u0438\u043b\u0438 \u043d\u0435 \u0431\u044b\u043b \u0433\u043e\u0442\u043e\u0432 \u043f\u0440\u043e\u0436\u0438\u0432\u0430\u0442\u044c, \u0438 \u043a\u0430\u043a \u044f \u0438\u0445 \u0438\u0437\u0431\u0435\u0433\u0430\u043b?", "\u041d\u0435\u043f\u0440\u043e\u0436\u0438\u0442\u044b\u0435 \u0447\u0443\u0432\u0441\u0442\u0432\u0430 \u0438 \u0441\u043f\u043e\u0441\u043e\u0431\u044b \u0438\u0437\u0431\u0435\u0433\u0430\u043d\u0438\u044f."),
+    val POINT_A: String get() = I18n.t("inventory.POINT_A", "Пункт А")
+    val POINT_B: String get() = I18n.t("inventory.POINT_B", "Пункт Б")
+    val POINT_V: String get() = I18n.t("inventory.POINT_V", "Пункт В")
+    val POINT_G: String get() = I18n.t("inventory.POINT_G", "Пункт Г")
+
+    val INTRO_TITLE: String get() = I18n.t("inventory.INTRO_TITLE", "I. Обиды")
+    val INTRO: String get() = I18n.t(
+        "inventory.INTRO",
+        "Наши обиды не давали нам покоя. Мы снова и снова проживали в своем сознании неприятные события из прошлого. Мы злились на то, что произошло, и вели подсчет всех своих обид. Мы сожалели о тех умных вещах, которых так и не сказали, и вынашивали планы расплаты за то, что было, или за то, чего могло и не быть. Мы были одержимы прошлым и будущим, и поэтому врали себе про настоящее. Теперь нам нужно написать об этих обидах, чтобы увидеть, какую роль мы сыграли в их появлении."
     )
 
-    val defaultCategoryNames = listOf(
-        "\u041b\u044e\u0434\u0438",
-        "\u0423\u0447\u0440\u0435\u0436\u0434\u0435\u043d\u0438\u044f",
-        "\u041a\u043e\u043d\u0446\u0435\u043f\u0446\u0438\u0438",
+    val POINT_A_BODY: String get() = I18n.t(
+        "inventory.POINT_A_BODY",
+        "Перечисли людей, организации и концепции, на которые ты обижен. Большинство из нас начинает с детства, но можно писать в любом порядке, главное, чтобы список был полным. Включи в него всех людей (родителей, друзей и подруг, врагов, самого себя и т. д.); организации и учреждения (тюрьмы, полицию, больницы, школы или институты и т. д.); а также концепции (религии, политику, предрассудки, социальные обычаи, Бога и т. д.), в отношении которых ты испытываешь чувство злости."
     )
+
+    val POINT_B_BODY: String get() = I18n.t(
+        "inventory.POINT_B_BODY",
+        "Перечисли причину или причины каждой обиды. В каждой обиде мы изучаем причину нашей злости и то, как она повлияла на нас. Вот некоторые из вопросов, которые мы задаем себе, чтобы помочь себе определить наши чувства:"
+    )
+
+    val POINT_V_BODY: String get() = I18n.t(
+        "inventory.POINT_V_BODY",
+        "В отношении каждой обиды мы стараемся увидеть, в чем мы совершили ошибку, и какую роль сыграли в ситуации. Какой была в каждой ситуации наша реакция на свои чувства? Мы должны быть максимально честны, мы должны разобраться, какие дефекты характера сыграли в наших действиях свою роль. Вот некоторые из вопросов, которые мы себе задаем:"
+    )
+
+    val POINT_G_BODY: String get() = I18n.t(
+        "inventory.POINT_G_BODY",
+        "Ситуации, в которых мы уверены в своей правоте, требуют пристального внимания и обсуждения с нашим спонсором. Ответы на эти и другие вопросы применительно именно к нам самим помогают нам определить свои дефекты характера. Отвечать мы должны честно, не упуская ничего. Если где-то кто-то поступил с нами неправильно, мы должны осознать, что нам необходимо прекратить ожидания безупречности от других. Если мы рассчитываем когда-нибудь обрести мир в душе, мы должны научиться принимать других такими, какие они есть."
+    )
+
+    val TARGET_TITLE: String get() = I18n.t("inventory.TARGET_TITLE", "На кого или на что я обижен?")
+    val TARGET_HINT: String get() = I18n.t("inventory.TARGET_HINT", "Человек, организация, учреждение или концепция")
+    val TYPE_SECTION: String get() = I18n.t("inventory.TYPE_SECTION", "Типы ситуаций")
+    val TYPE_SECTION_HINT: String get() = I18n.t(
+        "inventory.TYPE_SECTION_HINT",
+        "Одна обида может включать несколько типов ситуаций."
+    )
+    val SITUATION_SECTION: String get() = I18n.t("inventory.SITUATION_SECTION", "Ситуации")
+    val SITUATION_SECTION_HINT: String get() = I18n.t(
+        "inventory.SITUATION_SECTION_HINT",
+        "Для каждой обиды опишите причину, чувства, свою роль и ответьте на вопросы пунктов Б и В."
+    )
+    val TYPE_CUSTOM: String get() = I18n.t("inventory.TYPE_CUSTOM", "Свой тип…")
+
+    private val suggestedSituationTypesSrc = listOf(
+        "Критика / унижение",
+        "Предательство",
+        "Игнор",
+        "Контроль",
+        "Невыполненные обещания",
+        "Насилие / угроза",
+        "Разочарование в ожиданиях"
+    )
+
+    val suggestedSituationTypes: List<String>
+        get() = suggestedSituationTypesSrc.mapIndexed { i, label ->
+            I18n.t("inventory.type.$i", label)
+        }
+
+    val WHAT_TITLE: String get() = I18n.t("inventory.WHAT_TITLE", "Причина или причины обиды")
+    val WHAT_HINT: String get() = I18n.t("inventory.WHAT_HINT", "Почему я злюсь и как это на меня повлияло")
+    val FELT_TITLE: String get() = I18n.t("inventory.FELT_TITLE", "Я чувствовал")
+    val FELT_HINT: String get() = I18n.t(
+        "inventory.FELT_HINT",
+        "Какие чувства были тогда и какие возвращаются. Можно выбрать из таблицы чувств."
+    )
+    val feelingsTable: String get() = I18n.t("inventory.feelingsTable", "Таблица чувств")
+    val DID_TITLE: String get() = I18n.t("inventory.DID_TITLE", "Я делал")
+    val DID_HINT: String get() = I18n.t(
+        "inventory.DID_HINT",
+        "Как я реагировал: что говорил, делал или не делал"
+    )
+    val Q_SECTION: String get() = I18n.t("inventory.Q_SECTION", "Вопросы к обиде")
+    val Q_SECTION_HINT: String get() = I18n.t(
+        "inventory.Q_SECTION_HINT",
+        "Пункт Б — вопросы 1–4. Пункт В — вопросы 5–12. Можно заполнять по частям."
+    )
+
+    private val questionsSrc = listOf(
+        InventoryQuestion(1, "Была ли причиной моей обиды гордость?", "Гордость как причина злости."),
+        InventoryQuestion(2, "Угрожало ли что-либо моей безопасности или моему благополучию?", "Безопасность и благополучие."),
+        InventoryQuestion(3, "Были ли задеты или поставлены под угрозу личные отношения или сексуальные связи?", "Личные отношения или сексуальные связи."),
+        InventoryQuestion(4, "Привели ли мои желания к конфликту с другими?", "Желания и конфликт с другими."),
+        InventoryQuestion(5, "Где в основе моих действий были жадность или потребность подчинить?", "Жадность или потребность подчинить."),
+        InventoryQuestion(6, "До каких крайностей я доходил в своих обидах?", "Крайности в обидах."),
+        InventoryQuestion(7, "Каким образом я манипулировал другими, и зачем?", "Манипуляции и цель."),
+        InventoryQuestion(8, "В чем был эгоизм моего поведения?", "Эгоизм поведения."),
+        InventoryQuestion(9, "Думал ли я, что жизнь мне что-то должна?", "Ожидание, что жизнь мне должна."),
+        InventoryQuestion(10, "Каким образом мои ожидания от других приводили к проблемам?", "Ожидания от других и проблемы."),
+        InventoryQuestion(11, "Как в этой ситуации проявлялись гордыня и эго?", "Гордыня и эго."),
+        InventoryQuestion(12, "Как меня мотивировал страх?", "Страх как мотив."),
+        InventoryQuestion(13, "Какие чувства я не умел или не был готов проживать, и как я их избегал?", "Непрожитые чувства и способы избегания.")
+    )
+
+    val questions: List<InventoryQuestion>
+        get() = questionsSrc.map { q ->
+            InventoryQuestion(
+                number = q.number,
+                title = I18n.t("inventory.q.${q.number}.title", q.title),
+                hint = I18n.t("inventory.q.${q.number}.hint", q.hint)
+            )
+        }
+
+    private val defaultCategoryNamesSrc = listOf("Люди", "Учреждения", "Концепции")
+
+    val defaultCategoryNames: List<String>
+        get() = defaultCategoryNamesSrc.mapIndexed { i, label ->
+            I18n.t("inventory.category.$i", label)
+        }
+
+    fun questionsOf(from: Int, to: Int): List<InventoryQuestion> =
+        questions.filter { it.number in from..to }
+
+    fun questionsGuideText(from: Int, to: Int): String =
+        questionsOf(from, to).joinToString("\n") { "• ${it.title}" }
+
+    val workThrough: String get() = I18n.t("inventory.workThrough", "Проработка обиды")
+    val workThroughPro: String get() = I18n.t("inventory.workThroughPro", "Проработка обиды с ИИ")
+    val workThroughHint: String get() = I18n.t(
+        "inventory.workThroughHint",
+        "ИИ положит черновики и слепые зоны в подсказки у полей (значок i). Если всё заполнено — даст полный разбор ситуации. Это не замена спонсора."
+    )
+    val workThroughNeedText: String get() = I18n.t(
+        "inventory.workThroughNeedText",
+        "Сначала напишите хотя бы причину, чувства, действия или один вопрос — тогда можно предложить остальные."
+    )
+    val workThroughAllFilled: String get() = I18n.t(
+        "inventory.workThroughAllFilled",
+        "Все вопросы этой ситуации уже заполнены."
+    )
+    val workThroughReadyHints: String get() = I18n.t(
+        "inventory.workThroughReadyHints",
+        "Готово: откройте подсказки у полей (значок i) — там черновики и слепые зоны."
+    )
+    val workThroughFullTitle: String get() = I18n.t(
+        "inventory.workThroughFullTitle",
+        "Полная проработка ситуации"
+    )
+    val insightDraftTitle: String get() = I18n.t("inventory.insightDraftTitle", "Черновик проработки")
+    val insightBlindTitle: String get() = I18n.t(
+        "inventory.insightBlindTitle",
+        "Слепые зоны и слабые места"
+    )
+    val insertDraft: String get() = I18n.t("inventory.insertDraft", "Вставить в поле")
+    val appendDraft: String get() = I18n.t("inventory.appendDraft", "Добавить в поле")
+    val draftsTitle: String get() = I18n.t("inventory.draftsTitle", "Черновики для пустых вопросов")
+    val insertAllDrafts: String get() = I18n.t("inventory.insertAllDrafts", "Вставить все")
+    val dismissDraft: String get() = I18n.t("inventory.dismissDraft", "Скрыть")
+    val dismissAnalysis: String get() = I18n.t("inventory.dismissAnalysis", "Скрыть разбор")
 }

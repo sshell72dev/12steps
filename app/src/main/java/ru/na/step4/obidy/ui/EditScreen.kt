@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +25,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,7 +35,6 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -60,9 +59,13 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.Category
 import ru.na.step4.obidy.data.InventoryStructure
 import ru.na.step4.obidy.data.Situation
+import ru.na.step4.obidy.data.notes.NoteIds
+import ru.na.step4.obidy.data.notes.NoteMode
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
+import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.components.navigationBarsPaddingIfImeHidden
 import ru.na.step4.obidy.ui.components.FieldBlock
-import ru.na.step4.obidy.ui.components.HintIcon
+import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.components.ProgressBar
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Danger
@@ -76,6 +79,7 @@ import ru.na.step4.obidy.ui.theme.SandDeep
 fun EditScreen(
     viewModel: EditViewModel,
     onBack: () -> Unit,
+    onOpenList: () -> Unit,
     onOpenSituation: (Long) -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -95,12 +99,11 @@ fun EditScreen(
                         maxLines = 1
                     )
                 },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.save { onBack() } }) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, Ru.back, tint = Forest)
-                    }
-                },
+                navigationIcon = { AppNavIcon(onBack = { viewModel.save { onBack() } }) },
                 actions = {
+                    IconButton(onClick = { viewModel.save { onOpenList() } }) {
+                        Icon(Icons.Outlined.ViewList, Ru.resentments, tint = Forest)
+                    }
                     if (state.id > 0) {
                         IconButton(onClick = { showDelete = true }) {
                             Icon(Icons.Outlined.Delete, Ru.delete, tint = Danger)
@@ -116,7 +119,7 @@ fun EditScreen(
                     .fillMaxWidth()
                     .background(Sand.copy(alpha = 0.96f))
                     .imePadding()
-                    .navigationBarsPadding()
+                    .navigationBarsPaddingIfImeHidden()
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
                 Button(
@@ -128,16 +131,22 @@ fun EditScreen(
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.imeScaffoldContent(padding)) {
             AtmosphereBackground(Modifier.fillMaxSize())
             Column(
                 Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 12.dp)
                     .padding(bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                NoteView(
+                    NoteIds.INVENTORY_WORK,
+                    InventoryStructure.INTRO,
+                    InventoryStructure.INTRO_TITLE,
+                    defaultMode = NoteMode.COLLAPSED
+                )
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -145,10 +154,14 @@ fun EditScreen(
                     Box(Modifier.weight(1f)) {
                         ProgressBar(state.progress, state.totalSteps)
                     }
-                    HintIcon(Ru.hintWork)
                 }
 
-                Text(InventoryStructure.POINT_A, style = MaterialTheme.typography.labelLarge, color = Amber)
+                NoteView(
+                    NoteIds.INVENTORY_POINT_A,
+                    InventoryStructure.POINT_A_BODY,
+                    InventoryStructure.POINT_A,
+                    defaultMode = NoteMode.COLLAPSED
+                )
                 CategoryPicker(
                     categories = state.categories,
                     selectedId = state.categoryId,
@@ -163,6 +176,7 @@ fun EditScreen(
                     label = InventoryStructure.TARGET_TITLE,
                     hint = InventoryStructure.TARGET_HINT,
                     catalogHint = Ru.targetCatalogHint,
+                    noteId = NoteIds.INVENTORY_TARGET,
                     minLines = 2
                 )
 
@@ -176,23 +190,10 @@ fun EditScreen(
                         color = Forest,
                         modifier = Modifier.weight(1f)
                     )
-                    HintIcon(InventoryStructure.SITUATION_SECTION_HINT)
+                    NoteView(NoteIds.INVENTORY_SITUATION, InventoryStructure.SITUATION_SECTION_HINT, compact = true)
                 }
-                OutlinedTextField(
-                    value = state.quickSituation,
-                    onValueChange = viewModel::updateQuickSituation,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(Ru.quickSituationHint) },
-                    minLines = 2
-                )
                 Button(
-                    onClick = {
-                        if (state.quickSituation.isNotBlank()) {
-                            viewModel.addSituationFromQuick(onOpenSituation)
-                        } else {
-                            viewModel.addBlankSituation(onOpenSituation)
-                        }
-                    },
+                    onClick = { viewModel.addBlankSituation(onOpenSituation) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Sand),
                     shape = RoundedCornerShape(12.dp)
@@ -374,13 +375,17 @@ private fun CategoryPicker(
                     Text(
                         text = Ru.categoryLabel,
                         style = MaterialTheme.typography.titleMedium,
-                        color = Forest
+                        color = Forest,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (!expanded && selectedName.isNotBlank()) {
                         Text(
                             text = selectedName,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -390,7 +395,7 @@ private fun CategoryPicker(
                     tint = Forest
                 )
             }
-            HintIcon(Ru.categoryHint)
+            NoteView(NoteIds.INVENTORY_CATEGORY, Ru.categoryHint, compact = true)
         }
         if (expanded) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

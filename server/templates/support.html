@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Сообщения об ошибках · Админка</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --sand-deep: #e6dfd0;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --ok: #2f6b45;
+        --warn: #8a6a1a;
+        --new: #8a6a1a;
+        --work: #2f5f8a;
+        --done: #2f6b45;
+      }
+      body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #ece8df; color: var(--ink); }
+      .top {
+        background: var(--forest); color: var(--sand); padding: 12px 16px;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      }
+      .top a { color: var(--sand); text-decoration: none; opacity: .88; margin-left: 12px; font-size: 13px; }
+      .top a:hover { opacity: 1; }
+      .top b { font-size: 15px; }
+      .top span { opacity: .78; font-size: 12px; }
+      .ghost {
+        background: transparent; color: var(--sand);
+        border: 1px solid rgba(243, 239, 230, 0.28); border-radius: 8px; padding: 6px 10px; cursor: pointer;
+        margin: 0; font-weight: 600; font-size: 13px;
+      }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 12px 36px; }
+      .grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 12px; }
+      @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+      .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+      h1 { margin: 0 0 2px; font-size: 18px; color: var(--forest); }
+      .muted { color: var(--muted); font-size: 12px; line-height: 1.35; }
+      .item {
+        display: block; padding: 8px 0; border-bottom: 1px solid var(--line);
+        color: inherit; text-decoration: none;
+      }
+      .item.active { background: rgba(27, 46, 36, 0.05); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 8px; }
+      .item-head {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      }
+      .item-head b { color: var(--forest); font-size: 13px; }
+      .item-line {
+        display: block; color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.3;
+      }
+      .item.is-folded { display: none; }
+      .more-btn {
+        display: block; width: 100%; box-sizing: border-box;
+        margin-top: 10px; padding: 8px 12px;
+        background: var(--sand-deep); color: var(--forest);
+        font-size: 13px; font-weight: 650;
+      }
+      .meta { font-size: 12px; color: var(--muted); margin: 2px 0 6px; line-height: 1.35; }
+      .bubble { padding: 6px 8px; border-radius: 8px; margin-bottom: 6px; }
+      .bubble.user { background: var(--sand); }
+      .bubble.admin { background: rgba(47, 107, 69, 0.12); }
+      .bubble.system { background: rgba(47, 95, 138, 0.1); font-style: italic; }
+      .bubble small { display: block; color: var(--muted); font-size: 11px; margin: 0 0 2px; line-height: 1.2; }
+      .msg-body { font-size: 14px; line-height: 1.3; margin: 0; white-space: pre-wrap; }
+      .bubble-actions, .row-actions {
+        display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center;
+      }
+      .row-actions { margin: 4px 0 8px; }
+      .bubble-actions form, .row-actions form {
+        display: inline-flex; margin: 0; padding: 0; width: auto; flex: 0 0 auto;
+      }
+      textarea, input, select {
+        width: 100%; box-sizing: border-box; margin-top: 2px; padding: 6px 8px;
+        border-radius: 8px; border: 1px solid var(--line); background: #fbfaf7; font: inherit;
+      }
+      button, .btn {
+        padding: 8px 12px; border: 0; border-radius: 8px; background: var(--forest);
+        color: var(--sand); font-weight: 650; cursor: pointer; margin-top: 8px;
+        font-size: 13px; line-height: 1.2; width: auto;
+      }
+      .bubble-actions button, .row-actions button, .row-actions a.btn {
+        margin: 0 !important;
+        padding: 2px 7px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+        border-radius: 5px !important;
+        font-weight: 600;
+        width: auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        text-decoration: none;
+        display: inline-block;
+        flex: 0 0 auto;
+      }
+      .secondary { background: var(--sand-deep); color: var(--forest); }
+      .danger { background: #8a3a3a; color: #fff; }
+      .notice, .warn { margin-bottom: 10px; padding: 8px 10px; border-radius: 10px; font-size: 13px; }
+      .notice { background: rgba(47, 107, 69, 0.1); border: 1px solid rgba(47, 107, 69, 0.28); color: var(--ok); }
+      .warn { background: rgba(138, 106, 26, 0.1); border: 1px solid rgba(138, 106, 26, 0.28); color: var(--warn); }
+      .badge { border-radius: 99px; padding: 1px 6px; font-size: 10px; margin-left: 4px; color: #fff; vertical-align: middle; }
+      .badge.new { background: var(--new); }
+      .badge.in_progress { background: var(--work); }
+      .badge.done { background: var(--done); }
+      .badge.unread { background: var(--warn); }
+      .badge.read { background: var(--done); }
+      .badge.edited { background: var(--muted); }
+      .edit-form { display: none; margin-top: 6px; }
+      .edit-form.is-open { display: block; }
+      .edit-form textarea { min-height: 72px; margin: 0; }
+      .edit-form-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+      .edit-form-actions button {
+        margin: 0 !important;
+        padding: 2px 7px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+        border-radius: 5px !important;
+        width: auto !important;
+      }
+      .bubble.editing .msg-body { display: none; }
+      .copy-toast {
+        position: fixed;
+        left: 50%;
+        bottom: 28px;
+        transform: translateX(-50%) translateY(10px);
+        background: var(--forest);
+        color: var(--sand);
+        padding: 10px 16px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 650;
+        box-shadow: 0 10px 24px rgba(27, 46, 36, 0.28);
+        opacity: 0;
+        pointer-events: none;
+        z-index: 80;
+        transition: opacity .2s ease, transform .2s ease;
+      }
+      .copy-toast.is-on {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      @keyframes copy-pop {
+        0% { transform: scale(1); }
+        35% { transform: scale(0.92); }
+        100% { transform: scale(1); }
+      }
+      button.copied-flash {
+        animation: copy-pop .28s ease;
+        background: var(--forest) !important;
+        color: var(--sand) !important;
+      }
+      .status-form { display: flex; gap: 6px; align-items: center; margin: 0; }
+      .status-form label {
+        display: flex; align-items: center; gap: 6px; margin: 0;
+        flex: 0 1 auto; font-size: 12px; color: var(--muted); font-weight: 650;
+      }
+      .status-form select {
+        width: auto; min-width: 140px; margin-top: 0; padding: 4px 6px; font-size: 12px;
+      }
+      .ticket-head {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 10px; margin-bottom: 2px;
+      }
+      .ticket-head h1 { margin: 0; flex: 1 1 auto; min-width: 0; }
+      .ticket-head .status-form { flex: 0 0 auto; }
+      label.field { display: block; margin-top: 6px; font-size: 12px; font-weight: 650; color: var(--forest); }
+      .compose-link { display: inline-block; margin: 6px 0 2px; color: var(--forest); font-weight: 650; font-size: 13px; }
+      .complete-row {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        margin: 8px 0 4px; font-size: 13px; color: var(--forest); font-weight: 650;
+        cursor: pointer; user-select: none;
+      }
+      .complete-row input { position: absolute; opacity: 0; width: 0; height: 0; }
+      .switch {
+        position: relative; width: 44px; height: 24px; flex: 0 0 auto;
+        background: var(--sand-deep); border-radius: 999px;
+        border: 1px solid var(--line); transition: background .2s ease, border-color .2s ease;
+      }
+      .switch::after {
+        content: ""; position: absolute; top: 2px; left: 2px;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.18);
+        transition: transform .2s ease;
+      }
+      .complete-row input:checked + .switch {
+        background: var(--forest); border-color: var(--forest);
+      }
+      .complete-row input:checked + .switch::after { transform: translateX(20px); }
+      .complete-row:focus-within .switch { outline: 2px solid rgba(27, 46, 36, 0.25); outline-offset: 2px; }
+      .reply-form button[type=submit] { margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div>
+        <b>12 шагов · Админка</b>
+        <span>{{ domain }}</span>
+        <a href="{{ url_for('settings') }}">ИИ</a>
+        <a href="{{ url_for('notes_admin') }}">Подсказки</a>
+        <a href="{{ url_for('analyses_admin') }}">Самоанализ</a>
+        <a href="{{ url_for('voice_settings') }}">Голос</a>
+        <a href="{{ url_for('support_admin') }}">Ошибки{% if unread %}<span class="badge unread">{{ unread }}</span>{% endif %}</a>
+      </div>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="ghost" type="submit">Выйти</button>
+      </form>
+    </div>
+    <div class="wrap">
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+      {% if warn %}<div class="warn">{{ warn }}</div>{% endif %}
+      <div class="grid">
+        <div class="card">
+          <h1>Сообщения об ошибках</h1>
+          <div class="muted">Сначала новые, затем «в разработке», потом обработанные.</div>
+          <a class="compose-link" href="{{ url_for('support_admin', compose=1, from=admin_source) }}">+ Написать пользователю</a>
+          {% for item in items %}
+            <a class="item{% if current and current.id == item.id %} active{% endif %}"
+               data-list-item
+               href="{{ url_for('support_admin', id=item.id) }}">
+              <div class="item-head">
+                <b>{{ item.user_name or "Без имени" }}</b>
+                <span class="badge {{ item.status }}">{{ item.status_label }}</span>
+                {% if not item.admin_read %}<span class="badge unread">непрочит.</span>{% endif %}
+              </div>
+              <span class="item-line">{{ item.kind_label }} · {{ item.belonging_label }}</span>
+              {% if item.first_preview %}<span class="item-line">{{ item.first_preview }}</span>{% endif %}
+              {% if item.last_preview %}<span class="item-line">{{ item.last_preview }}</span>{% endif %}
+            </a>
+          {% else %}
+            <p class="muted">Пока нет сообщений.</p>
+          {% endfor %}
+          {% if items|length > 10 %}
+            <button type="button" class="more-btn" id="show-more">Показать ещё 10</button>
+          {% endif %}
+          <script>
+            (function () {
+              const PAGE = 10;
+              const items = Array.from(document.querySelectorAll("[data-list-item]"));
+              const btn = document.getElementById("show-more");
+              if (!items.length) return;
+              let shown = PAGE;
+              const active = items.findIndex((el) => el.classList.contains("active"));
+              if (active >= shown) shown = (Math.floor(active / PAGE) + 1) * PAGE;
+              function render() {
+                items.forEach((el, i) => el.classList.toggle("is-folded", i >= shown));
+                if (btn) btn.style.display = shown >= items.length ? "none" : "";
+              }
+              if (btn) {
+                btn.addEventListener("click", function () {
+                  shown += PAGE;
+                  render();
+                });
+              }
+              render();
+            })();
+          </script>
+        </div>
+        <div class="card">
+          {% if current and not compose and not report %}
+            <div class="ticket-head">
+              <h1>{{ current.user_name or "Без имени" }}</h1>
+              <form method="post" class="status-form" id="status-form">
+                <input type="hidden" name="id" value="{{ current.id }}" />
+                <input type="hidden" name="action" value="status" />
+                <label>
+                  Статус
+                  <select name="status" onchange="this.form.submit()">
+                    {% for key in statuses %}
+                      <option value="{{ key }}" {% if current.status == key %}selected{% endif %}>{{ status_labels[key] }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+              </form>
+            </div>
+            <div class="meta">
+              Тип: <b>{{ current.kind_label }}</b><br>
+              Принадлежность: <b>{{ current.belonging_label }}</b><br>
+              Экран: {{ current.screen }}<br>
+              Маршрут: {{ current.screen_route }}<br>
+              {% if current.admin_source_label %}Источник в админке: {{ current.admin_source_label }}<br>{% endif %}
+              Пользователь: {{ current.user_id }}<br>
+              Дата: {{ fmt_time(current.created_at) }}
+            </div>
+            <div class="row-actions">
+              <button type="button" class="secondary" onclick="copyTicket(this)">Копировать</button>
+              <button type="button" class="secondary" onclick="shareTicket()">Поделиться</button>
+              <form method="post" onsubmit="return confirm('Удалить всё обращение?');">
+                <input type="hidden" name="id" value="{{ current.id }}" />
+                <input type="hidden" name="action" value="delete_ticket" />
+                <button class="danger" type="submit">Удалить обращение</button>
+              </form>
+            </div>
+            {% for msg in current.messages %}
+              <div class="bubble {{ msg.author }}" id="msg-{{ msg.id }}">
+                <small>
+                  {% if msg.author == 'admin' %}Администратор{% elif msg.author == 'system' %}Система{% else %}Пользователь{% endif %}
+                  · {{ fmt_time(msg.created_at) }}
+                  {% if msg.edited %}<span class="badge edited">изменено</span>{% endif %}
+                  {% if msg.author == 'user' %}
+                    {% if msg.admin_read %}<span class="badge read">Прочитано</span>{% else %}<span class="badge unread">Не прочитано</span>{% endif %}
+                  {% endif %}
+                </small>
+                <div class="msg-body">{{ msg.body }}</div>
+                <div class="bubble-actions">
+                  <button type="button" class="secondary" onclick="copyMsg({{ msg.id }}, this)">Копировать</button>
+                  <button type="button" class="secondary" onclick="shareMsg({{ msg.id }})">Поделиться</button>
+                  <button type="button" class="secondary" onclick="toggleEdit({{ msg.id }})">Изменить</button>
+                  {% if msg.author == 'user' and not msg.admin_read %}
+                    <form method="post">
+                      <input type="hidden" name="message_id" value="{{ msg.id }}" />
+                      <input type="hidden" name="action" value="read_message" />
+                      <button class="secondary" type="submit">Прочитано</button>
+                    </form>
+                  {% endif %}
+                  <form method="post" onsubmit="return confirm('Удалить это сообщение?');">
+                    <input type="hidden" name="message_id" value="{{ msg.id }}" />
+                    <input type="hidden" name="action" value="delete_message" />
+                    <button class="danger" type="submit">Удалить</button>
+                  </form>
+                </div>
+                <form method="post" class="edit-form" id="edit-{{ msg.id }}">
+                  <input type="hidden" name="message_id" value="{{ msg.id }}" />
+                  <input type="hidden" name="action" value="edit_message" />
+                  <textarea name="body" rows="4" required>{{ msg.body }}</textarea>
+                  <div class="edit-form-actions">
+                    <button type="submit">Сохранить</button>
+                    <button type="button" class="secondary" onclick="toggleEdit({{ msg.id }})">Отмена</button>
+                  </div>
+                </form>
+              </div>
+            {% endfor %}
+            <form method="post" class="reply-form" id="reply-form">
+              <input type="hidden" name="id" value="{{ current.id }}" />
+              <input type="hidden" name="action" value="reply" />
+              <label class="complete-row" for="complete-toggle">
+                <span>Задача завершена</span>
+                <input type="checkbox" name="complete" value="1" id="complete-toggle"
+                       {% if current.status == 'done' %}checked{% endif %}
+                       onchange="onCompleteToggle(this)" />
+                <span class="switch" aria-hidden="true"></span>
+              </label>
+              <label for="body" class="field">Ответ</label>
+              <textarea id="body" name="body" rows="4" required placeholder="Ответ пользователю"></textarea>
+              <button type="submit">Отправить ответ</button>
+            </form>
+            <form method="post" id="complete-form" style="display:none;">
+              <input type="hidden" name="id" value="{{ current.id }}" />
+              <input type="hidden" name="action" value="complete" />
+            </form>
+            <script>
+              const ticketShareText = {{ (
+                (current.kind_label or "Ошибка") ~ " · " ~ (current.user_name or "Без имени") ~ "\n"
+                ~ "Статус: " ~ current.status_label ~ "\n"
+                ~ "Тип: " ~ current.kind_label ~ "\n"
+                ~ "Принадлежность: " ~ current.belonging_label ~ "\n"
+                ~ "Экран: " ~ current.screen ~ "\n"
+                ~ "Дата: " ~ fmt_time(current.created_at) ~ "\n\n"
+                ~ current.messages | map(attribute='body') | join('\n\n---\n\n')
+              ) | tojson }};
+              const messageBodies = {
+                {% for msg in current.messages %}
+                {{ msg.id }}: {{ msg.body | tojson }}{% if not loop.last %},{% endif %}
+                {% endfor %}
+              };
+              const messageNeedsRead = {
+                {% for msg in current.messages %}
+                {{ msg.id }}: {{ (msg.author == 'user' and not msg.admin_read) | tojson }}{% if not loop.last %},{% endif %}
+                {% endfor %}
+              };
+              let copyToastTimer = 0;
+              function showCopied(btn) {
+                if (btn) {
+                  btn.classList.remove("copied-flash");
+                  void btn.offsetWidth;
+                  btn.classList.add("copied-flash");
+                }
+                const toast = document.getElementById("copy-toast");
+                if (!toast) return;
+                toast.classList.add("is-on");
+                clearTimeout(copyToastTimer);
+                copyToastTimer = setTimeout(() => toast.classList.remove("is-on"), 1400);
+              }
+              function copyText(text, btn) {
+                if (!text) return Promise.resolve();
+                const done = () => showCopied(btn);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  return navigator.clipboard.writeText(text).then(done);
+                }
+                return new Promise((resolve, reject) => {
+                  const ta = document.createElement("textarea");
+                  ta.value = text;
+                  ta.setAttribute("readonly", "");
+                  ta.style.position = "fixed";
+                  ta.style.left = "-9999px";
+                  document.body.appendChild(ta);
+                  ta.select();
+                  try {
+                    document.execCommand("copy");
+                    done();
+                    resolve();
+                  } catch (err) {
+                    reject(err);
+                  } finally {
+                    ta.remove();
+                  }
+                });
+              }
+              function shareText(text) {
+                if (!text) return Promise.resolve();
+                if (navigator.share) {
+                  return navigator.share({ text }).catch(() => copyText(text));
+                }
+                return copyText(text);
+              }
+              function markMsgRead(id) {
+                if (!messageNeedsRead[id]) return;
+                const form = document.createElement("form");
+                form.method = "post";
+                form.style.display = "none";
+                form.innerHTML =
+                  '<input type="hidden" name="message_id" value="' + id + '" />' +
+                  '<input type="hidden" name="action" value="read_message" />';
+                document.body.appendChild(form);
+                form.submit();
+              }
+              const ticketMeta = {
+                kind: {{ current.kind_label | tojson }},
+                belonging: {{ current.belonging_label | tojson }},
+                screen: {{ current.screen | tojson }},
+                route: {{ current.screen_route | tojson }}
+              };
+              function formatMsgCopy(id) {
+                const body = messageBodies[id] || "";
+                return (
+                  "Тип: " + (ticketMeta.kind || "") + "\n" +
+                  "Принадлежность: " + (ticketMeta.belonging || "") + "\n" +
+                  "Экран: " + (ticketMeta.screen || "") + "\n" +
+                  "Маршрут: " + (ticketMeta.route || "") + "\n\n" +
+                  body
+                );
+              }
+              function copyMsg(id, btn) {
+                Promise.resolve(copyText(formatMsgCopy(id), btn)).finally(() => markMsgRead(id));
+              }
+              function shareMsg(id) {
+                Promise.resolve(shareText(messageBodies[id] || "")).finally(() => markMsgRead(id));
+              }
+              function copyTicket(btn) { copyText(ticketShareText, btn); }
+              function shareTicket() { shareText(ticketShareText); }
+              function toggleEdit(id) {
+                const bubble = document.getElementById("msg-" + id);
+                const form = document.getElementById("edit-" + id);
+                if (!form) return;
+                const open = !form.classList.contains("is-open");
+                document.querySelectorAll(".edit-form.is-open").forEach((el) => el.classList.remove("is-open"));
+                document.querySelectorAll(".bubble.editing").forEach((el) => el.classList.remove("editing"));
+                if (open) {
+                  form.classList.add("is-open");
+                  if (bubble) bubble.classList.add("editing");
+                  const ta = form.querySelector("textarea");
+                  if (ta) {
+                    ta.focus();
+                    ta.setSelectionRange(ta.value.length, ta.value.length);
+                  }
+                }
+              }
+              function onCompleteToggle(el) {
+                if (!el.checked) return;
+                document.getElementById("complete-form").submit();
+              }
+            </script>
+          {% elif report %}
+            <h1>Сообщить об ошибке</h1>
+            <div class="muted">
+              Запись попадёт в «Ошибки» для отладки раздела
+              <b>{{ admin_sources.get(admin_source, admin_source) }}</b>
+              — так же, как сообщения из приложения.
+            </div>
+            <form method="post" id="report-form">
+              <input type="hidden" name="action" value="report" />
+              <input type="hidden" name="admin_source" value="{{ admin_source }}" />
+              <label class="field">Тип</label>
+              <select name="kind">
+                {% for key in kinds %}
+                  <option value="{{ key }}" {% if key == 'bug' %}selected{% endif %}>{{ kind_labels[key] }}</option>
+                {% endfor %}
+              </select>
+              <label class="field">Принадлежность</label>
+              <select name="belonging" id="belonging" onchange="toggleBelonging()">
+                {% for key in belongings %}
+                  <option value="{{ key }}" {% if key == 'screen' %}selected{% endif %}>{{ belonging_labels[key] }}</option>
+                {% endfor %}
+              </select>
+              <div id="screen-fields">
+                <label class="field">Экран (название)</label>
+                <input name="screen" value="{{ report_screen }}" placeholder="Например: Админка · ИИ" />
+                <label class="field">Маршрут экрана</label>
+                <input name="screen_route" value="{{ report_route }}" placeholder="например admin/settings" />
+              </div>
+              <div id="family-fields" style="display:none;">
+                <label class="field">Группа экранов</label>
+                <select name="family">
+                  {% for key, label in families.items() %}
+                    <option value="{{ key }}" {% if key == 'admin' %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <label class="field">Что произошло?</label>
+              <textarea name="body" rows="6" required placeholder="Кратко опишите ошибку в админке"></textarea>
+              <button type="submit">Отправить</button>
+            </form>
+            <script>
+              function toggleBelonging() {
+                const mode = document.getElementById('belonging').value;
+                document.getElementById('screen-fields').style.display = mode === 'screen' ? 'block' : 'none';
+                document.getElementById('family-fields').style.display = mode === 'family' ? 'block' : 'none';
+              }
+              toggleBelonging();
+            </script>
+          {% else %}
+            <h1>Написать пользователю</h1>
+            <div class="muted">
+              Сообщение уйдёт из раздела
+              <b>{{ admin_sources.get(admin_source, admin_source) }}</b>.
+              Можно привязать к экрану, сделать общим или для всех подобных экранов.
+            </div>
+            <form method="post" id="compose-form">
+              <input type="hidden" name="action" value="compose" />
+              <input type="hidden" name="admin_source" value="{{ admin_source }}" />
+              <label class="field">Пользователь</label>
+              <select name="user_pick" id="user_pick" onchange="fillUser()">
+                <option value="">— выбрать из недавних —</option>
+                {% for u in recent_users %}
+                  <option value="{{ u.user_id }}" data-name="{{ u.user_name }}">{{ u.user_name }} · {{ u.user_id }}</option>
+                {% endfor %}
+              </select>
+              <label class="field">ID пользователя</label>
+              <input name="user_id" id="user_id" required placeholder="device id пользователя" />
+              <label class="field">Имя</label>
+              <input name="user_name" id="user_name" placeholder="Имя" />
+              <label class="field">Тип</label>
+              <select name="kind">
+                {% for key in kinds %}
+                  <option value="{{ key }}" {% if key == 'bug' %}selected{% endif %}>{{ kind_labels[key] }}</option>
+                {% endfor %}
+              </select>
+              <label class="field">Принадлежность</label>
+              <select name="belonging" id="belonging" onchange="toggleBelonging()">
+                {% for key in belongings %}
+                  <option value="{{ key }}" {% if key == 'screen' %}selected{% endif %}>{{ belonging_labels[key] }}</option>
+                {% endfor %}
+              </select>
+              <div id="screen-fields">
+                <label class="field">Экран (название)</label>
+                <input name="screen" placeholder="Например: Самоанализ" />
+                <label class="field">Маршрут экрана</label>
+                <input name="screen_route" placeholder="например analysis или journal" />
+              </div>
+              <div id="family-fields" style="display:none;">
+                <label class="field">Группа экранов</label>
+                <select name="family">
+                  {% for key, label in families.items() %}
+                    <option value="{{ key }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <label class="field">Текст</label>
+              <textarea name="body" rows="6" required placeholder="Сообщение пользователю"></textarea>
+              <button type="submit">Отправить</button>
+            </form>
+            <script>
+              function fillUser() {
+                const sel = document.getElementById('user_pick');
+                const opt = sel.options[sel.selectedIndex];
+                if (!opt || !opt.value) return;
+                document.getElementById('user_id').value = opt.value;
+                document.getElementById('user_name').value = opt.getAttribute('data-name') || '';
+              }
+              function toggleBelonging() {
+                const mode = document.getElementById('belonging').value;
+                document.getElementById('screen-fields').style.display = mode === 'screen' ? 'block' : 'none';
+                document.getElementById('family-fields').style.display = mode === 'family' ? 'block' : 'none';
+              }
+              toggleBelonging();
+            </script>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% set admin_report_from = admin_source|default('support') %}
+    {% include '_admin_report_fab.html' %}
+    <div class="copy-toast" id="copy-toast" role="status" aria-live="polite">Скопировано в буфер</div>
+  </body>
+</html>

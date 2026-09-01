@@ -53,6 +53,74 @@ class ResentmentRepository(
     suspend fun getById(id: Long): Resentment? = resentmentDao.getById(id)
     suspend fun getCategories(): List<Category> = categoryDao.getAll()
 
+    suspend fun exportInventoryJson(): String = ResentmentBackup.export(
+        categories = categoryDao.getAll(),
+        resentments = resentmentDao.getAll(),
+        types = situationDao.getAllTypes(),
+        situations = situationDao.getAllSituations(),
+        links = situationDao.getAllLinks()
+    )
+
+    suspend fun importInventoryJson(text: String): ResentmentBackup.Result {
+        val parsed = ResentmentBackup.parse(text)
+        val catIdByName = categoryDao.getAll()
+            .associate { it.name.trim().lowercase() to it.id }
+            .toMutableMap()
+        parsed.categories.forEach { category ->
+            val key = category.name.trim().lowercase()
+            if (key.isEmpty() || key in catIdByName) return@forEach
+            val id = categoryDao.insert(
+                Category(
+                    name = category.name.trim(),
+                    sortOrder = categoryDao.count(),
+                    createdAt = category.createdAt
+                )
+            )
+            catIdByName[key] = id
+        }
+        val existingKeys = resentmentDao.getAll()
+            .map { ResentmentBackup.fingerprint(it) }
+            .toMutableSet()
+        var resentmentCount = 0
+        var situationCount = 0
+        var skipped = 0
+        parsed.resentments.forEach { draft ->
+            val emptyDraft = draft.item.isDraft && draft.types.isEmpty() && draft.situations.isEmpty()
+            if (emptyDraft) return@forEach
+            val fp = ResentmentBackup.fingerprint(draft.item)
+            if (draft.item.target.isNotBlank() && fp in existingKeys) {
+                skipped++
+                return@forEach
+            }
+            val categoryId = draft.categoryName?.trim()?.lowercase()?.let { catIdByName[it] }
+            val newId = resentmentDao.insert(
+                draft.item.copy(id = 0, categoryId = categoryId)
+            )
+            existingKeys.add(fp)
+            val typeMap = mutableMapOf<Long, Long>()
+            draft.types.forEach { type ->
+                val name = type.item.name.trim()
+                if (name.isEmpty()) return@forEach
+                val nid = situationDao.insertType(
+                    type.item.copy(id = 0, resentmentId = newId, name = name)
+                )
+                typeMap[type.oldId] = nid
+            }
+            draft.situations.forEach { situation ->
+                val nid = situationDao.insertSituation(
+                    situation.item.copy(id = 0, resentmentId = newId)
+                )
+                situationCount++
+                val newTypeIds = situation.oldTypeIds.mapNotNull { typeMap[it] }.distinct()
+                if (newTypeIds.isNotEmpty()) {
+                    situationDao.insertLinks(newTypeIds.map { SituationTypeLink(nid, it) })
+                }
+            }
+            resentmentCount++
+        }
+        return ResentmentBackup.Result(resentmentCount, situationCount, skipped)
+    }
+
     suspend fun save(item: Resentment): Long {
         val now = System.currentTimeMillis()
         return if (item.id == 0L) {

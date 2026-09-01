@@ -24,9 +24,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
@@ -42,7 +44,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -71,17 +72,20 @@ import ru.na.step4.obidy.data.Category
 import ru.na.step4.obidy.data.Resentment
 import ru.na.step4.obidy.data.ResentmentListItem
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
+import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.components.ProgressBar
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Danger
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Moss
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListScreen(
     viewModel: ListViewModel,
+    onBack: (() -> Unit)? = null,
     onOpen: (Long) -> Unit,
     onGuide: () -> Unit,
     onCategories: () -> Unit,
@@ -123,11 +127,20 @@ fun ListScreen(
                         )
                     }
                 },
+                navigationIcon = { AppNavIcon(onBack = onBack) },
                 actions = {
+                    IconButton(onClick = { viewModel.exportToDownloads(context) }) {
+                        Icon(
+                            Icons.Outlined.FileDownload,
+                            contentDescription = Ru.exportJsonCd,
+                            tint = Forest
+                        )
+                    }
                     IconButton(
                         onClick = {
                             openDocument.launch(
                                 arrayOf(
+                                    "application/json",
                                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                     "text/csv",
                                     "text/comma-separated-values",
@@ -181,9 +194,7 @@ fun ListScreen(
         }
     ) { padding ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier = Modifier.imeScaffoldContent(padding)
         ) {
             AtmosphereBackground(modifier = Modifier.fillMaxSize())
 
@@ -197,7 +208,7 @@ fun ListScreen(
                         completed = state.completed
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
+                    VoiceOutlinedTextField(
                         value = state.searchQuery,
                         onValueChange = viewModel::setSearchQuery,
                         modifier = Modifier.fillMaxWidth(),

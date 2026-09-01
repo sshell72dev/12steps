@@ -43,7 +43,8 @@ data class VoiceUiState(
  * deadlocks UI/WebRTC callbacks — always invoke it off the main thread.
  */
 class VapiVoiceController(
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val plugin: ru.na.steps12.voice.VoicePlugin? = null
 ) {
     private var activity: Activity? = null
     private var lifecycle: Lifecycle? = null
@@ -55,9 +56,19 @@ class VapiVoiceController(
     private var watchdog: Runnable? = null
 
     private val _state = MutableStateFlow(
-        VoiceUiState(configured = BuildConfig.VAPI_PUBLIC_KEY.isNotBlank())
+        VoiceUiState(configured = publicKey().isNotBlank())
     )
     val state: StateFlow<VoiceUiState> = _state.asStateFlow()
+
+    init {
+        if (plugin != null) {
+            scope.launch {
+                plugin.config.collect { cfg ->
+                    _state.update { it.copy(configured = cfg.publicKey.isNotBlank() || BuildConfig.VAPI_PUBLIC_KEY.isNotBlank()) }
+                }
+            }
+        }
+    }
 
     fun attach(activity: Activity, lifecycle: Lifecycle) {
         if (this.activity === activity && this.lifecycle === lifecycle) return
@@ -66,7 +77,7 @@ class VapiVoiceController(
         this.lifecycle = lifecycle
     }
 
-    fun isConfigured(): Boolean = BuildConfig.VAPI_PUBLIC_KEY.isNotBlank()
+    fun isConfigured(): Boolean = publicKey().isNotBlank()
 
     fun start(
         session: DialogSession,
@@ -113,9 +124,10 @@ class VapiVoiceController(
                 // Keep overrides small — large payloads stall web-call creation on mobile.
                 val overrides = mapOf(
                     "variableValues" to vars,
-                    "firstMessage" to firstMessage
+                    "firstMessage" to firstMessage,
+                    "voice" to voiceMap()
                 )
-                val assistantId = BuildConfig.VAPI_ASSISTANT_ID.trim()
+                val assistantId = assistantId().trim()
                 val client = createClient(host, life)
 
                 Log.i(TAG, "start attempt1 assistantId=${assistantId.isNotBlank()} vars=${vars.size}")
@@ -250,14 +262,11 @@ class VapiVoiceController(
             "model" to "gpt-4o-mini",
             "systemPrompt" to prompt.truncate(MAX_PROMPT_CHARS)
         ),
-        "voice" to mapOf(
-            "provider" to "azure",
-            "voiceId" to "ru-RU-SvetlanaNeural"
-        ),
+        "voice" to voiceMap(),
         "transcriber" to mapOf(
             "provider" to "deepgram",
             "model" to "nova-2",
-            "language" to "ru"
+            "language" to ru.na.step4.obidy.data.i18n.I18n.languageCode().substringBefore('-').ifBlank { "en" }
         )
     )
 
@@ -329,7 +338,7 @@ class VapiVoiceController(
         val client = Vapi(
             host,
             life,
-            Vapi.Configuration(publicKey = BuildConfig.VAPI_PUBLIC_KEY)
+            Vapi.Configuration(publicKey = publicKey())
         )
         eventsJob = scope.launch {
             client.eventFlow.collect { event ->
@@ -362,6 +371,17 @@ class VapiVoiceController(
         vapi = client
         return client
     }
+
+    private fun publicKey(): String =
+        plugin?.publicKey(BuildConfig.VAPI_PUBLIC_KEY) ?: BuildConfig.VAPI_PUBLIC_KEY
+
+    private fun assistantId(): String =
+        plugin?.assistantId(BuildConfig.VAPI_ASSISTANT_ID) ?: BuildConfig.VAPI_ASSISTANT_ID
+
+    private fun voiceMap(): Map<String, Any> = plugin?.vapiVoice() ?: mapOf(
+        "provider" to "azure",
+        "voiceId" to "ru-RU-SvetlanaNeural"
+    )
 
     companion object {
         private const val TAG = "Step4Voice"

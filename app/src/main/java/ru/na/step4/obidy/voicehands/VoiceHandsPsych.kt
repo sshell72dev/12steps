@@ -1,0 +1,76 @@
+package ru.na.step4.obidy.voicehands
+
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import ru.na.step4.obidy.ui.psych.PsychPage
+import ru.na.step4.obidy.ui.psych.PsychUi
+import ru.na.step4.obidy.ui.psych.PsychViewModel
+
+/**
+ * Narrow façade over the psychologist screen. The experiment talks only
+ * through this gate so PsychViewModel can keep evolving on its own.
+ */
+class VoiceHandsPsych(private val vm: PsychViewModel) {
+    val ui: StateFlow<PsychUi> get() = vm.ui
+
+    fun same(other: PsychViewModel): Boolean = vm === other
+
+    fun goRecord() = vm.goRecord()
+
+    fun skipOnboarding() = vm.skipOnboarding()
+
+    fun goHub() = vm.goHub()
+
+    fun submitSituation(text: String) = vm.submitSituation(text, viaVoice = true)
+
+    fun pickTopicNoHistory(situationId: Long) = vm.pickTopic(situationId, null, noHistory = true)
+
+    fun answerDialogue(text: String) = vm.answerDialogue(text, viaVoice = true)
+
+    fun analyze() = vm.analyze()
+
+    fun recommend() = vm.recommend()
+}
+
+object VoiceHandsPsychGate {
+    private val _bound = MutableStateFlow<VoiceHandsPsych?>(null)
+    val bound: StateFlow<VoiceHandsPsych?> = _bound.asStateFlow()
+
+    fun attach(vm: PsychViewModel) {
+        _bound.value = VoiceHandsPsych(vm)
+    }
+
+    fun detach(vm: PsychViewModel) {
+        if (_bound.value?.same(vm) == true) {
+            _bound.value = null
+        }
+    }
+}
+
+internal val PsychUi.dialogueQuestion: String?
+    get() = (page as? PsychPage.Dialogue)?.question?.trim()?.takeIf { it.isNotBlank() }
+
+internal val PsychUi.topicPickId: Long?
+    get() = (page as? PsychPage.TopicPick)?.situationId
+
+internal val PsychUi.resultSpeakable: String?
+    get() {
+        val page = page as? PsychPage.Result ?: return null
+        return page.speakable.ifBlank { page.text }.trim().takeIf { it.isNotBlank() }
+    }
+
+internal val PsychUi.resultKey: String?
+    get() {
+        val page = page as? PsychPage.Result ?: return null
+        return "${page.kind}:${page.session.id}:${page.text.hashCode()}"
+    }
+
+internal val PsychUi.isOnboarding: Boolean
+    get() = page is PsychPage.Onboarding
+
+internal val PsychUi.isRecord: Boolean
+    get() = page is PsychPage.Record
+
+internal val PsychUi.isPaywall: Boolean
+    get() = page is PsychPage.Paywall

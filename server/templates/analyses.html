@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Самоанализ · Админка</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --sand-deep: #e6dfd0;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --ok: #2f6b45;
+        --warn: #8a6a1a;
+        --danger: #8a3a2a;
+      }
+      body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #ece8df; color: var(--ink); }
+      .top {
+        background: var(--forest); color: var(--sand); padding: 16px 20px;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      }
+      .top a { color: var(--sand); text-decoration: none; opacity: .88; margin-left: 14px; font-size: 13px; }
+      .top b { font-size: 16px; }
+      .top span { opacity: .78; font-size: 13px; }
+      .ghost { background: transparent; color: var(--sand); border: 1px solid rgba(243,239,230,.28); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
+      .grid { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+      .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+      h1 { margin: 0 0 8px; font-size: 22px; color: var(--forest); }
+      .muted { color: var(--muted); font-size: 14px; line-height: 1.5; }
+      label { display: block; margin-top: 10px; font-size: 13px; font-weight: 650; color: var(--forest); }
+      input, select, textarea {
+        width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px 12px;
+        border-radius: 10px; border: 1px solid var(--line); background: #fbfaf7; font-size: 15px; font-family: inherit;
+      }
+      textarea { min-height: 64px; }
+      button {
+        padding: 9px 14px; border: 0; border-radius: 10px; background: var(--forest);
+        color: var(--sand); font-weight: 650; cursor: pointer; margin-top: 8px;
+      }
+      .secondary { background: var(--sand-deep); color: var(--forest); }
+      .danger { background: var(--danger); color: #fff; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .item {
+        display: flex; gap: 6px; align-items: center; padding: 8px 0;
+        border-bottom: 1px solid var(--line); cursor: pointer;
+      }
+      .item.active b { text-decoration: underline; }
+      .item b { color: var(--forest); font-size: 14px; flex: 1; }
+      .qcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; background: #fbfaf7; }
+      .qcard.nested { background: #fff; }
+      .notice, .warn { margin-bottom: 14px; padding: 10px 12px; border-radius: 12px; }
+      .notice { background: rgba(47,107,69,.1); border: 1px solid rgba(47,107,69,.28); color: var(--ok); }
+      .warn { background: rgba(138,106,26,.1); border: 1px solid rgba(138,106,26,.28); color: var(--warn); }
+      .chip { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+      .chip button { margin-top: 0; padding: 6px 10px; font-size: 13px; }
+      .chip button.on { outline: 2px solid var(--forest); }
+      .tiny { padding: 6px 10px; font-size: 13px; margin-top: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div>
+        <b>12 шагов · Админка</b>
+        <span>{{ domain }}</span>
+        <a href="{{ url_for('settings') }}">ИИ</a>
+        <a href="{{ url_for('notes_admin') }}">Подсказки</a>
+        <a href="{{ url_for('analyses_admin') }}">Самоанализ</a>
+        <a href="{{ url_for('voice_settings') }}">Голос</a>
+        <a href="{{ url_for('support_admin') }}">Ошибки</a>
+      </div>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="ghost" type="submit">Выйти</button>
+      </form>
+    </div>
+    <div class="wrap">
+      <div id="flash"></div>
+      <div class="grid">
+        <div class="card">
+          <h1>Самоанализы</h1>
+          <div class="muted">Общий каталог для всех приложений. После сохранения телефоны заберут его при синхронизации.</div>
+          <div class="row" style="margin-top:12px;">
+            <button type="button" onclick="createAnalysis()">Новый</button>
+            <button class="secondary" type="button" onclick="saveCatalog()">Сохранить общий</button>
+          </div>
+          <div id="list"></div>
+        </div>
+        <div class="card" id="editor"><div class="muted">Выберите самоанализ слева.</div></div>
+      </div>
+    </div>
+    <script>
+      const BUILTIN = new Set(["10-step","10-step-mini","1-shag-na-kazhdyj-den","2-shag-na-kazhdyj-den","3-shag-na-kazhdyj-den","12-voprosov","clean-day-short","clean-day-long"]);
+      let catalog = {{ catalog_json | safe }};
+      const seed = {{ seed_json | safe }};
+      let selectedId = (catalog.self_analyses[0] && catalog.self_analyses[0].id) || "";
+
+      function uid() { return Math.random().toString(16).slice(2, 10); }
+      function flash(text, warn) {
+        document.getElementById("flash").innerHTML = `<div class="${warn ? "warn" : "notice"}">${text}</div>`;
+      }
+      function analyses() { return catalog.self_analyses || []; }
+      function selected() { return analyses().find(a => a.id === selectedId); }
+      function normalizeQ(q, prefix) {
+        if (typeof q === "string") return { id: prefix + uid(), text: q, buttons: "auto", allow_text: true };
+        q.id = q.id || prefix + uid();
+        q.buttons = q.buttons || (q.choices ? "list" : "auto");
+        if (q.allow_text === undefined) q.allow_text = true;
+        q.choices = q.choices || [];
+        q.follow_ups = q.follow_ups || {};
+        q.end_on = q.end_on || [];
+        Object.keys(q.follow_ups).forEach(k => {
+          q.follow_ups[k] = (q.follow_ups[k] || []).map((x, i) => normalizeQ(x, q.id + "-" + k + i));
+        });
+        return q;
+      }
+      analyses().forEach(a => {
+        a.questions = (a.questions || []).map((q, i) => normalizeQ(q, a.id + "-q" + i));
+        a.branches = a.branches || [];
+        a.items = a.items || [];
+      });
+
+      function move(arr, i, dir) {
+        const j = i + dir;
+        if (j < 0 || j >= arr.length) return;
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      function renderList() {
+        const box = document.getElementById("list");
+        box.innerHTML = analyses().map(a => `
+          <div class="item ${a.id === selectedId ? "active" : ""}" onclick="selectAnalysis('${a.id}')">
+            <b>${esc(a.title || a.id)}</b>
+            <button class="secondary tiny" onclick="event.stopPropagation(); moveAnalysis('${a.id}',-1)">↑</button>
+            <button class="secondary tiny" onclick="event.stopPropagation(); moveAnalysis('${a.id}',1)">↓</button>
+          </div>`).join("");
+      }
+      function selectAnalysis(id) { selectedId = id; render(); }
+      function moveAnalysis(id, dir) {
+        const arr = analyses();
+        const i = arr.findIndex(a => a.id === id);
+        move(arr, i, dir);
+        arr.forEach((a, idx) => a.menu_order = idx + 1);
+        render();
+      }
+      function createAnalysis() {
+        const title = prompt("Название самоанализа", "Мой самоанализ");
+        if (!title) return;
+        const id = "custom-" + uid();
+        catalog.self_analyses.push({
+          id, title, custom: true, menu_order: analyses().length + 1,
+          questions: [{ id: id + "-q1", text: "Новый вопрос", buttons: "none", allow_text: true, choices: [], follow_ups: {}, end_on: [] }]
+        });
+        selectedId = id;
+        render();
+      }
+      function deleteAnalysis() {
+        const a = selected();
+        if (!a) return;
+        if (BUILTIN.has(a.id)) { flash("Стандартный самоанализ нельзя удалить. Можно сбросить к исходным вопросам.", true); return; }
+        if (!confirm("Удалить «" + a.title + "» из общего каталога?")) return;
+        catalog.self_analyses = analyses().filter(x => x.id !== a.id);
+        selectedId = (analyses()[0] && analyses()[0].id) || "";
+        render();
+      }
+      function resetSelected() {
+        const a = selected();
+        if (!a || !BUILTIN.has(a.id)) return;
+        const src = (seed.self_analyses || []).find(x => x.id === a.id);
+        if (!src) return;
+        if (!confirm("Вернуть стандартные вопросы этого самоанализа?")) return;
+        const i = analyses().findIndex(x => x.id === a.id);
+        catalog.self_analyses[i] = JSON.parse(JSON.stringify(src));
+        catalog.self_analyses[i].questions = (catalog.self_analyses[i].questions || []).map((q, n) => normalizeQ(q, a.id + "-q" + n));
+        render();
+      }
+      function blankQ() {
+        return { id: "q" + uid(), text: "Новый вопрос", buttons: "none", allow_text: true, choices: [], follow_ups: {}, end_on: [] };
+      }
+      function yesNo() {
+        return [{ id: "yes", label: "Да" }, { id: "no", label: "Нет" }];
+      }
+      function esc(s) {
+        return String(s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+      }
+      function setText(obj, key, value) { obj[key] = value; }
+
+      function qEditor(q, arr, depth) {
+        const idx = arr.indexOf(q);
+        const mode = q.buttons || "auto";
+        const list = mode === "list";
+        return `<div class="qcard ${depth ? "nested" : ""}">
+          <div class="row">
+            <button class="secondary tiny" onclick="moveQ(this,-1)">↑</button>
+            <button class="secondary tiny" onclick="moveQ(this,1)">↓</button>
+            <button class="danger tiny" onclick="delQ(this)">×</button>
+          </div>
+          <label>Вопрос</label>
+          <textarea data-qid="${q.id}" oninput="qById('${q.id}').text=this.value">${esc(q.text)}</textarea>
+          ${depth > 1 ? "" : `
+          <label>Кнопки ответа</label>
+          <div class="chip">
+            <button type="button" class="${mode==="none"?"on":""}" onclick="setButtons('${q.id}','none')">Без кнопок</button>
+            <button type="button" class="${mode==="list" && isYesNo(q)?"on":""}" onclick="setButtons('${q.id}','yesno')">Да / Нет</button>
+            <button type="button" class="${mode==="list" && !isYesNo(q)?"on":""}" onclick="setButtons('${q.id}','custom')">Свои</button>
+            ${depth===0?`<button type="button" class="${mode==="auto"?"on":""}" onclick="setButtons('${q.id}','auto')">Как обычно</button>`:""}
+          </div>
+          <label class="row" style="font-weight:650;"><input type="checkbox" ${q.allow_text!==false?"checked":""} onchange="qById('${q.id}').allow_text=this.checked"/> Можно писать ответ</label>
+          <label>Если «Нет» — пропустить следующие</label>
+          <input type="number" min="0" max="20" value="${q.skip_next_questions_on_no||0}" oninput="qById('${q.id}').skip_next_questions_on_no=parseInt(this.value||0,10)"/>
+          ${list ? choicesEditor(q, depth) : ""}
+          `}
+        </div>`;
+      }
+      function isYesNo(q) {
+        const labs = (q.choices||[]).map(c => (c.label||"").trim().toLowerCase());
+        return labs.length===2 && labs.includes("да") && labs.includes("нет");
+      }
+      function choicesEditor(q, depth) {
+        return (q.choices||[]).map(c => {
+          const kids = q.follow_ups[c.id] || [];
+          return `<div class="qcard nested">
+            <label>Кнопка</label>
+            <div class="row">
+              <input value="${esc(c.label)}" oninput="choiceById('${q.id}','${c.id}').label=this.value"/>
+              <button class="danger tiny" onclick="delChoice('${q.id}','${c.id}')">×</button>
+            </div>
+            <label class="row"><input type="checkbox" ${(q.end_on||[]).includes(c.id)?"checked":""} onchange="toggleEnd('${q.id}','${c.id}',this.checked)"/> Завершить самоанализ</label>
+            ${depth < 1 ? `<label>Вопросы, если выбран этот ответ</label>${kids.map(k => qEditor(k, kids, depth+1)).join("")}
+              <button class="secondary tiny" onclick="addFollow('${q.id}','${c.id}')">Добавить вопрос ветки</button>` : ""}
+          </div>`;
+        }).join("") + `<button class="secondary tiny" onclick="addChoice('${q.id}')">Добавить кнопку</button>`;
+      }
+      function qById(id, list) {
+        const walk = (arr) => {
+          for (const q of arr || []) {
+            if (q.id === id) return q;
+            for (const kids of Object.values(q.follow_ups || {})) {
+              const found = walk(kids);
+              if (found) return found;
+            }
+          }
+        };
+        return walk((selected() && selected().questions) || []);
+      }
+      function parentList(id) {
+        const a = selected();
+        const find = (arr) => {
+          if ((arr || []).some(q => q.id === id)) return arr;
+          for (const q of arr || []) {
+            for (const kids of Object.values(q.follow_ups || {})) {
+              const found = find(kids);
+              if (found) return found;
+            }
+          }
+        };
+        return find(a.questions);
+      }
+      window.moveQ = function(btn, dir) {
+        const card = btn.closest(".qcard");
+        const ta = card.querySelector("textarea[data-qid]");
+        const arr = parentList(ta.dataset.qid);
+        const i = arr.findIndex(q => q.id === ta.dataset.qid);
+        move(arr, i, dir);
+        renderEditor();
+      };
+      window.delQ = function(btn) {
+        const ta = btn.closest(".qcard").querySelector("textarea[data-qid]");
+        const arr = parentList(ta.dataset.qid);
+        const i = arr.findIndex(q => q.id === ta.dataset.qid);
+        if (i >= 0) arr.splice(i, 1);
+        renderEditor();
+      };
+      window.setButtons = function(id, mode) {
+        const q = qById(id);
+        if (mode === "none") { q.buttons = "none"; q.choices = []; }
+        if (mode === "auto") { q.buttons = "auto"; }
+        if (mode === "yesno") { q.buttons = "list"; q.choices = yesNo(); }
+        if (mode === "custom") { q.buttons = "list"; if (!q.choices.length) q.choices = yesNo(); }
+        renderEditor();
+      };
+      window.choiceById = function(qid, cid) { return (qById(qid).choices || []).find(c => c.id === cid); };
+      window.addChoice = function(id) {
+        const q = qById(id);
+        q.buttons = "list";
+        q.choices = q.choices || [];
+        q.choices.push({ id: "c" + uid(), label: "Кнопка" });
+        renderEditor();
+      };
+      window.delChoice = function(qid, cid) {
+        const q = qById(qid);
+        q.choices = (q.choices || []).filter(c => c.id !== cid);
+        delete (q.follow_ups || {})[cid];
+        q.end_on = (q.end_on || []).filter(x => x !== cid);
+        renderEditor();
+      };
+      window.toggleEnd = function(qid, cid, on) {
+        const q = qById(qid);
+        const set = new Set(q.end_on || []);
+        if (on) set.add(cid); else set.delete(cid);
+        q.end_on = [...set];
+      };
+      window.addFollow = function(qid, cid) {
+        const q = qById(qid);
+        q.follow_ups = q.follow_ups || {};
+        q.follow_ups[cid] = q.follow_ups[cid] || [];
+        q.follow_ups[cid].push(blankQ());
+        renderEditor();
+      };
+      function renderEditor() {
+        const a = selected();
+        const box = document.getElementById("editor");
+        if (!a) { box.innerHTML = `<div class="muted">Выберите самоанализ слева.</div>`; return; }
+        const branched = (a.branches || []).length > 0;
+        const clean = (a.items || []).length > 0;
+        box.innerHTML = `
+          <h1>${esc(a.title)}</h1>
+          <div class="muted">id: ${esc(a.id)}${a.custom ? " · свой" : " · стандартный"}</div>
+          <label>Название</label>
+          <input value="${esc(a.title)}" oninput="selected().title=this.value; renderList()"/>
+          <div class="row" style="margin-top:12px;">
+            ${BUILTIN.has(a.id) ? `<button class="secondary" type="button" onclick="resetSelected()">Сбросить к стандартному</button>` : `<button class="danger" type="button" onclick="deleteAnalysis()">Удалить</button>`}
+            <button type="button" onclick="saveCatalog()">Сохранить общий</button>
+          </div>
+          ${clean ? cleanEditor(a) : ""}
+          ${!clean ? `<label>Вопросы</label>${(a.questions||[]).map(q => qEditor(q, a.questions, 0)).join("")}
+            <button class="secondary" type="button" onclick="selected().questions.push(blankQ()); renderEditor()">Добавить вопрос</button>` : ""}
+          ${branched ? branchEditor(a) : (a.custom ? `<div style="margin-top:16px;"><button class="secondary" type="button" onclick="addBranchBlock()">Добавить ветки выбора (как 2/3 шаг)</button></div>` : "")}
+        `;
+      }
+      function addBranchBlock() {
+        const a = selected();
+        a.branches = [{ id: "b" + uid(), title: "Ветка", questions: ["Новый вопрос"] }];
+        renderEditor();
+      }
+      function branchEditor(a) {
+        return `<h1 style="margin-top:18px;font-size:18px;">Ветки</h1>
+          ${(a.branches||[]).map((b,i) => `
+            <div class="qcard">
+              <label>Название ветки</label>
+              <div class="row">
+                <input value="${esc(b.title)}" oninput="selected().branches[${i}].title=this.value"/>
+                <button class="danger tiny" onclick="selected().branches.splice(${i},1); renderEditor()">×</button>
+              </div>
+              ${(b.questions||[]).map((t,j) => `
+                <textarea oninput="selected().branches[${i}].questions[${j}]=this.value">${esc(t)}</textarea>
+                <button class="danger tiny" onclick="selected().branches[${i}].questions.splice(${j},1); renderEditor()">×</button>
+              `).join("")}
+              <button class="secondary tiny" onclick="selected().branches[${i}].questions.push('Новый вопрос'); renderEditor()">Добавить вопрос ветки</button>
+            </div>`).join("")}
+          <button class="secondary" type="button" onclick="selected().branches.push({id:'b'+uid(), title:'Ветка', questions:['Новый вопрос']}); renderEditor()">Добавить ветку</button>`;
+      }
+      function cleanEditor(a) {
+        return `<label>Темы «Чистого дня»</label>
+          ${(a.items||[]).map((item,i) => `
+            <div class="qcard">
+              <div class="row">
+                <button class="secondary tiny" onclick="move(selected().items,${i},-1); renderEditor()">↑</button>
+                <button class="secondary tiny" onclick="move(selected().items,${i},1); renderEditor()">↓</button>
+                <button class="danger tiny" onclick="selected().items.splice(${i},1); renderEditor()">×</button>
+              </div>
+              <label>Тема</label>
+              <input value="${esc(item.title)}" oninput="selected().items[${i}].title=this.value"/>
+              <label>Вопрос</label>
+              <textarea oninput="selected().items[${i}].question=this.value">${esc(item.question)}</textarea>
+              <label>Если да — подпись</label>
+              <input value="${esc(item.if_yes.label)}" oninput="selected().items[${i}].if_yes.label=this.value"/>
+              ${(item.if_yes.questions||[]).map((t,j)=>`<textarea oninput="selected().items[${i}].if_yes.questions[${j}]=this.value">${esc(t)}</textarea>`).join("")}
+              <button class="secondary tiny" onclick="selected().items[${i}].if_yes.questions.push('Новый вопрос'); renderEditor()">+ вопрос «да»</button>
+              <label>Если нет — подпись</label>
+              <input value="${esc(item.if_no.label)}" oninput="selected().items[${i}].if_no.label=this.value"/>
+              ${(item.if_no.questions||[]).map((t,j)=>`<textarea oninput="selected().items[${i}].if_no.questions[${j}]=this.value">${esc(t)}</textarea>`).join("")}
+              <button class="secondary tiny" onclick="selected().items[${i}].if_no.questions.push('Новый вопрос'); renderEditor()">+ вопрос «нет»</button>
+            </div>`).join("")}
+          <button class="secondary" type="button" onclick="selected().items.push({title:'Тема', question:'Новый вопрос', if_yes:{label:'Да', questions:[]}, if_no:{label:'Нет', questions:[]}}); renderEditor()">Добавить тему</button>`;
+      }
+      async function saveCatalog() {
+        const res = await fetch({{ url_for('analyses_save') | tojson }}, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ catalog })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) flash("Общий каталог сохранён. Приложения заберут его при следующей синхронизации.");
+        else flash("Не удалось сохранить.", true);
+      }
+      function render() { renderList(); renderEditor(); }
+      render();
+    </script>
+    {% set admin_report_from = 'analyses' %}
+    {% include '_admin_report_fab.html' %}
+    {% include "_voice_plugin.html" %}
+  </body>
+</html>

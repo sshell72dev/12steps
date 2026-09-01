@@ -34,7 +34,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -53,11 +52,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.assistant.ChatTurn
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
-import ru.na.step4.obidy.ui.components.HintIcon
+import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.data.notes.NoteIds
+import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Danger
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.steps12.voice.ui.SpeakIconButton
+import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,20 +125,16 @@ fun AssistantScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    AppNavIcon(onBack = {
                         viewModel.stopVoice()
                         onBack()
-                    }) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = Ru.back,
-                            tint = Forest
-                        )
-                    }
+                    })
                 },
                 actions = {
-                    HintIcon(
-                        if (state.questionAssist.active) Ru.assistantFocusHint else Ru.assistantHint
+                    NoteView(
+                        NoteIds.ASSISTANT,
+                        if (state.questionAssist.active) Ru.assistantFocusHint else Ru.assistantHint,
+                        compact = true
                     )
                     if (!state.questionAssist.active && state.session.draftTarget.isNotBlank()) {
                         IconButton(onClick = {
@@ -150,9 +149,7 @@ fun AssistantScreen(
         }
     ) { padding ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier = Modifier.imeScaffoldContent(padding)
         ) {
             AtmosphereBackground(modifier = Modifier.fillMaxSize())
 
@@ -189,7 +186,7 @@ fun AssistantScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 12.dp)
                 ) {
-                    OutlinedTextField(
+                    VoiceOutlinedTextField(
                         value = state.input,
                         onValueChange = viewModel::updateInput,
                         modifier = Modifier.weight(1f),
@@ -306,14 +303,25 @@ private fun ChatBubble(turn: ChatTurn) {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (mine) Alignment.End else Alignment.Start
     ) {
-        Text(
-            text = turn.content,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (mine) Sand else Forest,
+        Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(14.dp))
                 .background(if (mine) Forest else Sand.copy(alpha = 0.92f))
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        )
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = turn.content,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (mine) Sand else Forest,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+            )
+            SpeakIconButton(
+                text = turn.content,
+                tint = if (mine) Sand else Forest
+            )
+        }
     }
 }

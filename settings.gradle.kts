@@ -14,5 +14,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Step4Obidy"
+rootProject.name = "Steps12"
 include(":app")
+include(":voice")

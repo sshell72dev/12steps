@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Настройки ИИ-аналитики</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --sand-deep: #e6dfd0;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --ok: #2f6b45;
+        --warn: #8a6a1a;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #ece8df;
+        color: var(--ink);
+      }
+      .top {
+        background: var(--forest);
+        color: var(--sand);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .top a { color: var(--sand); text-decoration: none; opacity: .88; margin-left: 14px; font-size: 13px; }
+      .top a:hover { opacity: 1; }
+      .top b { font-size: 16px; }
+      .top span { opacity: .78; font-size: 13px; }
+      .ghost {
+        background: transparent;
+        color: var(--sand);
+        border: 1px solid rgba(243, 239, 230, 0.28);
+        border-radius: 10px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 28px 16px 48px; }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 22px;
+      }
+      h1 { margin: 0 0 8px; font-size: 22px; color: var(--forest); }
+      .muted { color: var(--muted); font-size: 14px; line-height: 1.5; }
+      label { display: block; margin-top: 18px; font-size: 13px; font-weight: 650; color: var(--forest); }
+      input, select {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 6px;
+        padding: 11px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fbfaf7;
+        font-size: 15px;
+      }
+      .actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+      button {
+        padding: 11px 16px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--forest);
+        color: var(--sand);
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .secondary {
+        background: var(--sand-deep);
+        color: var(--forest);
+      }
+      .notice, .warn {
+        margin-bottom: 14px;
+        padding: 10px 12px;
+        border-radius: 12px;
+      }
+      .notice {
+        background: rgba(47, 107, 69, 0.1);
+        border: 1px solid rgba(47, 107, 69, 0.28);
+        color: var(--ok);
+      }
+      .warn {
+        background: rgba(138, 106, 26, 0.1);
+        border: 1px solid rgba(138, 106, 26, 0.28);
+        color: var(--warn);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div>
+        <b>12 шагов · Админка</b>
+        <span>{{ domain }}</span>
+        <a href="{{ url_for('settings') }}">ИИ</a>
+        <a href="{{ url_for('notes_admin') }}">Подсказки</a>
+        <a href="{{ url_for('analyses_admin') }}">Самоанализ</a>
+        <a href="{{ url_for('voice_settings') }}">Голос</a>
+        <a href="{{ url_for('support_admin') }}">Ошибки</a>
+      </div>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="ghost" type="submit">Выйти</button>
+      </form>
+    </div>
+    <div class="wrap">
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+      {% if request.args.get('messenger') %}<div class="notice">Мессенджер: сохранено.</div>{% endif %}
+      {% if warn %}<div class="warn">{{ warn }}</div>{% endif %}
+      <div class="card">
+        <h1>Настройки ИИ-аналитики</h1>
+        <div class="muted">Настройки для ИИ-консультанта анализа самоанализа (DeepSeek API).</div>
+        <form method="post">
+          <label for="api_key">API Key</label>
+          <input
+            id="api_key"
+            name="api_key"
+            type="password"
+            autocomplete="off"
+            placeholder="{% if has_key %}Ключ сохранён — введите новый, чтобы заменить{% else %}sk-...{% endif %}"
+            value=""
+          />
+
+          <label for="model">Модель для проверки ключа</label>
+          <select id="model" name="model">
+            {% for value, label in models %}
+              <option value="{{ value }}" {% if value == model %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div class="muted" style="margin-top:8px;">
+            Для пользователей модель выбирается автоматически:
+            без Premium — <b>deepseek-v4-flash</b>, с Premium — <b>deepseek-v4-pro</b>.
+            Список ниже нужен только для кнопки «Проверить ключ».
+          </div>
+
+          <label for="premium_price_rub">Сумма Premium, ₽</label>
+          <input
+            id="premium_price_rub"
+            name="premium_price_rub"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            value="{{ premium_price_rub }}"
+            placeholder="199"
+          />
+          <div class="muted" style="margin-top:8px;">
+            Показывается в приложении при предложении Premium. Это небольшой вклад в развитие,
+            а не «закрытие» функций: flash уже закрывает рабочие сценарии.
+          </div>
+
+          <label for="premium_days_after_payment">Срок Premium после оплаты, дней</label>
+          <input
+            id="premium_days_after_payment"
+            name="premium_days_after_payment"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            value="{{ premium_days_after_payment }}"
+            placeholder="365"
+          />
+          <div class="muted" style="margin-top:8px;">
+            После успешного платежа ЮKassa entitlement продлевается на это число дней
+            (от текущего срока или от «сейчас»). По умолчанию 365.
+          </div>
+
+          <div class="actions">
+            <button type="submit" name="action" value="save">Сохранить</button>
+            <button class="secondary" type="submit" name="action" value="test">Проверить ключ</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h1>ЮKassa · Premium</h1>
+        <div class="muted" style="margin-bottom:12px;">
+          Оплата вне магазина приложений (самозанятый / НПД). Ключи хранятся на сервере,
+          в APK не попадают. Чек НПД — вручную в «Мой налог» или автоотправка ЮKassa (не блокер MVP).
+          Статус:
+          {% if yookassa_configured %}<b style="color:var(--ok)">настроена</b>{% else %}<b style="color:var(--warn)">не настроена</b>{% endif %}.
+        </div>
+        <form method="post">
+          <input type="hidden" name="model" value="{{ model }}" />
+          <input type="hidden" name="premium_price_rub" value="{{ premium_price_rub }}" />
+          <input type="hidden" name="premium_days_after_payment" value="{{ premium_days_after_payment }}" />
+
+          <label for="yookassa_shop_id">shopId</label>
+          <input
+            id="yookassa_shop_id"
+            name="yookassa_shop_id"
+            type="text"
+            autocomplete="off"
+            value="{{ yookassa_shop_id }}"
+            placeholder="Из личного кабинета ЮKassa"
+          />
+
+          <label for="yookassa_secret_key">secretKey</label>
+          <input
+            id="yookassa_secret_key"
+            name="yookassa_secret_key"
+            type="password"
+            autocomplete="off"
+            placeholder="{% if yookassa_has_secret %}Ключ сохранён — введите новый, чтобы заменить{% else %}Секретный ключ{% endif %}"
+            value=""
+          />
+          {% if yookassa_has_secret %}
+          <div class="muted" style="margin-top:6px;">Сохранён: {{ yookassa_secret_masked }}</div>
+          {% endif %}
+
+          <label style="display:flex;align-items:center;gap:8px;margin-top:18px;font-weight:650;">
+            <input
+              type="checkbox"
+              name="yookassa_test_mode"
+              value="1"
+              {% if yookassa_test_mode %}checked{% endif %}
+              style="width:auto;margin:0;"
+            />
+            Тестовый режим (напоминание: в кабинете ЮKassa — тестовый магазин / ключи)
+          </label>
+
+          <div class="muted" style="margin-top:14px;line-height:1.55;">
+            <p style="margin:0 0 8px;"><b>В кабинете ЮKassa укажите:</b></p>
+            <p style="margin:0 0 6px;">Webhook (HTTP-уведомления): <code>{{ webhook_url }}</code></p>
+            <p style="margin:0 0 6px;">Return URL после оплаты: <code>{{ return_url }}</code></p>
+            <p style="margin:0;">События: <code>payment.succeeded</code> (достаточно для MVP).</p>
+          </div>
+
+          <div class="actions">
+            <button type="submit" name="action" value="save">Сохранить ЮKassa</button>
+          </div>
+        </form>
+
+        <h1 style="margin-top:22px;font-size:18px;">Последние платежи</h1>
+        {% if premium_payments %}
+        <div style="overflow-x:auto;margin-top:8px;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="text-align:left;border-bottom:1px solid var(--line);">
+                <th style="padding:6px 4px;">Когда</th>
+                <th style="padding:6px 4px;">Статус</th>
+                <th style="padding:6px 4px;">Сумма</th>
+                <th style="padding:6px 4px;">device</th>
+                <th style="padding:6px 4px;">payment_id</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in premium_payments %}
+              <tr style="border-bottom:1px solid var(--line);">
+                <td style="padding:6px 4px;white-space:nowrap;">{{ p.paid_at or p.created_at }}</td>
+                <td style="padding:6px 4px;">{{ p.status }}</td>
+                <td style="padding:6px 4px;">{{ p.amount }} {{ p.currency }}</td>
+                <td style="padding:6px 4px;font-family:monospace;font-size:11px;">{{ p.device_id[:12] }}…</td>
+                <td style="padding:6px 4px;font-family:monospace;font-size:11px;">{{ p.payment_id[:18] }}…</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="muted" style="margin-top:8px;">Пока платежей нет.</div>
+        {% endif %}
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h1>Код администратора для приложения</h1>
+        <div class="muted">
+          Пользователь вводит этот код в настройках приложения, чтобы получить статус админа
+          (правка подсказок, без лимита ИИ). Код действует, пока вы его не обновите.
+        </div>
+        <label>Текущий код</label>
+        <input type="text" readonly value="{{ admin_code }}" onclick="this.select()" />
+        <form method="post" action="{{ url_for('rotate_admin_code') }}" style="margin-top:12px;">
+          <button class="secondary" type="submit" onclick="return confirm('Старый код перестанет работать. Продолжить?')">
+            Создать новый код
+          </button>
+        </form>
+      </div>
+    </div>
+    {% set admin_report_from = 'settings' %}
+    {% include '_admin_report_fab.html' %}
+    {% include "_messenger_plugin.html" %}
+    {% include "_voice_plugin.html" %}
+  </body>
+</html>

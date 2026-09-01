@@ -56,7 +56,10 @@ class AssistantViewModel(
     private val focusKey: String = ""
 ) : AndroidViewModel(app) {
 
-    private val voice = VapiVoiceController(scope = viewModelScope)
+    private val voice = VapiVoiceController(
+        scope = viewModelScope,
+        plugin = (app as? ru.na.step4.obidy.Step4App)?.voicePlugin
+    )
 
     private val session = MutableStateFlow(DialogSession())
     private val input = MutableStateFlow("")

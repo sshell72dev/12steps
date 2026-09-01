@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Подсказки · Админка</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --sand-deep: #e6dfd0;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --ok: #2f6b45;
+        --warn: #8a6a1a;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #ece8df;
+        color: var(--ink);
+      }
+      .top {
+        background: var(--forest);
+        color: var(--sand);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .top b { font-size: 16px; }
+      .top span { opacity: .78; font-size: 13px; }
+      .top a { color: var(--sand); text-decoration: none; opacity: .88; margin-left: 14px; font-size: 13px; }
+      .ghost {
+        background: transparent;
+        color: var(--sand);
+        border: 1px solid rgba(243, 239, 230, 0.28);
+        border-radius: 10px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 28px 16px 48px; }
+      .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
+      @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 22px;
+      }
+      h1 { margin: 0 0 8px; font-size: 22px; color: var(--forest); }
+      .muted { color: var(--muted); font-size: 14px; line-height: 1.5; }
+      label { display: block; margin-top: 14px; font-size: 13px; font-weight: 650; color: var(--forest); }
+      input, select, textarea {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 6px;
+        padding: 11px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fbfaf7;
+        font-size: 15px;
+        font-family: inherit;
+      }
+      input[type="checkbox"] { width: auto; margin: 0; }
+      .chk {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 14px;
+        font-size: 14px;
+        font-weight: 650;
+        color: var(--forest);
+      }
+      button {
+        padding: 11px 16px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--forest);
+        color: var(--sand);
+        font-weight: 650;
+        cursor: pointer;
+        margin-top: 14px;
+      }
+      .notice, .warn {
+        margin-bottom: 14px;
+        padding: 10px 12px;
+        border-radius: 12px;
+      }
+      .notice {
+        background: rgba(47, 107, 69, 0.1);
+        border: 1px solid rgba(47, 107, 69, 0.28);
+        color: var(--ok);
+      }
+      .warn {
+        background: rgba(138, 106, 26, 0.1);
+        border: 1px solid rgba(138, 106, 26, 0.28);
+        color: var(--warn);
+      }
+      .item {
+        display: block;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+        color: inherit;
+        text-decoration: none;
+      }
+      .item b { color: var(--forest); font-size: 14px; }
+      .item span { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+      .mode { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--forest); }
+      .search { display: flex; gap: 8px; }
+      .search button { margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div>
+        <b>12 шагов · Админка</b>
+        <span>{{ domain }}</span>
+        <a href="{{ url_for('settings') }}">ИИ</a>
+        <a href="{{ url_for('notes_admin') }}">Подсказки</a>
+        <a href="{{ url_for('analyses_admin') }}">Самоанализ</a>
+        <a href="{{ url_for('voice_settings') }}">Голос</a>
+        <a href="{{ url_for('support_admin') }}">Ошибки</a>
+      </div>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="ghost" type="submit">Выйти</button>
+      </form>
+    </div>
+    <div class="wrap">
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+      {% if warn %}<div class="warn">{{ warn }}</div>{% endif %}
+      <div class="grid">
+        <div class="card">
+          <h1>Подсказки и примечания</h1>
+          <div class="muted">
+            Режим показа: всплывающая (по значку), свёрнутая или развёрнутая.
+            Пустой текст в базе оставляет текст из приложения. Изменения уходят на телефоны при синхронизации.
+          </div>
+          <form method="get" class="search">
+            <div style="flex:1">
+              <label for="q">Поиск</label>
+              <input id="q" name="q" value="{{ query }}" placeholder="id, заголовок или текст" />
+            </div>
+            <button type="submit">Найти</button>
+          </form>
+          {% if not items %}
+            <p class="muted">Пока нет сохранённых подсказок. Их можно задать карандашом в приложении или формой справа.</p>
+          {% endif %}
+          {% for item in items %}
+            <a class="item" href="{{ url_for('notes_admin', edit=item.id, q=query) }}">
+              <b>{{ item.title or item.id }}</b>
+              <span class="mode">{{ item.mode }}{% if item.show_title %} · заголовок отдельно{% endif %} · {{ item.id }}</span>
+              <span>{{ (item.text or 'текст из приложения')[:180] }}</span>
+            </a>
+          {% endfor %}
+        </div>
+        <div class="card">
+          <h1>{% if current %}Редактировать{% else %}Новая / правка по id{% endif %}</h1>
+          <form method="post">
+            <label for="id">Идентификатор</label>
+            <input id="id" name="id" required value="{{ current.id if current else '' }}" placeholder="journal.15 или inventory.work" />
+            <label for="title">Заголовок</label>
+            <input id="title" name="title" value="{{ current.title if current else '' }}" />
+            <label class="chk">
+              <input type="checkbox" name="show_title" value="1" {% if current and current.show_title %}checked{% endif %} />
+              Отображать отдельно (заголовок перед описанием)
+            </label>
+            <label for="mode">Режим показа</label>
+            <select id="mode" name="mode">
+              {% set cur_mode = current.mode if current else 'collapsed' %}
+              <option value="popup" {% if cur_mode == 'popup' %}selected{% endif %}>Всплывающая (по значку)</option>
+              <option value="collapsed" {% if cur_mode == 'collapsed' %}selected{% endif %}>Свёрнутая</option>
+              <option value="expanded" {% if cur_mode == 'expanded' %}selected{% endif %}>Развёрнутая</option>
+            </select>
+            <label for="body">Текст (пусто = оставить текст из приложения)</label>
+            <textarea id="body" name="body">{{ current.text if current else '' }}</textarea>
+            <button type="submit">Сохранить</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% set admin_report_from = 'notes' %}
+    {% include '_admin_report_fab.html' %}
+    {% include "_voice_plugin.html" %}
+  </body>
+</html>

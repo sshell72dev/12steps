@@ -20,6 +20,7 @@ build_log*.txt
 fix_encoding_report.txt
 _vapi_paths.txt
 *.log
+compile-err.txt
 fix_encoding.py
 fix_resentment.py
 patch_ui_ru.py
@@ -29,3 +30,11 @@ tools/sergey_obidy.csv
 tools/dup_report.txt
 tools/xlsx_probe.txt
 tools/xlsx_sample.json
+server/.env
+server/__pycache__/
+server/**/__pycache__/
+server/wheels/
+server/vendor/
+server/tmp/restart.txt
+server/uploads/messenger/*
+!server/uploads/messenger/.gitkeep

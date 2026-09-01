@@ -26,7 +26,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -43,9 +42,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.Category
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
+import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.theme.Danger
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,23 +68,13 @@ fun CategoriesScreen(
                         color = Forest
                     )
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = Ru.back,
-                            tint = Forest
-                        )
-                    }
-                },
+                navigationIcon = { AppNavIcon(onBack = onBack) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Sand.copy(alpha = 0.92f))
             )
         }
     ) { padding ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier = Modifier.imeScaffoldContent(padding)
         ) {
             AtmosphereBackground(modifier = Modifier.fillMaxSize())
 
@@ -105,7 +96,7 @@ fun CategoriesScreen(
                             color = Forest
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedTextField(
+                        VoiceOutlinedTextField(
                             value = state.draftName,
                             onValueChange = viewModel::updateDraftName,
                             modifier = Modifier.fillMaxWidth(),
@@ -195,7 +186,7 @@ private fun CategoryRow(
             .padding(14.dp)
     ) {
         if (editing) {
-            OutlinedTextField(
+            VoiceOutlinedTextField(
                 value = editingName,
                 onValueChange = onNameChange,
                 modifier = Modifier.fillMaxWidth(),

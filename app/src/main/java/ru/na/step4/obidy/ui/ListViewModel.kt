@@ -20,10 +20,15 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.Category
 import ru.na.step4.obidy.data.Resentment
 import ru.na.step4.obidy.data.ResentmentListItem
+import ru.na.step4.obidy.data.ResentmentBackup
 import ru.na.step4.obidy.data.ResentmentRepository
 import ru.na.step4.obidy.data.ResentmentSearch
+import ru.na.step4.obidy.data.files.DownloadJson
 import ru.na.step4.obidy.data.tableimport.ResentmentTableImporter
 import ru.na.step4.obidy.data.tableimport.TableSheetReader
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 sealed interface CategoryFilter {
     data object All : CategoryFilter
@@ -147,18 +152,62 @@ class ListViewModel(private val repository: ResentmentRepository) : ViewModel() 
                     val name = uri.lastPathSegment.orEmpty()
                     val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                         ?: error("empty")
-                    val rows = TableSheetReader.read(bytes, name)
-                    val imported = ResentmentTableImporter(repository).importTable(rows)
-                    if (imported.situationCount == 0 && imported.resentmentCount == 0) {
-                        Ru.importEmpty
+                    val text = bytes.toString(Charsets.UTF_8)
+                    if (ResentmentBackup.looksLikeBackup(name, text)) {
+                        val imported = repository.importInventoryJson(text)
+                        when {
+                            imported.resentmentCount == 0 && imported.skipped > 0 -> Ru.importAlready
+                            imported.resentmentCount == 0 && imported.situationCount == 0 -> Ru.importEmpty
+                            else -> String.format(
+                                Ru.importOk,
+                                imported.resentmentCount,
+                                imported.situationCount
+                            )
+                        }
                     } else {
-                        String.format(
-                            Ru.importOk,
-                            imported.resentmentCount,
-                            imported.situationCount
-                        )
+                        val rows = TableSheetReader.read(bytes, name)
+                        val imported = ResentmentTableImporter(repository).importTable(rows)
+                        if (imported.situationCount == 0 && imported.resentmentCount == 0) {
+                            Ru.importEmpty
+                        } else {
+                            String.format(
+                                Ru.importOk,
+                                imported.resentmentCount,
+                                imported.situationCount
+                            )
+                        }
                     }
                 }.getOrElse { Ru.importError }
+            }
+            importing.value = false
+            message.value = resultMessage
+        }
+    }
+
+    fun exportToDownloads(context: Context) {
+        viewModelScope.launch {
+            importing.value = true
+            message.value = null
+            val resultMessage = withContext(Dispatchers.IO) {
+                runCatching {
+                    val json = repository.exportInventoryJson()
+                    val count = ResentmentBackup.parse(json).resentments.size
+                    if (count == 0) {
+                        Ru.exportJsonEmpty
+                    } else {
+                        val stamp = SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date())
+                        val fileName = "obidy-$stamp.json"
+                        val (uri, name) = DownloadJson.write(
+                            context,
+                            fileName,
+                            json.toByteArray(Charsets.UTF_8)
+                        )
+                        withContext(Dispatchers.Main) {
+                            runCatching { DownloadJson.share(context, uri, Ru.exportJsonShare) }
+                        }
+                        String.format(Ru.exportJsonOk, name, count)
+                    }
+                }.getOrElse { Ru.exportJsonError }
             }
             importing.value = false
             message.value = resultMessage

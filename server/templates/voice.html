@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Голос · Админка</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --sand-deep: #e6dfd0;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --ok: #2f6b45;
+        --warn: #8a6a1a;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #ece8df;
+        color: var(--ink);
+      }
+      .top {
+        background: var(--forest);
+        color: var(--sand);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .top a { color: var(--sand); text-decoration: none; opacity: .88; margin-left: 14px; font-size: 13px; }
+      .top a:hover { opacity: 1; }
+      .top b { font-size: 16px; }
+      .top span { opacity: .78; font-size: 13px; }
+      .ghost {
+        background: transparent;
+        color: var(--sand);
+        border: 1px solid rgba(243, 239, 230, 0.28);
+        border-radius: 10px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 28px 16px 48px; }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 22px;
+      }
+      h1 { margin: 0 0 8px; font-size: 22px; color: var(--forest); }
+      .hint { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+      .ok-line { margin-top: 6px; color: var(--ok); font-size: 13px; font-weight: 650; }
+      label { display: block; margin-top: 18px; font-size: 13px; font-weight: 650; color: var(--forest); }
+      input, select {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 6px;
+        padding: 11px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fbfaf7;
+        font-size: 15px;
+      }
+      .actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+      button {
+        padding: 11px 16px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--forest);
+        color: var(--sand);
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .secondary {
+        background: var(--sand-deep);
+        color: var(--forest);
+      }
+      .notice, .warn {
+        margin-bottom: 14px;
+        padding: 10px 12px;
+        border-radius: 12px;
+      }
+      .notice {
+        background: rgba(47, 107, 69, 0.1);
+        border: 1px solid rgba(47, 107, 69, 0.28);
+        color: var(--ok);
+      }
+      .warn {
+        background: rgba(138, 106, 26, 0.1);
+        border: 1px solid rgba(138, 106, 26, 0.28);
+        color: var(--warn);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div>
+        <b>12 шагов · Админка</b>
+        <span>{{ domain }}</span>
+        <a href="{{ url_for('settings') }}">ИИ</a>
+        <a href="{{ url_for('notes_admin') }}">Подсказки</a>
+        <a href="{{ url_for('analyses_admin') }}">Самоанализ</a>
+        <a href="{{ url_for('voice_settings') }}">Голос</a>
+        <a href="{{ url_for('support_admin') }}">Ошибки</a>
+      </div>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="ghost" type="submit">Выйти</button>
+      </form>
+    </div>
+    <div class="wrap">
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+      {% if warn %}<div class="warn">{{ warn }}</div>{% endif %}
+      <div class="card">
+        <h1>Голосовой помощник (Vapi)</h1>
+        <div class="muted">
+          Ключи из
+          <a href="https://dashboard.vapi.ai" target="_blank" rel="noopener">dashboard.vapi.ai</a>.
+          Public Key и Assistant ID уходят в приложение. Private Key остаётся только на сервере
+          (проверка доступа). Голос и скорость — для озвучки и живого консультанта.
+        </div>
+        <form method="post" autocomplete="off" data-voice-skip="1">
+          <label for="vapi_public_key">Public Key</label>
+          <input
+            id="vapi_public_key"
+            name="vapi_public_key"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            spellcheck="false"
+            data-voice-skip="1"
+            placeholder="{% if has_public %}оставьте пустым, чтобы не менять{% else %}dashboard.vapi.ai → Organization → API Keys → Public Key{% endif %}"
+            value=""
+          />
+          {% if has_public %}
+            <div class="ok-line">Сохранён на сервере: {{ public_mask }}</div>
+          {% else %}
+            <div class="hint">Вставьте Public Key. После сохранения поле снова будет пустым — это нормально, ключ лежит в базе.</div>
+          {% endif %}
+
+          <label for="vapi_private_key">Private Key</label>
+          <input
+            id="vapi_private_key"
+            name="vapi_private_key"
+            type="password"
+            autocomplete="new-password"
+            data-voice-skip="1"
+            placeholder="{% if has_private %}оставьте пустым, чтобы не менять{% else %}dashboard.vapi.ai → API Keys → Private Key{% endif %}"
+            value=""
+          />
+          {% if has_private %}
+            <div class="ok-line">Сохранён на сервере: {{ private_mask }}</div>
+          {% else %}
+            <div class="hint">Нужен только для кнопки «Проверить ключ». В приложение не уходит.</div>
+          {% endif %}
+
+          <label for="assistant_id">Assistant ID</label>
+          <input
+            id="assistant_id"
+            name="assistant_id"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            data-voice-skip="1"
+            placeholder="можно оставить пустым"
+            value="{{ assistant_id }}"
+          />
+          <div class="hint">
+            Это не логин админки. В
+            <a href="https://dashboard.vapi.ai" target="_blank" rel="noopener">dashboard.vapi.ai</a>
+            откройте <b>Assistants</b>, выберите ассистента и скопируйте его <b>id</b>
+            (длинная строка вида <code>a1b2c3d4-e5f6-…</code>).
+            Если отдельного ассистента нет — оставьте пустым: приложение создаст голосового консультанта само.
+          </div>
+
+          <label for="voice">Голос по умолчанию</label>
+          <select id="voice" name="voice">
+            {% for value, label in voices %}
+              <option value="{{ value }}" {% if value == voice %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="speed">Скорость воспроизведения (0.5–1.8)</label>
+          <input
+            id="speed"
+            name="speed"
+            type="number"
+            min="0.5"
+            max="1.8"
+            step="0.1"
+            data-voice-skip="1"
+            value="{{ speed }}"
+          />
+
+          <div class="actions">
+            <button type="submit" name="action" value="save">Сохранить</button>
+            <button class="secondary" type="submit" name="action" value="test">Проверить ключ</button>
+          </div>
+          <div class="hint">
+            «Проверить ключ» ходит на api.vapi.ai с сервера. Если Cloudflare режет запрос —
+            ключи всё равно сохраняйте, проверка не обязательна.
+          </div>
+        </form>
+      </div>
+    </div>
+    {% set admin_report_from = 'voice' %}
+    {% include '_admin_report_fab.html' %}
+    {% include "_voice_plugin.html" %}
+  </body>
+</html>

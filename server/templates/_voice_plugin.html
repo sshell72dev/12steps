@@ -1,0 +1,117 @@
+<script>
+(function () {
+  var speed = parseFloat("{{ voice_speed|default(1) }}") || 1;
+  var preferred = "{{ voice_id|default('') }}".toLowerCase();
+
+  function skip(el) {
+    if (!el || el.dataset.voiceSkip === "1") return true;
+    if (el.closest("[data-voice-skip='1']")) return true;
+    if (el.disabled) return true;
+    var type = (el.getAttribute("type") || "").toLowerCase();
+    if (type === "password" || type === "hidden" || type === "file" || type === "checkbox" || type === "radio" || type === "submit" || type === "button") {
+      return true;
+    }
+    if (el.readOnly && el.tagName !== "TEXTAREA") return true;
+    return false;
+  }
+
+  function wrap(el) {
+    if (el.closest(".voice-field")) return;
+    var box = document.createElement("div");
+    box.className = "voice-field";
+    el.parentNode.insertBefore(box, el);
+    box.appendChild(el);
+    var bar = document.createElement("div");
+    bar.className = "voice-bar";
+    bar.appendChild(btn("🎙", "Ввести голосом", function () { dictate(el); }));
+    bar.appendChild(btn("🔊", "Озвучить", function () { speak(el.value || ""); }));
+    box.appendChild(bar);
+  }
+
+  function btn(label, title, onClick) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "voice-btn";
+    b.title = title;
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function speak(text) {
+    text = (text || "").trim();
+    if (!text || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = "ru-RU";
+    u.rate = speed;
+    var voices = window.speechSynthesis.getVoices() || [];
+    var ru = voices.filter(function (v) { return (v.lang || "").toLowerCase().indexOf("ru") === 0; });
+    var match = ru.find(function (v) {
+      return preferred && (v.name || "").toLowerCase().indexOf(preferred) !== -1;
+    }) || ru[0] || voices[0];
+    if (match) u.voice = match;
+    window.speechSynthesis.speak(u);
+  }
+
+  function dictate(el) {
+    var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Rec) {
+      alert("Голосовой ввод в этом браузере недоступен. Откройте Chrome.");
+      return;
+    }
+    var rec = new Rec();
+    rec.lang = "ru-RU";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = function (ev) {
+      var said = (ev.results[0] && ev.results[0][0] && ev.results[0][0].transcript) || "";
+      said = said.trim();
+      if (!said) return;
+      if (el.value && String(el.value).trim()) {
+        el.value = String(el.value).replace(/\s+$/, "") + " " + said;
+      } else {
+        el.value = said;
+      }
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    rec.start();
+  }
+
+  function speakable(node) {
+    if (!node || node.dataset.voiceSpeakable === "1") return;
+    node.dataset.voiceSpeakable = "1";
+    if (!node.style.position || node.style.position === "static") {
+      node.style.position = "relative";
+    }
+    var b = btn("🔊", "Озвучить текст", function () {
+      var sel = window.getSelection && String(window.getSelection());
+      speak((sel && sel.trim()) || node.innerText || "");
+    });
+    b.className = "voice-btn voice-btn-abs";
+    node.appendChild(b);
+  }
+
+  var style = document.createElement("style");
+  style.textContent =
+    ".voice-field{position:relative;}" +
+    ".voice-bar{position:absolute;right:6px;top:6px;display:flex;gap:4px;z-index:2;}" +
+    ".voice-field input,.voice-field textarea{padding-right:72px;}" +
+    ".voice-btn{border:0;background:#1b2e24;color:#f3efe6;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:14px;line-height:1;padding:0;}" +
+    ".voice-btn-abs{position:absolute;right:8px;top:8px;}";
+  document.head.appendChild(style);
+
+  function scan() {
+    document.querySelectorAll("input, textarea").forEach(function (el) {
+      if (!skip(el)) wrap(el);
+    });
+    document.querySelectorAll(".card").forEach(speakable);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", scan);
+  } else {
+    scan();
+  }
+})();
+</script>

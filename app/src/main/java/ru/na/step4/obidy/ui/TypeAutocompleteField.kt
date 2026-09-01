@@ -9,7 +9,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +23,7 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.TypeSuggestEngine
 import ru.na.step4.obidy.ui.components.HintIcon
 import ru.na.step4.obidy.ui.theme.Forest
+import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +50,7 @@ fun TypeAutocompleteField(
         onExpandedChange = { expanded = it && focused },
         modifier = modifier.fillMaxWidth()
     ) {
-        OutlinedTextField(
+        VoiceOutlinedTextField(
             value = query,
             onValueChange = {
                 query = it
@@ -66,7 +66,7 @@ fun TypeAutocompleteField(
             label = { Text(Ru.addTypeAction) },
             placeholder = { Text(Ru.typeSearchHint) },
             trailingIcon = if (catalogHint.isNotBlank()) {
-                { HintIcon(catalogHint) }
+                { ru.na.step4.obidy.ui.components.HintIcon(catalogHint) }
             } else {
                 null
             },

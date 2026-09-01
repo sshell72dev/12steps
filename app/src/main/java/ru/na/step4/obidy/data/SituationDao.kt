@@ -132,4 +132,13 @@ interface SituationDao {
 
     @Query("SELECT COUNT(*) FROM situation_type_links")
     fun observeLinkCount(): Flow<Int>
+
+    @Query("SELECT * FROM situation_types ORDER BY id ASC")
+    suspend fun getAllTypes(): List<SituationType>
+
+    @Query("SELECT * FROM situations ORDER BY id ASC")
+    suspend fun getAllSituations(): List<Situation>
+
+    @Query("SELECT * FROM situation_type_links")
+    suspend fun getAllLinks(): List<SituationTypeLink>
 }

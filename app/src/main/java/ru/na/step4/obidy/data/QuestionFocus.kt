@@ -65,6 +65,9 @@ object QuestionFocus {
         }
     }
 
+    fun workKeys(): List<String> =
+        listOf(WHAT, FELT, DID) + InventoryStructure.questions.map { q(it.number) }
+
     fun currentAnswer(situation: Situation, key: String): String = when (key) {
         TITLE -> situation.title
         WHAT -> situation.whatHappened

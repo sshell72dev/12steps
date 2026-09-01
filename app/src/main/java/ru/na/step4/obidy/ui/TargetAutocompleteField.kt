@@ -10,7 +10,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,10 +24,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.ResentmentSearch
-import ru.na.step4.obidy.ui.components.HintIcon
+import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Moss
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,8 +38,9 @@ fun TargetAutocompleteField(
     knownTargets: List<String>,
     label: String,
     hint: String,
-    modifier: Modifier = Modifier,
     catalogHint: String = "",
+    noteId: String = "",
+    modifier: Modifier = Modifier,
     minLines: Int = 1
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -61,13 +62,15 @@ fun TargetAutocompleteField(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f)
             )
             val tip = listOf(hint, catalogHint).filter { it.isNotBlank() }.joinToString("\n\n")
-            if (tip.isNotEmpty()) {
-                HintIcon(tip)
+                    if (noteId.isNotBlank()) {
+                NoteView(noteId, tip, label, compact = true)
+            } else if (tip.isNotEmpty()) {
+                ru.na.step4.obidy.ui.components.HintIcon(tip)
             }
         }
         ExposedDropdownMenuBox(
@@ -75,7 +78,7 @@ fun TargetAutocompleteField(
             onExpandedChange = { expanded = it && focused },
             modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedTextField(
+            VoiceOutlinedTextField(
                 value = value,
                 onValueChange = {
                     onValueChange(it)

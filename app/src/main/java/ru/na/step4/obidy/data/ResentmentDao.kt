@@ -37,6 +37,9 @@ interface ResentmentDao {
     @Query("SELECT * FROM resentments WHERE id = :id")
     suspend fun getById(id: Long): Resentment?
 
+    @Query("SELECT * FROM resentments ORDER BY id ASC")
+    suspend fun getAll(): List<Resentment>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: Resentment): Long
 

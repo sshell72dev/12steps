@@ -1,0 +1,22 @@
+      <div class="card" style="margin-top:18px;">
+        <h1>Экспериментальный мессенджер</h1>
+        <div class="muted" style="margin-bottom:12px;">
+          Чат по QR, группы и голосовые. Если что-то пойдёт не так — снимите галочку:
+          пункт в приложении пропадёт, API сразу ответит 503.
+        </div>
+        <form method="post" action="{{ url_for('messenger_admin') }}">
+          <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:650;">
+            <input
+              type="checkbox"
+              name="messenger_enabled"
+              value="1"
+              {% if messenger_enabled %}checked{% endif %}
+              style="width:auto;margin:0;"
+            />
+            Мессенджер включён
+          </label>
+          <div class="actions">
+            <button type="submit">Сохранить мессенджер</button>
+          </div>
+        </form>
+      </div>
