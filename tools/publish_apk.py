@@ -288,6 +288,15 @@ def ensure_google_libs() -> None:
         )
 
 
+def drive_service():
+    ensure_google_libs()
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+
+    creds = Credentials(token=read_rclone_access_token(), scopes=SCOPES)
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
 def docs_service():
     ensure_google_libs()
     from google.oauth2.credentials import Credentials
@@ -328,7 +337,38 @@ def render_doc(releases: list[dict], links: dict[str, str]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def replace_doc(text: str) -> None:
+def render_html(releases: list[dict], links: dict[str, str]) -> str:
+    import html as html_lib
+
+    parts = [
+        "<html><head><meta charset='utf-8'></head><body>",
+        "<h1>12 шагов — установочные файлы</h1>",
+        "<p>Новые версии сверху. «Скачать APK» открывает файл на Google Диске.</p>",
+    ]
+    for release in releases:
+        version = html_lib.escape(str(release.get("version") or "?"))
+        when = html_lib.escape(str(release.get("date") or ""))
+        items = [str(item) for item in release.get("items") or [] if str(item).strip()]
+        url = links.get(str(release.get("version") or ""), "")
+        parts.append(f"<h2>{version} · {when}</h2>")
+        if url:
+            parts.append(f'<p><a href="{html_lib.escape(url, quote=True)}">Скачать APK</a></p>')
+        else:
+            parts.append("<p>Сборка APK для этой версии ещё не загружена.</p>")
+        parts.append("<ul>")
+        if items:
+            for item in items:
+                parts.append(f"<li>{html_lib.escape(item)}</li>")
+        else:
+            parts.append("<li>(без описания)</li>")
+        parts.append("</ul>")
+    stamp = html_lib.escape(datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M"))
+    parts.append(f"<p><small>Обновлено: {stamp}</small></p>")
+    parts.append("</body></html>")
+    return "\n".join(parts)
+
+
+def replace_doc_via_docs_api(text: str) -> None:
     docs = docs_service()
     document = docs.documents().get(documentId=DOC_ID).execute()
     content = document.get("body", {}).get("content") or []
@@ -349,6 +389,46 @@ def replace_doc(text: str) -> None:
         documentId=DOC_ID,
         body={"requests": requests},
     ).execute()
+
+
+def replace_doc_via_drive_html(html: str) -> None:
+    import io
+
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseUpload
+    from google.oauth2.credentials import Credentials
+
+    media = MediaIoBaseUpload(
+        io.BytesIO(html.encode("utf-8")),
+        mimetype="text/html",
+        resumable=True,
+    )
+    try:
+        drive_service().files().update(
+            fileId=DOC_ID,
+            media_body=media,
+            supportsAllDrives=True,
+        ).execute()
+        return
+    except Exception as exc:
+        print(f"Drive v3 update не принял HTML ({exc.__class__.__name__}), пробую v2 convert…", flush=True)
+    creds = Credentials(token=read_rclone_access_token(), scopes=SCOPES)
+    drive_v2 = build("drive", "v2", credentials=creds, cache_discovery=False)
+    media = MediaIoBaseUpload(
+        io.BytesIO(html.encode("utf-8")),
+        mimetype="text/html",
+        resumable=True,
+    )
+    drive_v2.files().update(fileId=DOC_ID, media_body=media, convert=True).execute()
+
+
+def replace_doc(text: str, html: str) -> None:
+    try:
+        replace_doc_via_docs_api(text)
+        return
+    except Exception as exc:
+        print(f"Docs API недоступен ({exc.__class__.__name__}), пробую Drive…", flush=True)
+    replace_doc_via_drive_html(html)
 
 
 def assemble_debug_apk() -> Path:
@@ -394,7 +474,7 @@ def publish(skip_build: bool, apk_path: Path | None) -> int:
     links[name] = url
     save_links(links)
     releases = load_changelog().get("releases") or []
-    replace_doc(render_doc(releases, links))
+    replace_doc(render_doc(releases, links), render_html(releases, links))
     print(f"опубликовано {name} ({code})")
     print(f"APK: {url}")
     print(f"Документ: {DOC_URL}")
@@ -423,7 +503,8 @@ def main() -> int:
         links = load_links()
         links.update(list_drive_links())
         save_links(links)
-        replace_doc(render_doc(load_changelog().get("releases") or [], links))
+        releases = load_changelog().get("releases") or []
+        replace_doc(render_doc(releases, links), render_html(releases, links))
         print(f"документ обновлён: {DOC_URL}")
         return 0
     return publish(args.skip_build, args.apk)

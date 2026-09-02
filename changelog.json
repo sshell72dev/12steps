@@ -1,6 +1,14 @@
 {
   "releases": [
     {
+      "version": "1.0.13",
+      "versionCode": 14,
+      "date": "2026-09-02",
+      "items": [
+        "Google Doc: обновление через Drive API, если Docs API выключен"
+      ]
+    },
+    {
       "version": "1.0.12",
       "versionCode": 13,
       "date": "2026-09-02",

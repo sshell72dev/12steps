@@ -3,6 +3,10 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 Версия приложения обновляется скриптом `tools/bump_version.py` после работы агента и при деплое.
 
+## [1.0.13] — 2026-09-02
+
+- Google Doc: обновление через Drive API, если Docs API выключен
+
 ## [1.0.12] — 2026-09-02
 
 - Публикация APK на Google Drive
