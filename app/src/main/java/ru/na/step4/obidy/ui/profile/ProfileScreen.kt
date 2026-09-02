@@ -200,7 +200,11 @@ fun ProfileScreen(
                     localizedQuestion(ProfileQuestionnaire.ID_LAST_USE).hint
                 )
                 QuestionChips(localizedQuestion(ProfileQuestionnaire.ID_REASON), reason) { reason = it }
-                QuestionChips(localizedQuestion(ProfileQuestionnaire.ID_MOTIVATION), motivation) { motivation = it }
+                QuestionChips(
+                    localizedQuestion(ProfileQuestionnaire.ID_MOTIVATION),
+                    motivation,
+                    columns = 5
+                ) { motivation = it }
                 ProfileField(birth, { birth = it }, localizedQuestion(ProfileQuestionnaire.ID_BIRTH).text)
                 ProfileField(place, { place = it }, localizedQuestion(ProfileQuestionnaire.ID_LOCATION).text)
                 ProfileField(about, { about = it }, localizedQuestion(ProfileQuestionnaire.ID_ABOUT).text, minLines = 3)
@@ -335,6 +339,7 @@ private fun LanguagePicker(current: String, onPick: (String) -> Unit) {
 private fun QuestionChips(
     question: QuestionnaireQuestion,
     selected: String,
+    columns: Int? = null,
     onPick: (String) -> Unit
 ) {
     Text(question.text, color = Forest)
@@ -342,6 +347,7 @@ private fun QuestionChips(
         options = question.options,
         selected = selected,
         onPick = onPick,
+        columns = columns,
         labelOf = { src ->
             val idx = question.options.indexOf(src)
             if (idx >= 0) {
@@ -358,8 +364,31 @@ private fun ChipGroup(
     options: List<String>,
     selected: String,
     onPick: (String) -> Unit,
-    labelOf: (String) -> String = { it }
+    labelOf: (String) -> String = { it },
+    columns: Int? = null
 ) {
+    if (columns != null && columns > 0) {
+        options.chunked(columns).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { option ->
+                    FilterChip(
+                        selected = selected == option,
+                        onClick = { onPick(option) },
+                        label = { Text(labelOf(option)) },
+                        modifier = Modifier.weight(1f),
+                        colors = chipColors()
+                    )
+                }
+                repeat(columns - row.size) {
+                    Box(Modifier.weight(1f))
+                }
+            }
+        }
+        return
+    }
     options.forEach { option ->
         FilterChip(
             selected = selected == option,
