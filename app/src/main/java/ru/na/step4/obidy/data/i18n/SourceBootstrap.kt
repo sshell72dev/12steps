@@ -498,6 +498,7 @@ object SourceBootstrap {
         SourceCatalog.put("psych.aiSettings", "Настройки ИИ")
         SourceCatalog.put("psych.reminders", "Напоминания")
         SourceCatalog.put("psych.fillProfile", "Заполнить анкету")
+        SourceCatalog.put("psych.furtherActions", "Дальнейшие действия")
         SourceCatalog.put("psych.analyze", "Разобрать ситуацию")
         SourceCatalog.put("psych.recommend", "Рекомендации по ситуации")
         SourceCatalog.put("psych.work", "Проработка ситуации")
@@ -524,6 +525,7 @@ object SourceBootstrap {
         SourceCatalog.put("psych.startWork", "Начать проработку")
         SourceCatalog.put("psych.continueWork", "Продолжить")
         SourceCatalog.put("psych.finish", "Завершить")
+        SourceCatalog.put("psych.finishSituation", "Завершить ситуацию")
         SourceCatalog.put("psych.startNew", "Начать новую")
         SourceCatalog.put("psych.assistant", "Ассистент ИИ по ситуации")
         SourceCatalog.put("psych.postponed", "Отложенные")
@@ -589,6 +591,10 @@ object SourceBootstrap {
         SourceCatalog.put("psych.format", "Формат ответа")
         SourceCatalog.put("psych.style", "Стиль ответа")
         SourceCatalog.put("psych.workQs", "Вопросы проработки")
+        SourceCatalog.put("psych.questionLimits", "Сколько вопросов задавать")
+        SourceCatalog.put("psych.questionLimitsHint", "Целое число от 1 до 30. Дополнительные вопросы — после первого сообщения. Вопросы проработки — отдельно.")
+        SourceCatalog.put("psych.dialogueExtraQs", "Дополнительные вопросы после первого сообщения")
+        SourceCatalog.put("psych.workQuestionCount", "Вопросы для проработки")
         SourceCatalog.put("psych.reminderOn", "Напоминания включены")
         SourceCatalog.put("psych.reminderOff", "Напоминания выключены")
         SourceCatalog.put("psych.intervalHours", "Интервал, часов")
@@ -607,13 +613,26 @@ object SourceBootstrap {
         SourceCatalog.put("psych.deleteTopicBody", "Тема будет удалена. Ситуации останутся.")
         SourceCatalog.put("psych.topicMemory", "Сжатая память темы")
         SourceCatalog.put("psych.idleTitle", "Продолжить?")
-        SourceCatalog.put("psych.idleBody", "Диалог давно без ответа. Можно продолжить, завершить или отложить.")
+        SourceCatalog.put("psych.idleBody", "Диалог давно без ответа.")
         SourceCatalog.put("psych.emptyView", "За этот период записей нет.")
         SourceCatalog.put("psych.countRecords", "Записей: %1\$d")
         SourceCatalog.put("psych.send", "Отправить")
         SourceCatalog.put("psych.meetNice", "Приятно познакомиться, %1\$s. Теперь отправь своё первое сообщение — опиши ситуацию, мысль или страх…")
         SourceCatalog.put("psych.skipName", "друг")
         SourceCatalog.put("psych.reminderFallback", "Я готов. Просто отправь мне то, что тебя сейчас волнует.")
+        SourceCatalog.put("psych.psychologistName", "Психолог")
+        SourceCatalog.put("psych.reminderHow", "Напоминания приходят в чат Электронного психолога от имени «Психолог» и дублируются уведомлением в шторке телефона.")
+        SourceCatalog.put("psych.reminderWhere", "Включить, выбрать интервал и тихие часы можно на этом экране. Кнопка «Показать уведомление сейчас» сразу отправит сообщение в чат и в шторку.")
+        SourceCatalog.put("psych.reminderNext", "Следующее напоминание: %1\$s")
+        SourceCatalog.put("psych.reminderNextOff", "Напоминания выключены — уведомления не приходят.")
+        SourceCatalog.put("psych.reminderTest", "Показать уведомление сейчас")
+        SourceCatalog.put("psych.reminderPermissionOff", "Телефон блокирует уведомления приложения. Разрешите их в настройках Android, иначе напоминания не появятся в шторке.")
+        SourceCatalog.put("psych.reminderOpenSettings", "Открыть настройки уведомлений")
+        SourceCatalog.put("psych.quietStart", "Тихие часы с (0–23)")
+        SourceCatalog.put("psych.quietEnd", "Тихие часы до (0–23)")
+        SourceCatalog.put("psych.interval6", "Каждые 6 ч")
+        SourceCatalog.put("psych.interval12", "Каждые 12 ч")
+        SourceCatalog.put("psych.interval24", "Раз в сутки")
         SourceCatalog.put("psych.busy", "Уже формирую ответ.")
         SourceCatalog.put("psych.proOnly", "Эта возможность доступна в Premium.")
         SourceCatalog.put("psych.speakIntro", "Я так понял твою ситуацию:")
@@ -630,6 +649,10 @@ object SourceBootstrap {
         SourceCatalog.put("psych.eyebrow", "Рефлексия в моменте")
         SourceCatalog.put("psych.copyAll", "Одним текстом")
         SourceCatalog.put("psych.oneByOne", "По одной")
+        SourceCatalog.put("psych.viewModeHint", "По одной — листать ситуации. Одним текстом — все записи сразу, удобно копировать.")
+        SourceCatalog.put("psych.viewIndex", "%1\$d из %2\$d")
+        SourceCatalog.put("psych.prevSituation", "Предыдущая")
+        SourceCatalog.put("psych.nextSituation", "Следующая")
         SourceCatalog.put("psych.today", "Сегодня")
         SourceCatalog.put("psych.open", "Открыть")
         SourceCatalog.put("psych.saveName", "Сохранить")
@@ -815,7 +838,7 @@ object SourceBootstrap {
         SourceCatalog.put("voicehands.experiment", "Эксперимент")
         SourceCatalog.put(
             "voicehands.hint",
-            "Пока приложение открыто, телефон слушает «Давай запишем» и ведёт запись у психолога. Существующие экраны не меняются. Выключите, если что-то пойдёт не так."
+            "Пока приложение открыто. В ожидании микрофон выключен — нажмите «Слушать» и скажите «Давай запишем». Существующие экраны не меняются. Выключите, если что-то пойдёт не так."
         )
         SourceCatalog.put(
             "voicehands.commands",
@@ -833,6 +856,31 @@ object SourceBootstrap {
         SourceCatalog.put("voicehands.disable", "Выключить")
         SourceCatalog.put("voicehands.toStandby", "В ожидание")
         SourceCatalog.put("voicehands.listening", "Слушаю")
+        SourceCatalog.put("voicehands.listenButton", "Слушать")
+        SourceCatalog.put("voicehands.quiet", "Микрофон выключен")
+        SourceCatalog.put(
+            "voicehands.hintStandby",
+            "Нажмите «Слушать», затем скажите: «Давай запишем»"
+        )
+        SourceCatalog.put(
+            "voicehands.hintDictating",
+            "Диктуйте ситуацию. Команды: «готово» · «Вернись в режим ожидания»"
+        )
+        SourceCatalog.put(
+            "voicehands.hintAwaiting",
+            "Ответьте на вопрос или: «разобрать ситуацию» · «рекомендации по ситуации» · «Вернись в режим ожидания»"
+        )
+        SourceCatalog.put(
+            "voicehands.hintAskRead",
+            "«читай» · «разобрать ситуацию» · «рекомендации по ситуации» · «Вернись в режим ожидания»"
+        )
+        SourceCatalog.put(
+            "voicehands.hintAfterRead",
+            "«Вернись в режим ожидания» · «разобрать ситуацию» · «рекомендации по ситуации» · «Давай запишем»"
+        )
+        SourceCatalog.put("voicehands.hintThinking", "Жду ответ ИИ…")
+        SourceCatalog.put("voicehands.hintOpening", "Открываю новую запись…")
+        SourceCatalog.put("voicehands.hintReading", "Читаю ответ. Подождите.")
         SourceCatalog.put("voicehands.needMic", "Нужен доступ к микрофону.")
         SourceCatalog.put(
             "voicehands.noEngine",

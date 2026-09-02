@@ -18,6 +18,7 @@ object PsychRu {
     val aiSettings: String get() = I18n.t("psych.aiSettings", "Настройки ИИ")
     val reminders: String get() = I18n.t("psych.reminders", "Напоминания")
     val fillProfile: String get() = I18n.t("psych.fillProfile", "Заполнить анкету")
+    val furtherActions: String get() = I18n.t("psych.furtherActions", "Дальнейшие действия")
     val analyze: String get() = I18n.t("psych.analyze", "Разобрать ситуацию")
     val recommend: String get() = I18n.t("psych.recommend", "Рекомендации по ситуации")
     val work: String get() = I18n.t("psych.work", "Проработка ситуации")
@@ -44,6 +45,7 @@ object PsychRu {
     val startWork: String get() = I18n.t("psych.startWork", "Начать проработку")
     val continueWork: String get() = I18n.t("psych.continueWork", "Продолжить")
     val finish: String get() = I18n.t("psych.finish", "Завершить")
+    val finishSituation: String get() = I18n.t("psych.finishSituation", "Завершить ситуацию")
     val startNew: String get() = I18n.t("psych.startNew", "Начать новую")
     val assistant: String get() = I18n.t("psych.assistant", "Ассистент ИИ по ситуации")
     val postponed: String get() = I18n.t("psych.postponed", "Отложенные")
@@ -109,6 +111,16 @@ object PsychRu {
     val format: String get() = I18n.t("psych.format", "Формат ответа")
     val style: String get() = I18n.t("psych.style", "Стиль ответа")
     val workQs: String get() = I18n.t("psych.workQs", "Вопросы проработки")
+    val questionLimits: String get() = I18n.t("psych.questionLimits", "Сколько вопросов задавать")
+    val questionLimitsHint: String get() = I18n.t(
+        "psych.questionLimitsHint",
+        "Целое число от 1 до 30. Дополнительные вопросы — после первого сообщения. Вопросы проработки — отдельно."
+    )
+    val dialogueExtraQs: String get() = I18n.t(
+        "psych.dialogueExtraQs",
+        "Дополнительные вопросы после первого сообщения"
+    )
+    val workQuestionCount: String get() = I18n.t("psych.workQuestionCount", "Вопросы для проработки")
     val reminderOn: String get() = I18n.t("psych.reminderOn", "Напоминания включены")
     val reminderOff: String get() = I18n.t("psych.reminderOff", "Напоминания выключены")
     val intervalHours: String get() = I18n.t("psych.intervalHours", "Интервал, часов")
@@ -127,13 +139,35 @@ object PsychRu {
     val deleteTopicBody: String get() = I18n.t("psych.deleteTopicBody", "Тема будет удалена. Ситуации останутся.")
     val topicMemory: String get() = I18n.t("psych.topicMemory", "Сжатая память темы")
     val idleTitle: String get() = I18n.t("psych.idleTitle", "Продолжить?")
-    val idleBody: String get() = I18n.t("psych.idleBody", "Диалог давно без ответа. Можно продолжить, завершить или отложить.")
+    val idleBody: String get() = I18n.t("psych.idleBody", "Диалог давно без ответа.")
     val emptyView: String get() = I18n.t("psych.emptyView", "За этот период записей нет.")
     val countRecords: String get() = I18n.t("psych.countRecords", "Записей: %1\$d")
     val send: String get() = I18n.t("psych.send", "Отправить")
     val meetNice: String get() = I18n.t("psych.meetNice", "Приятно познакомиться, %1\$s. Теперь отправь своё первое сообщение — опиши ситуацию, мысль или страх…")
     val skipName: String get() = I18n.t("psych.skipName", "друг")
     val reminderFallback: String get() = I18n.t("psych.reminderFallback", "Я готов. Просто отправь мне то, что тебя сейчас волнует.")
+    val psychologistName: String get() = I18n.t("psych.psychologistName", "Психолог")
+    val reminderHow: String get() = I18n.t(
+        "psych.reminderHow",
+        "Напоминания приходят в чат Электронного психолога от имени «Психолог» и дублируются уведомлением в шторке телефона."
+    )
+    val reminderWhere: String get() = I18n.t(
+        "psych.reminderWhere",
+        "Включить, выбрать интервал и тихие часы можно на этом экране. Кнопка «Показать уведомление сейчас» сразу отправит сообщение в чат и в шторку."
+    )
+    val reminderNext: String get() = I18n.t("psych.reminderNext", "Следующее напоминание: %1\$s")
+    val reminderNextOff: String get() = I18n.t("psych.reminderNextOff", "Напоминания выключены — уведомления не приходят.")
+    val reminderTest: String get() = I18n.t("psych.reminderTest", "Показать уведомление сейчас")
+    val reminderPermissionOff: String get() = I18n.t(
+        "psych.reminderPermissionOff",
+        "Телефон блокирует уведомления приложения. Разрешите их в настройках Android, иначе напоминания не появятся в шторке."
+    )
+    val reminderOpenSettings: String get() = I18n.t("psych.reminderOpenSettings", "Открыть настройки уведомлений")
+    val quietStart: String get() = I18n.t("psych.quietStart", "Тихие часы с (0–23)")
+    val quietEnd: String get() = I18n.t("psych.quietEnd", "Тихие часы до (0–23)")
+    val interval6: String get() = I18n.t("psych.interval6", "Каждые 6 ч")
+    val interval12: String get() = I18n.t("psych.interval12", "Каждые 12 ч")
+    val interval24: String get() = I18n.t("psych.interval24", "Раз в сутки")
     val busy: String get() = I18n.t("psych.busy", "Уже формирую ответ.")
     val proOnly: String get() = I18n.t("psych.proOnly", "Эта возможность доступна в Premium.")
     val speakIntro: String get() = I18n.t("psych.speakIntro", "Я так понял твою ситуацию:")
@@ -150,6 +184,13 @@ object PsychRu {
     val eyebrow: String get() = I18n.t("psych.eyebrow", "Рефлексия в моменте")
     val copyAll: String get() = I18n.t("psych.copyAll", "Одним текстом")
     val oneByOne: String get() = I18n.t("psych.oneByOne", "По одной")
+    val viewModeHint: String get() = I18n.t(
+        "psych.viewModeHint",
+        "По одной — листать ситуации. Одним текстом — все записи сразу, удобно копировать."
+    )
+    val viewIndex: String get() = I18n.t("psych.viewIndex", "%1\$d из %2\$d")
+    val prevSituation: String get() = I18n.t("psych.prevSituation", "Предыдущая")
+    val nextSituation: String get() = I18n.t("psych.nextSituation", "Следующая")
     val today: String get() = I18n.t("psych.today", "Сегодня")
     val open: String get() = I18n.t("psych.open", "Открыть")
     val saveName: String get() = I18n.t("psych.saveName", "Сохранить")

@@ -3,6 +3,7 @@ package ru.na.step4.obidy.ui.psych
 import android.Manifest
 import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,12 +18,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -79,7 +82,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import ru.na.step4.obidy.BuildConfig
+import ru.na.step4.obidy.MainActivity
 import ru.na.step4.obidy.Ru
+import ru.na.step4.obidy.data.psych.PsychInboxMessage
 import ru.na.step4.obidy.data.psych.PsychLogic
 import ru.na.step4.obidy.data.psych.PsychQa
 import ru.na.step4.obidy.data.psych.PsychReminderWorker
@@ -117,6 +122,13 @@ fun PsychHostScreen(
     val completed by viewModel.completed.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val voicePlugin = LocalVoicePlugin.current
+    val psychOpenTick = (context as? MainActivity)?.psychOpenTick ?: 0
+    LaunchedEffect(psychOpenTick) {
+        val activity = context as? MainActivity ?: return@LaunchedEffect
+        if (activity.consumePendingPsychOpen()) {
+            viewModel.consumeNotificationOpen()
+        }
+    }
 
     LaunchedEffect(ui.speaking) {
         if (ui.speaking) {
@@ -189,8 +201,8 @@ fun PsychHostScreen(
             AtmosphereBackground(Modifier.fillMaxSize())
             when (val page = ui.page) {
                 is PsychPage.Onboarding -> OnboardingBody(page, viewModel)
-                PsychPage.Hub -> HubBody(viewModel)
-                PsychPage.Record -> RecordBody(viewModel)
+                PsychPage.Hub -> HubBody(viewModel, ui)
+                PsychPage.Record -> RecordBody(viewModel, ui)
                 is PsychPage.TopicPick -> TopicPickBody(page, topics, viewModel)
                 is PsychPage.Dialogue -> DialogueBody(page, ui, viewModel, onOpenProfile)
                 is PsychPage.Result -> ResultBody(page, ui, viewModel)
@@ -210,6 +222,7 @@ fun PsychHostScreen(
                     viewModel = viewModel
                 )
                 is PsychPage.Idle -> IdleBody(page, viewModel)
+                is PsychPage.Review -> ReviewBody(page, viewModel, onOpenProfile)
             }
             if (ui.waiting && ui.page !is PsychPage.Dialogue && ui.page !is PsychPage.Work) {
                 WaitOverlay(ui)
@@ -340,7 +353,7 @@ private fun WaitOverlay(ui: PsychUi) {
 }
 
 @Composable
-private fun HubBody(vm: PsychViewModel) {
+private fun HubBody(vm: PsychViewModel, ui: PsychUi) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -348,9 +361,19 @@ private fun HubBody(vm: PsychViewModel) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (ui.inbox.isNotEmpty()) {
+            ui.inbox.takeLast(5).forEach { msg ->
+                PsychologistBubble(
+                    msg,
+                    offsetMinutes = vm.settings.utcOffsetMinutes,
+                    onClick = vm::goRecord
+                )
+            }
+        }
         NoteView(NoteIds.PSYCH_INTRO, PsychRu.intro, Ru.sectionPsych)
         NoteView(NoteIds.PSYCH_DISCLAIMER, PsychRu.disclaimer, PsychRu.disclaimer)
         MenuBtn(PsychRu.record, onClick = vm::goRecord)
+        MenuBtn(PsychRu.reminders, onClick = vm::goReminders)
         MenuBtn(PsychRu.topics, onClick = vm::goTopics)
         MenuBtn(PsychRu.view, onClick = { vm.openView(false) })
         MenuBtn(PsychRu.postponed, onClick = { vm.goSessions(true) })
@@ -383,7 +406,7 @@ private fun OnboardingBody(page: PsychPage.Onboarding, vm: PsychViewModel) {
 }
 
 @Composable
-private fun RecordBody(vm: PsychViewModel) {
+private fun RecordBody(vm: PsychViewModel, ui: PsychUi) {
     var text by remember { mutableStateOf("") }
     val typing = isImeVisible()
     val composing = typing || text.isNotBlank()
@@ -394,7 +417,11 @@ private fun RecordBody(vm: PsychViewModel) {
         composing = composing,
         showField = true,
         header = {
-            if (!typing) {
+            if (ui.inbox.isNotEmpty()) {
+                ui.inbox.forEach { msg ->
+                    PsychologistBubble(msg, offsetMinutes = vm.settings.utcOffsetMinutes)
+                }
+            } else if (!typing) {
                 Text(PsychRu.describe, style = MaterialTheme.typography.titleLarge, color = Forest)
             }
         },
@@ -493,7 +520,7 @@ private fun DialogueBody(
         composing = composing,
         showField = questionReady && !waitingNext,
         header = {
-            CollapsedRecordBlock(page.situation.text)
+            CollapsedRecordBlock(page.situation.text, forceCollapsed = waitingNext)
             if (!composing) {
                 page.answers.forEach { qa ->
                     QaCard(qa)
@@ -516,19 +543,22 @@ private fun DialogueBody(
             }
         },
         footer = {
-            if (!ui.waiting) {
-                ActionBar {
-                    PrimaryBtn(PsychRu.send, enabled = draft.isNotBlank() && questionReady) {
+            var moreOpen by remember { mutableStateOf(false) }
+            ActionBar {
+                if (questionReady && !waitingNext) {
+                    PrimaryBtn(PsychRu.send, enabled = draft.isNotBlank()) {
                         vm.answerDialogue(draft)
                     }
-                    if (!composing) {
-                        MenuBtn(PsychRu.analyze) { vm.analyze() }
-                        MenuBtn(PsychRu.recommend) { vm.recommend() }
-                        MenuBtn(PsychRu.work) { vm.startWork() }
-                        MenuBtn(PsychRu.postpone) { vm.postpone() }
-                        if (vm.settings.hasEmptyProfileField()) {
-                            MenuBtn(PsychRu.fillProfile) { onOpenProfile() }
-                        }
+                }
+                if (!moreOpen) {
+                    MenuBtn(PsychRu.furtherActions) { moreOpen = true }
+                } else {
+                    MenuBtn(PsychRu.analyze) { vm.analyze() }
+                    MenuBtn(PsychRu.recommend) { vm.recommend() }
+                    MenuBtn(PsychRu.postpone) { vm.postpone() }
+                    MenuBtn(PsychRu.work) { vm.startWork() }
+                    if (vm.settings.hasEmptyProfileField()) {
+                        MenuBtn(PsychRu.fillProfile) { onOpenProfile() }
                     }
                 }
             }
@@ -576,7 +606,7 @@ private fun ResultBody(page: PsychPage.Result, ui: PsychUi, vm: PsychViewModel) 
 private fun WorkBody(page: PsychPage.Work, ui: PsychUi, vm: PsychViewModel) {
     var draft by remember(page.index) { mutableStateOf("") }
     val question = page.questions.getOrElse(page.index) { "" }
-    val waitingNext = ui.waiting
+    val waitingNext = ui.waiting || (question.isBlank() && ui.error == null)
     val composing = !waitingNext && (draft.isNotBlank() || isImeVisible())
     val questionReady = question.isNotBlank()
     PsychWriteColumn(
@@ -586,7 +616,7 @@ private fun WorkBody(page: PsychPage.Work, ui: PsychUi, vm: PsychViewModel) {
         composing = composing,
         showField = questionReady && !waitingNext,
         header = {
-            CollapsedRecordBlock(page.situation.text)
+            CollapsedRecordBlock(page.situation.text, forceCollapsed = waitingNext)
             Text(
                 Ru.analysisQuestionOf.format(page.index + 1, page.questions.size.coerceAtLeast(page.index + 1)),
                 color = Amber,
@@ -606,15 +636,20 @@ private fun WorkBody(page: PsychPage.Work, ui: PsychUi, vm: PsychViewModel) {
             )
         },
         footer = {
-            if (!ui.waiting) {
-                ActionBar {
-                    PrimaryBtn(PsychRu.send, enabled = draft.isNotBlank() && questionReady) {
+            var moreOpen by remember { mutableStateOf(false) }
+            ActionBar {
+                if (questionReady && !waitingNext) {
+                    PrimaryBtn(PsychRu.send, enabled = draft.isNotBlank()) {
                         vm.answerWork(draft)
                     }
-                    if (!composing) {
-                        MenuBtn(PsychRu.postpone) { vm.postpone() }
-                        MenuBtn(PsychRu.finish) { vm.finishNow() }
-                    }
+                }
+                if (!moreOpen) {
+                    MenuBtn(PsychRu.furtherActions) { moreOpen = true }
+                } else {
+                    MenuBtn(PsychRu.analyze) { vm.analyze() }
+                    MenuBtn(PsychRu.recommend) { vm.recommend() }
+                    MenuBtn(PsychRu.postpone) { vm.postpone() }
+                    MenuBtn(PsychRu.finish) { vm.finishNow() }
                 }
             }
         }
@@ -643,6 +678,7 @@ private fun DoneBody(page: PsychPage.Done, vm: PsychViewModel) {
 @Composable
 private fun ViewBody(page: PsychPage.ViewPeriod, vm: PsychViewModel) {
     var date by remember { mutableStateOf("") }
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -672,36 +708,134 @@ private fun ViewBody(page: PsychPage.ViewPeriod, vm: PsychViewModel) {
                 if (parsed != null) vm.openView(false, parsed)
             }
         }
-        MenuBtn(if (page.asOneText) PsychRu.oneByOne else PsychRu.copyAll) { vm.toggleViewMode() }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !page.asOneText,
+                onClick = { vm.setViewAsOneText(false) },
+                label = { Text(PsychRu.oneByOne) },
+                colors = chipColors()
+            )
+            FilterChip(
+                selected = page.asOneText,
+                onClick = { vm.setViewAsOneText(true) },
+                label = { Text(PsychRu.copyAll) },
+                colors = chipColors()
+            )
+        }
+        Text(
+            PsychRu.viewModeHint,
+            color = Moss,
+            style = MaterialTheme.typography.bodySmall
+        )
         if (page.items.isEmpty()) {
             Text(PsychRu.emptyView, color = Moss)
-        } else {
-            Text(PsychRu.countRecords.format(page.items.size), color = Amber)
-            page.items.forEach { item ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(SandDeep.copy(alpha = 0.72f))
-                        .clickable { item.session?.let { vm.openSession(it.id) } }
-                        .padding(12.dp)
+        } else if (page.asOneText) {
+            val allText = page.items.joinToString("\n\n") { item ->
+                PsychLogic.shareText(
+                    item.situation.text,
+                    item.answers,
+                    item.situation.createdAt,
+                    vm.settings.utcOffsetMinutes
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(SandDeep.copy(alpha = 0.72f))
+                    .padding(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(item.timeLabel, color = Amber, style = MaterialTheme.typography.labelMedium)
-                    Text(item.situation.text, color = Forest, style = MaterialTheme.typography.bodyMedium)
-                    if (!page.asOneText) {
-                        item.answers.forEach { qa ->
-                            Spacer(Modifier.height(6.dp))
-                            Text(qa.question, color = Forest, style = MaterialTheme.typography.titleSmall)
-                            Text(qa.answer, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    } else {
-                        item.answers.forEach { qa ->
-                            Text("— ${qa.question}", color = Moss, style = MaterialTheme.typography.bodySmall)
-                            Text(qa.answer, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                    Text(
+                        PsychRu.countRecords.format(page.items.size),
+                        modifier = Modifier.weight(1f),
+                        color = Amber,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    if (allText.isNotBlank()) {
+                        SpeakIconButton(text = allText, tint = Forest)
                     }
                 }
+                Text(
+                    allText,
+                    color = Forest,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
+            MenuBtn(PsychRu.share) { sharePlain(context, allText) }
+        } else {
+            var index by remember(page.from, page.to, page.items.size) { mutableIntStateOf(0) }
+            val safeIndex = index.coerceIn(0, page.items.lastIndex)
+            val item = page.items[safeIndex]
+            Text(
+                PsychRu.viewIndex.format(safeIndex + 1, page.items.size),
+                color = Amber,
+                style = MaterialTheme.typography.labelMedium
+            )
+            ViewSituationCard(
+                item = item,
+                onOpen = { vm.openSituationReview(item.situation.id, item.session?.id) }
+            )
+            if (page.items.size > 1) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { index = (safeIndex - 1).coerceAtLeast(0) },
+                        enabled = safeIndex > 0,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text(PsychRu.prevSituation, color = Forest) }
+                    OutlinedButton(
+                        onClick = { index = (safeIndex + 1).coerceAtMost(page.items.lastIndex) },
+                        enabled = safeIndex < page.items.lastIndex,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text(PsychRu.nextSituation, color = Forest) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ViewSituationCard(item: ViewItem, onOpen: () -> Unit) {
+    val speakText = viewItemSpeakText(item)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SandDeep.copy(alpha = 0.72f))
+            .clickable(onClick = onOpen)
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                item.timeLabel,
+                modifier = Modifier.weight(1f),
+                color = Amber,
+                style = MaterialTheme.typography.labelMedium
+            )
+            if (speakText.isNotBlank()) {
+                SpeakIconButton(text = speakText, tint = Forest)
+            }
+        }
+        Text(
+            item.situation.text,
+            color = Forest,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        item.answers.forEach { qa ->
+            Spacer(Modifier.height(8.dp))
+            Text(qa.question, color = Forest, style = MaterialTheme.typography.titleSmall)
+            Text(qa.answer, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -838,6 +972,22 @@ private fun AiSettingsBody(vm: PsychViewModel) {
             label = { Text("${PsychRu.longQ} ⭐") },
             colors = chipColors()
         )
+        Text(PsychRu.questionLimits, style = MaterialTheme.typography.titleMedium, color = Forest)
+        Text(PsychRu.questionLimitsHint, color = Moss, style = MaterialTheme.typography.bodySmall)
+        var dialogueExtra by remember(s.dialogueExtraLimit) {
+            mutableStateOf(s.dialogueExtraLimit.toString())
+        }
+        var workCount by remember(s.workQuestionLimit) {
+            mutableStateOf(s.workQuestionLimit.toString())
+        }
+        PsychField(dialogueExtra, { dialogueExtra = it }, PsychRu.dialogueExtraQs, 1)
+        PsychField(workCount, { workCount = it }, PsychRu.workQuestionCount, 1)
+        MenuBtn(Ru.save) {
+            vm.setQuestionLimits(
+                dialogueExtra.toIntOrNull(),
+                workCount.toIntOrNull()
+            )
+        }
         SwitchRow(PsychRu.voiceOn, s.voiceEnabled, vm::setVoiceEnabled)
     }
 }
@@ -951,14 +1101,52 @@ private fun TopicDetailBody(page: PsychPage.TopicDetail, vm: PsychViewModel) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RemindersBody(vm: PsychViewModel) {
     val s = vm.settings
     val context = LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var hours by remember { mutableStateOf(s.reminderIntervalHours.toString()) }
+    var quietStart by remember { mutableStateOf(s.quietStartHour.toString()) }
+    var quietEnd by remember { mutableStateOf(s.quietEndHour.toString()) }
+    var offset by remember { mutableStateOf(s.utcOffsetMinutes.toString()) }
+    var canPost by remember { mutableStateOf(PsychReminderWorker.canPost(context)) }
     val notifyPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { }
+    ) { granted ->
+        canPost = granted || PsychReminderWorker.canPost(context)
+        if (granted) {
+            PsychReminderWorker.notify(context, PsychRu.reminderFallback)
+        }
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                canPost = PsychReminderWorker.canPost(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(Unit) {
+        PsychReminderWorker.schedule(context)
+        vm.onRemindersShown()
+    }
+    fun requestNotifyIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 && !canPost) {
+            notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    fun openSystemNotifySettings() {
+        runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+            )
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -966,26 +1154,102 @@ private fun RemindersBody(vm: PsychViewModel) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Text(PsychRu.reminderHow, color = Forest, style = MaterialTheme.typography.bodyLarge)
+        Text(PsychRu.reminderWhere, color = Moss, style = MaterialTheme.typography.bodyMedium)
+        if (!canPost) {
+            Text(PsychRu.reminderPermissionOff, color = Amber, style = MaterialTheme.typography.bodyMedium)
+            MenuBtn(PsychRu.reminderOpenSettings) { openSystemNotifySettings() }
+        }
         SwitchRow(
             if (s.reminderEnabled) PsychRu.reminderOn else PsychRu.reminderOff,
             s.reminderEnabled
         ) { on ->
-            if (on && Build.VERSION.SDK_INT >= 33) {
-                notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+            if (on) requestNotifyIfNeeded()
             vm.enableReminders(on)
-            if (on) PsychReminderWorker.schedule(context)
+            if (on) {
+                PsychReminderWorker.schedule(context, replace = true)
+                if (canPost) {
+                    PsychReminderWorker.notify(context, PsychRu.reminderFallback)
+                }
+            } else {
+                PsychReminderWorker.cancel(context)
+            }
+        }
+        Text(
+            if (!s.reminderEnabled) {
+                PsychRu.reminderNextOff
+            } else {
+                val next = s.nextReminderAt
+                val whenLabel = if (next > 0L) {
+                    PsychLogic.formatLocal(next, s.utcOffsetMinutes)
+                } else {
+                    PsychRu.intervalHours
+                }
+                PsychRu.reminderNext.format(whenLabel)
+            },
+            color = Forest,
+            style = MaterialTheme.typography.titleSmall
+        )
+        Text(PsychRu.intervalHours, color = Moss, style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = s.reminderIntervalHours == 6,
+                onClick = {
+                    hours = "6"
+                    vm.setReminderHours(6)
+                },
+                label = { Text(PsychRu.interval6) },
+                colors = chipColors()
+            )
+            FilterChip(
+                selected = s.reminderIntervalHours == 12,
+                onClick = {
+                    hours = "12"
+                    vm.setReminderHours(12)
+                },
+                label = { Text(PsychRu.interval12) },
+                colors = chipColors()
+            )
+            FilterChip(
+                selected = s.reminderIntervalHours == 24,
+                onClick = {
+                    hours = "24"
+                    vm.setReminderHours(24)
+                },
+                label = { Text(PsychRu.interval24) },
+                colors = chipColors()
+            )
         }
         PsychField(hours, { hours = it }, PsychRu.intervalHours, 1)
-        MenuBtn(Ru.save) { vm.setReminderHours(hours.toIntOrNull() ?: s.reminderIntervalHours) }
+        MenuBtn(Ru.save) {
+            vm.setReminderHours(hours.toIntOrNull() ?: s.reminderIntervalHours)
+            if (s.reminderEnabled) PsychReminderWorker.schedule(context, replace = true)
+        }
+        PsychField(quietStart, { quietStart = it }, PsychRu.quietStart, 1)
+        PsychField(quietEnd, { quietEnd = it }, PsychRu.quietEnd, 1)
         Text(
             "${PsychRu.quietHours}: ${s.quietStartHour}:00–${s.quietEndHour}:00",
-            color = Moss
+            color = Moss,
+            style = MaterialTheme.typography.bodySmall
         )
-        var offset by remember { mutableStateOf(s.utcOffsetMinutes.toString()) }
+        MenuBtn(Ru.save) {
+            vm.setQuietHours(
+                quietStart.toIntOrNull() ?: s.quietStartHour,
+                quietEnd.toIntOrNull() ?: s.quietEndHour
+            )
+        }
         PsychField(offset, { offset = it }, PsychRu.timezone, 1)
         Text(PsychRu.offsetHint, color = Moss, style = MaterialTheme.typography.bodySmall)
         MenuBtn(Ru.save) { vm.saveProfileField("offset", offset) }
+        PrimaryBtn(PsychRu.reminderTest) {
+            if (!canPost) {
+                requestNotifyIfNeeded()
+                if (Build.VERSION.SDK_INT < 33) openSystemNotifySettings()
+            } else {
+                PsychReminderWorker.notify(context, PsychRu.reminderFallback)
+                vm.goRecord()
+            }
+        }
     }
 }
 
@@ -1024,7 +1288,38 @@ private fun PaywallBody(vm: PsychViewModel) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(PsychRu.paywallTitle, style = MaterialTheme.typography.headlineMedium, color = Forest)
+        val speakText = buildString {
+            appendLine(PsychRu.paywallTitle)
+            appendLine()
+            appendLine(PsychRu.paywallBody)
+            appendLine()
+            append(PsychRu.upsell)
+            priceRub?.let { price ->
+                appendLine()
+                appendLine()
+                append(PsychRu.paywallPrice.format(price))
+            }
+            appendLine()
+            appendLine()
+            append(PsychRu.paywallHint)
+            pay.message?.let { msg ->
+                appendLine()
+                appendLine()
+                append(msg)
+            }
+        }.trim()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                PsychRu.paywallTitle,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineMedium,
+                color = Forest
+            )
+            SpeakIconButton(text = speakText, tint = Forest)
+        }
         Text(PsychRu.paywallBody, style = MaterialTheme.typography.bodyLarge, color = Forest)
         Text(PsychRu.upsell, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         priceRub?.let { price ->
@@ -1103,13 +1398,30 @@ private fun SessionListBody(
 
 @Composable
 private fun IdleBody(page: PsychPage.Idle, vm: PsychViewModel) {
+    val snippet = PsychLogic.shortStory(
+        page.situation.summary.ifBlank { page.situation.text },
+        90
+    )
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(PsychRu.idleTitle, style = MaterialTheme.typography.titleLarge, color = Forest)
+        if (snippet.isNotBlank()) {
+            Text(
+                "«$snippet»",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(SandDeep.copy(alpha = 0.72f))
+                    .padding(12.dp),
+                style = MaterialTheme.typography.titleMedium,
+                color = Forest
+            )
+        }
         Text(PsychRu.idleBody, color = Moss)
         PrimaryBtn(PsychRu.continueWork) { vm.continueIdle() }
         MenuBtn(PsychRu.finish) { vm.finishNow() }
@@ -1119,9 +1431,82 @@ private fun IdleBody(page: PsychPage.Idle, vm: PsychViewModel) {
 }
 
 @Composable
-private fun CollapsedRecordBlock(text: String) {
+private fun ReviewBody(page: PsychPage.Review, vm: PsychViewModel, onOpenProfile: () -> Unit) {
+    var moreOpen by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        ExpandedRecordBlock(page.situation.text)
+        page.answers.forEach { QaCard(it) }
+        if (page.session.analyzeText.isNotBlank()) {
+            Text(PsychRu.analyze, style = MaterialTheme.typography.titleMedium, color = Forest)
+            ReadableText(page.session.analyzeText)
+        }
+        if (page.session.recommendText.isNotBlank()) {
+            Text(PsychRu.recommend, style = MaterialTheme.typography.titleMedium, color = Forest)
+            ReadableText(page.session.recommendText)
+        }
+        if (page.session.assistantText.isNotBlank()) {
+            Text(PsychRu.assistant, style = MaterialTheme.typography.titleMedium, color = Forest)
+            ReadableText(page.session.assistantText)
+        }
+        if (!moreOpen) {
+            MenuBtn(PsychRu.furtherActions) { moreOpen = true }
+        } else {
+            MenuBtn(PsychRu.analyze) { vm.analyze() }
+            MenuBtn(PsychRu.recommend) { vm.recommend() }
+            MenuBtn(PsychRu.work) { vm.startWork() }
+            MenuBtn(PsychRu.postpone) { vm.postpone() }
+            MenuBtn(PsychRu.finishSituation) { vm.finishNow() }
+            if (vm.settings.hasEmptyProfileField()) {
+                MenuBtn(PsychRu.fillProfile) { onOpenProfile() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandedRecordBlock(text: String) {
+    if (text.isBlank()) return
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SandDeep.copy(alpha = 0.72f))
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                PsychRu.yourRecord,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
+                color = Amber
+            )
+            SpeakIconButton(text = text, tint = Forest)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Forest
+        )
+    }
+}
+
+@Composable
+private fun CollapsedRecordBlock(text: String, forceCollapsed: Boolean = false) {
     if (text.isBlank()) return
     var open by remember(text) { mutableStateOf(false) }
+    LaunchedEffect(forceCollapsed) {
+        if (forceCollapsed) open = false
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1153,16 +1538,16 @@ private fun CollapsedRecordBlock(text: String) {
                     .padding(8.dp)
             )
         }
-        Text(
-            if (open) text else collapsedTail(text),
-            modifier = Modifier
-                .clickable { open = !open }
-                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = Forest,
-            maxLines = if (open) Int.MAX_VALUE else 8,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (open) {
+            Text(
+                text,
+                modifier = Modifier
+                    .clickable { open = false }
+                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Forest
+            )
+        }
     }
 }
 
@@ -1199,17 +1584,27 @@ private fun QuestionBlock(question: String, waiting: Boolean) {
         return
     }
     if (question.isBlank()) return
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
-            question,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.headlineMedium,
+            PsychRu.psychologistName,
+            style = MaterialTheme.typography.labelLarge,
             color = Forest
         )
-        SpeakIconButton(text = question, tint = Forest)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            Text(
+                question,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineMedium,
+                color = Forest
+            )
+            SpeakIconButton(text = question, tint = Forest)
+        }
     }
 }
 
@@ -1238,6 +1633,49 @@ private fun ReadableText(text: String) {
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PsychologistBubble(
+    message: PsychInboxMessage,
+    offsetMinutes: Int,
+    onClick: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(SandDeep)
+                .then(
+                    if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+                )
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Text(
+                PsychRu.psychologistName,
+                style = MaterialTheme.typography.labelLarge,
+                color = Forest
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                message.text,
+                color = Forest,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            if (message.createdAt > 0L) {
+                Text(
+                    PsychLogic.formatLocal(message.createdAt, offsetMinutes),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.End)
+                )
             }
         }
     }
@@ -1280,13 +1718,21 @@ private fun QaCard(qa: PsychQa) {
     }
 }
 
-private fun collapsedTail(text: String, maxChars: Int = 520): String {
-    val t = text.trim()
-    if (t.length <= maxChars) return t
-    val raw = t.takeLast(maxChars)
-    val cut = raw.indexOfAny(charArrayOf('\n', ' ', '\t')).takeIf { it in 0..80 } ?: 0
-    return "…" + raw.drop(cut).trimStart()
-}
+private fun viewItemSpeakText(item: ViewItem): String = buildString {
+    append(item.situation.text.trim())
+    item.answers.forEach { qa ->
+        val question = qa.question.trim()
+        val answer = qa.answer.trim()
+        if (question.isNotEmpty()) {
+            append("\n\n")
+            append(question)
+        }
+        if (answer.isNotEmpty()) {
+            append('\n')
+            append(answer)
+        }
+    }
+}.trim()
 
 @Composable
 private fun rememberScrollToEndOnGrow(text: String): androidx.compose.foundation.ScrollState {

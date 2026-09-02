@@ -1,5 +1,6 @@
 package ru.na.step4.obidy.ui.psych
 
+import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,7 +14,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.psych.PsychAiClient
+import ru.na.step4.obidy.data.psych.PsychInboxMessage
 import ru.na.step4.obidy.data.psych.PsychLocks
 import ru.na.step4.obidy.data.psych.PsychLogic
 import ru.na.step4.obidy.data.psych.PsychQa
@@ -87,6 +90,11 @@ sealed class PsychPage {
     data class Paywall(val reason: String) : PsychPage()
     data class SessionList(val postponed: Boolean) : PsychPage()
     data class Idle(val situation: PsychSituation, val session: PsychSession, val work: Boolean) : PsychPage()
+    data class Review(
+        val situation: PsychSituation,
+        val session: PsychSession,
+        val answers: List<PsychQa>
+    ) : PsychPage()
 }
 
 data class ViewItem(
@@ -106,7 +114,8 @@ data class PsychUi(
     val upsell: String? = null,
     val outreach: String? = null,
     val speaking: Boolean = false,
-    val topicSnippets: Map<Long, String> = emptyMap()
+    val topicSnippets: Map<Long, String> = emptyMap(),
+    val inbox: List<PsychInboxMessage> = emptyList()
 )
 
 data class PremiumPayUi(
@@ -144,6 +153,7 @@ class PsychViewModel(
     private var premiumPollJob: Job? = null
     private var lastFullText: String = ""
     private var lastSpeakable: String = ""
+    private var inboxWatch: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     init {
         settings.expireProIfNeeded()
@@ -154,8 +164,31 @@ class PsychViewModel(
                 _ui.value = PsychUi(page = PsychPage.Onboarding())
             }
         }
+        reloadInbox()
+        inboxWatch = settings.watchInbox {
+            viewModelScope.launch { reloadInbox() }
+        }
         viewModelScope.launch { maybeIdle() }
         viewModelScope.launch { refreshPremiumFromServer(silent = true) }
+        viewModelScope.launch { applyServerQuestionLimits() }
+    }
+
+    override fun onCleared() {
+        inboxWatch?.let { settings.unwatchInbox(it) }
+        inboxWatch = null
+        super.onCleared()
+    }
+
+    private suspend fun applyServerQuestionLimits() {
+        val cfg = withContext(Dispatchers.IO) {
+            ru.na.step4.obidy.data.ai.AppConfigClient.fetch()
+        }
+        settings.applyAdminQuestionLimits(cfg.psychDialogueExtra, cfg.psychWorkQuestions)
+        bump()
+    }
+
+    private fun reloadInbox() {
+        _ui.value = _ui.value.copy(inbox = settings.inboxMessages())
     }
 
     fun goHub() = setPage(PsychPage.Hub)
@@ -188,9 +221,10 @@ class PsychViewModel(
 
     fun skipOnboarding() {
         settings.onboardingDone = true
+        settings.appendInbox(PsychRu.meetNice.format(PsychRu.skipName))
         _ui.value = PsychUi(
             page = PsychPage.Record,
-            outreach = PsychRu.meetNice.format(PsychRu.skipName)
+            inbox = settings.inboxMessages()
         )
     }
 
@@ -206,9 +240,10 @@ class PsychViewModel(
         }
         settings.name = text.take(40)
         settings.onboardingDone = true
+        settings.appendInbox(PsychRu.meetNice.format(settings.name))
         _ui.value = PsychUi(
             page = PsychPage.Record,
-            outreach = PsychRu.meetNice.format(settings.name)
+            inbox = settings.inboxMessages()
         )
     }
 
@@ -217,7 +252,8 @@ class PsychViewModel(
         if (body.isEmpty()) return
         if (settings.reminderOutreachPending && PsychLogic.looksLikeReadiness(body)) {
             settings.reminderOutreachPending = false
-            _ui.value = _ui.value.copy(outreach = PsychRu.describe, page = PsychPage.Record)
+            settings.appendInbox(PsychRu.describe)
+            _ui.value = _ui.value.copy(page = PsychPage.Record, inbox = settings.inboxMessages())
             return
         }
         settings.reminderOutreachPending = false
@@ -291,8 +327,8 @@ class PsychViewModel(
             val answers = repository.qaFor(page.session.sessionUid)
             val updated = page.session.copy(currentIndex = answers.size)
             repository.updateSession(updated)
-            if (answers.size >= settings.maxQuestions) {
-                setPage(PsychPage.Done(page.situation, updated, answers))
+            if (answers.size >= settings.dialogueExtraLimit) {
+                setPage(PsychPage.Review(page.situation, updated, answers))
                 return@launch
             }
             setPage(PsychPage.Dialogue(page.situation, updated, question = "", answers, prompt = page.prompt))
@@ -326,6 +362,7 @@ class PsychViewModel(
                 updated
             }
             val answers = repository.qaFor(work.sessionUid)
+            setPage(PsychPage.Work(sit, work, emptyList(), 0, answers))
             if (seq == PsychSession.SEQ_PRO) {
                 askNextWorkQuestion(sit, work, answers)
             } else {
@@ -349,7 +386,7 @@ class PsychViewModel(
             val answers = repository.qaFor(page.session.sessionUid)
             val next = page.index + 1
             if (page.session.sequentialWork == PsychSession.SEQ_PRO) {
-                if (next >= settings.maxQuestions) {
+                if (next >= settings.workQuestionLimit) {
                     complete(page.situation, page.session, answers)
                 } else {
                     val updated = page.session.copy(currentIndex = next)
@@ -597,7 +634,7 @@ class PsychViewModel(
                     from = range.first,
                     to = range.second,
                     items = items,
-                    asOneText = true
+                    asOneText = false
                 )
             )
         }
@@ -606,6 +643,30 @@ class PsychViewModel(
     fun toggleViewMode() {
         val page = _ui.value.page as? PsychPage.ViewPeriod ?: return
         setPage(page.copy(asOneText = !page.asOneText))
+    }
+
+    fun setViewAsOneText(value: Boolean) {
+        val page = _ui.value.page as? PsychPage.ViewPeriod ?: return
+        if (page.asOneText == value) return
+        setPage(page.copy(asOneText = value))
+    }
+
+    fun openSituationReview(situationId: Long, sessionId: Long? = null) {
+        viewModelScope.launch {
+            val situation = repository.getSituation(situationId) ?: return@launch
+            val session = when {
+                sessionId != null -> repository.getSession(sessionId)
+                else -> null
+            } ?: repository.sessionForSituation(situationId)
+                ?: repository.createSession(
+                    situation.id,
+                    settings.newSessionUid(),
+                    PsychSession.SEQ_LIVE
+                )
+            val answers = repository.qaFor(session.sessionUid)
+            settings.activeSessionUid = session.sessionUid
+            setPage(PsychPage.Review(situation, session, answers))
+        }
     }
 
     fun openSession(sessionId: Long) {
@@ -665,6 +726,9 @@ class PsychViewModel(
             is PsychPage.ViewPeriod -> page.items.joinToString("\n\n") { item ->
                 PsychLogic.shareText(item.situation.text, item.answers, item.situation.createdAt, settings.utcOffsetMinutes)
             }
+            is PsychPage.Review -> PsychLogic.shareText(
+                page.situation.text, page.answers, page.situation.createdAt, settings.utcOffsetMinutes
+            )
             else -> null
         }
     }
@@ -673,21 +737,7 @@ class PsychViewModel(
         val page = _ui.value.page as? PsychPage.Idle ?: return
         viewModelScope.launch {
             val answers = repository.qaFor(page.session.sessionUid)
-            if (page.work) {
-                val questions = PsychLogic.decodeQuestions(page.session.questionsJson)
-                setPage(
-                    PsychPage.Work(
-                        page.situation,
-                        page.session,
-                        questions,
-                        page.session.currentIndex,
-                        answers
-                    )
-                )
-            } else {
-                val q = answers.lastOrNull()?.question.orEmpty()
-                setPage(PsychPage.Dialogue(page.situation, page.session, q, answers))
-            }
+            setPage(PsychPage.Review(page.situation, page.session, answers))
         }
     }
 
@@ -740,17 +790,51 @@ class PsychViewModel(
         if (on) {
             settings.nextReminderAt =
                 System.currentTimeMillis() + settings.reminderIntervalHours * 3_600_000L
-            viewModelScope.launch { sendOutreach() }
+            viewModelScope.launch { refreshReminderText() }
+        } else {
+            settings.nextReminderAt = 0L
         }
         bump()
     }
 
     fun setReminderHours(hours: Int) {
-        if (!settings.isPro) {
+        val clamped = hours.coerceIn(1, 72)
+        if (!settings.isPro && clamped != 12) {
             setPage(PsychPage.Paywall("reminders"))
             return
         }
-        settings.reminderIntervalHours = hours
+        settings.reminderIntervalHours = clamped
+        if (settings.reminderEnabled) {
+            settings.nextReminderAt =
+                System.currentTimeMillis() + clamped * 3_600_000L
+        }
+        bump()
+    }
+
+    fun setQuietHours(startHour: Int, endHour: Int) {
+        settings.quietStartHour = startHour.coerceIn(0, 23)
+        settings.quietEndHour = endHour.coerceIn(0, 23)
+        bump()
+    }
+
+    fun consumeNotificationOpen() {
+        when (_ui.value.page) {
+            is PsychPage.Onboarding,
+            is PsychPage.Dialogue,
+            is PsychPage.Work,
+            is PsychPage.Result,
+            is PsychPage.Done,
+            is PsychPage.Idle,
+            is PsychPage.Review -> return
+            else -> goRecord()
+        }
+    }
+
+    fun onRemindersShown() {
+        if (settings.reminderEnabled && settings.nextReminderAt == 0L) {
+            settings.nextReminderAt =
+                System.currentTimeMillis() + settings.reminderIntervalHours * 3_600_000L
+        }
         bump()
     }
 
@@ -764,6 +848,12 @@ class PsychViewModel(
             "offset" -> settings.utcOffsetMinutes = value.trim().toIntOrNull() ?: settings.utcOffsetMinutes
             "personality" -> settings.myPersonality = value.trim()
         }
+        bump()
+    }
+
+    fun setQuestionLimits(dialogueExtra: Int?, workQuestions: Int?) {
+        if (dialogueExtra != null) settings.dialogueExtraLimit = dialogueExtra
+        if (workQuestions != null) settings.workQuestionLimit = workQuestions
         bump()
     }
 
@@ -924,9 +1014,14 @@ class PsychViewModel(
         answers: List<PsychQa>
     ) {
         callAi("questions", situation, session, answers) { ok ->
-            val questions = ok.questions.filter { q ->
+            val questions = workQuestionsFrom(ok).filter { q ->
                 answers.none { it.question.equals(q, ignoreCase = true) }
-            }.ifEmpty { ok.questions }
+            }.ifEmpty { workQuestionsFrom(ok) }
+                .take(settings.workQuestionLimit)
+            if (questions.isEmpty()) {
+                _ui.value = _ui.value.copy(error = Ru.analysisAiError)
+                return@callAi
+            }
             val updated = session.copy(
                 questionsJson = PsychLogic.encodeQuestions(questions),
                 currentIndex = 0,
@@ -942,6 +1037,10 @@ class PsychViewModel(
         session: PsychSession,
         answers: List<PsychQa>
     ) {
+        if (answers.size >= settings.dialogueExtraLimit) {
+            setPage(PsychPage.Review(situation, session, answers))
+            return
+        }
         callAi(
             "dialogue_question",
             situation,
@@ -962,6 +1061,10 @@ class PsychViewModel(
         session: PsychSession,
         answers: List<PsychQa>
     ) {
+        if (answers.size >= settings.workQuestionLimit) {
+            complete(situation, session, answers)
+            return
+        }
         callAi(
             "questions_next",
             situation,
@@ -969,7 +1072,11 @@ class PsychViewModel(
             answers,
             questionNumber = answers.size + 1
         ) { ok ->
-            val q = ok.question.ifBlank { ok.text }
+            val q = ok.question.ifBlank { ok.text }.trim()
+            if (q.isBlank()) {
+                _ui.value = _ui.value.copy(error = Ru.analysisAiError)
+                return@callAi
+            }
             val questions = PsychLogic.decodeQuestions(session.questionsJson) + q
             val updated = session.copy(
                 questionsJson = PsychLogic.encodeQuestions(questions),
@@ -997,7 +1104,19 @@ class PsychViewModel(
         setPage(PsychPage.Done(situation, updated, answers))
     }
 
-    private suspend fun sendOutreach() {
+    private fun workQuestionsFrom(ok: PsychAiClient.Result.Ok): List<String> {
+        val listed = ok.questions.map { it.trim() }.filter { it.isNotEmpty() }
+        if (listed.isNotEmpty()) return listed
+        val decoded = PsychLogic.decodeQuestions(ok.text)
+        if (decoded.isNotEmpty()) return decoded
+        val single = ok.question.ifBlank { ok.text }.trim()
+        if (single.isEmpty()) return emptyList()
+        val starts = single.trimStart()
+        if (starts.startsWith("[") || starts.startsWith("{")) return emptyList()
+        return listOf(single)
+    }
+
+    private suspend fun refreshReminderText() {
         val result = withContext(Dispatchers.IO) {
             client.request(
                 kind = "reminder_outreach",
@@ -1010,8 +1129,10 @@ class PsychViewModel(
         }
         val text = (result as? PsychAiClient.Result.Ok)?.text?.ifBlank { null }
             ?: PsychRu.reminderFallback
-        settings.reminderOutreachPending = true
-        _ui.value = _ui.value.copy(outreach = text)
+        settings.lastReminderText = text
+        if (settings.inboxMessages().lastOrNull()?.text != text) {
+            settings.appendInbox(text)
+        }
     }
 
     private suspend fun callAi(
@@ -1044,13 +1165,14 @@ class PsychViewModel(
         startSpinner(waitKind)
         try {
             val cached = if (kind in SKIP_CACHE) null else repository.cached(key)
-            val ok = if (cached != null) {
-                val questions = PsychLogic.decodeQuestions(cached.responseText)
+            val cacheUsable = cached != null &&
+                !(kind.startsWith("question") && PsychLogic.decodeQuestions(cached.responseText).isEmpty())
+            val ok = if (cacheUsable && cached != null) {
                 PsychAiClient.Result.Ok(
                     text = cached.responseText,
                     speakable = cached.responseText,
                     question = cached.responseText,
-                    questions = questions,
+                    questions = PsychLogic.decodeQuestions(cached.responseText),
                     prompt = cached.promptText
                 )
             } else {
@@ -1066,6 +1188,11 @@ class PsychViewModel(
                         topic = topic,
                         topics = topics,
                         questionNumber = questionNumber,
+                        questionCount = if (kind.startsWith("question")) {
+                            settings.workQuestionLimit
+                        } else {
+                            settings.dialogueExtraLimit
+                        },
                         admin = isAdmin
                     )
                 }
@@ -1075,7 +1202,7 @@ class PsychViewModel(
                     _ui.value = _ui.value.copy(waiting = false, error = ok.message)
                 }
                 is PsychAiClient.Result.Ok -> {
-                    if (cached == null) repository.putCache(key, kind, ok.text, ok.prompt)
+                    if (!cacheUsable) repository.putCache(key, kind, ok.text, ok.prompt)
                     ok.personality?.let { if (settings.personalityCollectEnabled) settings.myPersonality = it }
                     var quotaLine: String? = null
                     var upsell: String? = null
@@ -1129,6 +1256,7 @@ class PsychViewModel(
             is PsychPage.Work -> page.situation to page.session
             is PsychPage.Done -> page.situation to page.session
             is PsychPage.Idle -> page.situation to page.session
+            is PsychPage.Review -> page.situation to page.session
             else -> null
         }
     }
@@ -1199,7 +1327,9 @@ class PsychViewModel(
             "analyze", "recommend", "questions", "questions_retry",
             "questions_next", "dialogue_question", "assistant"
         )
-        private val SKIP_CACHE = setOf("analyze", "recommend", "assistant")
+        private val SKIP_CACHE = setOf(
+            "analyze", "recommend", "assistant", "questions", "questions_retry"
+        )
 
         fun factory(
             repository: PsychRepository,
