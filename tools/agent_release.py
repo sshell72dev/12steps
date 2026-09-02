@@ -160,8 +160,11 @@ def hook_session_start() -> int:
                 "После любых правок в этом репозитории в конце сессии обязательно "
                 "выполни `python tools/agent_release.py --notes \"описание\"`: "
                 "поднимется версия, changelog получит описание, изменения этой "
-                "сессии уйдут коммитом и push на GitHub. Не спрашивай разрешение. "
-                "Не деплой сервер и не собирай APK без явной просьбы."
+                "сессии уйдут коммитом и push на GitHub, затем соберётся debug APK, "
+                "он загрузится на Google Drive, а ссылка появится в Google Doc. "
+                "Не спрашивай разрешение. Дождись окончания публикации APK "
+                "(несколько минут). Деплой сервера и установку на телефон "
+                "не делай без явной просьбы."
             )
         }
     )
@@ -191,11 +194,13 @@ def hook_stop() -> int:
         {
             "followup_message": (
                 "Перед завершением нужно поднять версию с описанием, закоммитить "
-                "правки этой сессии и запушить на GitHub. Это правило репозитория, "
-                "не спрашивай разрешение. Не деплой сервер и не собирай APK.\n\n"
+                "правки этой сессии, запушить на GitHub и опубликовать APK "
+                "(Google Drive + ссылка в Google Doc). Это правило репозитория, "
+                "не спрашивай разрешение. Дождись сборки и загрузки APK. "
+                "Не деплой сервер и не ставь APK на телефон.\n\n"
                 "python tools/agent_release.py --notes \"кратко по-русски, что сделано\"\n\n"
                 "В --notes напиши конкретное описание, пункты разделяй `;`. "
-                "Не включай чужой незакоммиченный WIP."
+                "Не включай чужой незакоммиченный WIP. Не добавляй --skip-apk."
             )
         }
     )
@@ -222,9 +227,15 @@ def collect_files(extra_paths: list[str]) -> list[str]:
 def publish_apk() -> int:
     script = ROOT / "tools" / "publish_apk.py"
     print("publishing APK to Google Drive and Google Doc...")
+    env = os.environ.copy()
+    java_home = env.get("JAVA_HOME") or r"C:\Program Files\Android\Android Studio\jbr"
+    env["JAVA_HOME"] = java_home
+    env["Path"] = str(Path(java_home) / "bin") + os.pathsep + env.get("Path", "")
+    env["PYTHONUNBUFFERED"] = "1"
     result = subprocess.run(
         [sys.executable, str(script)],
         cwd=ROOT,
+        env=env,
         encoding="utf-8",
     )
     return result.returncode
@@ -299,7 +310,7 @@ def run_release(notes: str | None, extra_paths: list[str], skip_push: bool, do_p
 def main() -> int:
     _configure_stdio()
     parser = argparse.ArgumentParser(
-        description="Bump version, commit this session's files, and push to GitHub",
+        description="Bump version, commit this session's files, push to GitHub, publish APK",
     )
     parser.add_argument(
         "--hook",
@@ -316,9 +327,9 @@ def main() -> int:
         help="Commit locally without git push",
     )
     parser.add_argument(
-        "--publish-apk",
+        "--skip-apk",
         action="store_true",
-        help="After git push, build APK, upload to Google Drive, update Google Doc",
+        help="Do not build/upload APK after git push (default is to publish)",
     )
     parser.add_argument(
         "paths",
@@ -344,7 +355,7 @@ def main() -> int:
         args.notes,
         args.paths,
         args.skip_push or os.getenv("AGENT_RELEASE_SKIP_PUSH") == "1",
-        args.publish_apk or os.getenv("AGENT_PUBLISH_APK") == "1",
+        not (args.skip_apk or os.getenv("AGENT_SKIP_APK") == "1"),
     )
 
 

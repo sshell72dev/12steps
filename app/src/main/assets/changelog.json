@@ -1,6 +1,14 @@
 {
   "releases": [
     {
+      "version": "1.0.14",
+      "versionCode": 15,
+      "date": "2026-09-02",
+      "items": [
+        "Автопубликация APK на Google Drive после релиза любого агента"
+      ]
+    },
+    {
       "version": "1.0.13",
       "versionCode": 14,
       "date": "2026-09-02",

@@ -69,7 +69,7 @@ python server/deploy_ftp.py
 
 Перед загрузкой на FTP автоматически повышается версия релиза (см. раздел **Версии и история изменений** ниже).
 
-**Важно для агента / Cursor:** не запускать деплой сервера, сборку APK и обновление на телефоне, пока пользователь явно не попросит. Не делать это «на всякий случай» и не предлагать как следующий шаг без запроса.
+**Важно для агента / Cursor:** не запускать деплой сервера и установку на телефон, пока пользователь явно не попросит. Сборка debug APK и выкладка на Google Drive — часть `agent_release.py`, её делать нужно.
 
 ## Версии и история изменений
 
@@ -83,28 +83,28 @@ python server/deploy_ftp.py
 | `CHANGELOG.md` | Тот же changelog в Markdown (для людей и git) |
 | `app/src/main/assets/changelog.json` | Копия для экрана «Версия» в приложении |
 | `tools/bump_version.py` | Повышение версии и синхронизация changelog |
-| `tools/agent_release.py` | Bump + changelog + commit файлов сессии + push на GitHub |
+| `tools/agent_release.py` | Bump + changelog + commit + push + сборка APK на Google Drive и ссылка в Google Doc |
 | `tools/publish_apk.py` | Сборка debug APK → Google Drive → ссылка в [Google Doc](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing) |
 | `.cursor/hooks.json` | Хук: после правок агента не даёт забыть релиз |
 | `.cursor/rules/agent-release.mdc` | Правило для любого агента Cursor |
 
 ### После работы агента
 
-После **каждого** изменения агентом (не только при деплое) версия поднимается сама, в changelog пишется описание, коммит уходит на GitHub:
+После **каждого** изменения агентом (не только при деплое) версия поднимается сама, в changelog пишется описание, коммит уходит на GitHub, собирается debug APK и ссылка появляется в [Google Doc](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing):
 
 ```powershell
 python tools/agent_release.py --notes "Что сделано;Второй пункт"
 ```
 
-Это правило репозитория: агент делает bump/commit/push в конце сессии, без отдельной просьбы. Деплой и сборка APK по-прежнему только по явному запросу.
+Это правило репозитория: агент делает bump/commit/push **и публикацию APK** в конце сессии, без отдельной просьбы. Деплой сервера и установку на телефон — только по явному запросу.
 
-Если агент забыл, хук `stop` напомнит ему дописать релиз (не больше двух автоповторов). Временно отключить: `$env:AGENT_RELEASE_SKIP = "1"`.
+Если агент забыл, хук `stop` напомнит ему дописать релиз (не больше двух автоповторов). Временно отключить весь релиз: `$env:AGENT_RELEASE_SKIP = "1"`. Только без APK: `$env:AGENT_SKIP_APK = "1"` или `--skip-apk`.
 
 ### APK для тестеров (Google Drive + Google Doc)
 
-Установочный файл кладётся на Google Диск, а в [документе с версиями](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing) сверху появляется блок: версия, описание правок и ссылка «Скачать APK».
+Установочный файл кладётся на Google Диск, а в [документе с версиями](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing) сверху появляется блок: версия, описание правок и ссылка «Скачать APK». Это происходит **автоматически** в конце `agent_release.py`.
 
-Первый раз (откроется браузер Google — войдите в аккаунт, где лежит документ):
+Первый раз на машине (откроется браузер Google — войдите в аккаунт, где лежит документ):
 
 ```powershell
 python tools/publish_apk.py --auth
@@ -112,19 +112,11 @@ python tools/publish_apk.py --auth
 
 Скрипт сам скачает портативный `rclone` в `tools/.vendor/` (в git не попадает). Нужен доступ в интернет.
 
-Опубликовать текущую версию:
+Повторить публикацию вручную (уже текущая версия, без нового bump):
 
 ```powershell
 python tools/publish_apk.py
 ```
-
-Или сразу после релиза агента:
-
-```powershell
-python tools/agent_release.py --notes "Что сделано" --publish-apk
-```
-
-APK не собирается автоматически после каждой правки — только эта команда или явная просьба. Нужен `rclone` и вход в тот Google-аккаунт, где лежит документ.
 
 Готовый debug APK без пересборки: `python tools/publish_apk.py --skip-build`. Только переписать документ: `python tools/publish_apk.py --doc-only`.
 
@@ -151,7 +143,7 @@ python server/deploy_ftp.py
 
 ### Команды
 
-**Автоматически после работы агента** — `tools/agent_release.py` (хук + правило Cursor).
+**Автоматически после работы агента** — `tools/agent_release.py` (хук + правило Cursor): bump, GitHub, сборка APK, Google Drive, Google Doc.
 
 **Автоматически при деплое** — `deploy_ftp.py` вызывает `bump_version.py`. Если версию уже поднял агент и нужен только FTP, задайте `$env:DEPLOY_SKIP_BUMP = "1"`.
 
@@ -206,7 +198,7 @@ python server/deploy_ftp.py
 
 ## Обновление на телефоне
 
-**Не делать сборку и установку на телефон без явного запроса пользователя.**
+**Не ставить APK на телефон без явного запроса пользователя.** Сборка для Google Drive идёт сама в `agent_release.py`.
 
 На Xiaomi USB-установка из Android Studio часто блокируется. Рабочий путь — собрать debug APK и поставить через `adb push` + `pm install`.
 
