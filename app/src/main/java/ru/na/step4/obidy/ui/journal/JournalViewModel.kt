@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.na.step4.obidy.data.journal.EmotionCatalog
 import ru.na.step4.obidy.data.journal.JournalAiClient
 import ru.na.step4.obidy.data.journal.JournalEntry
 import ru.na.step4.obidy.data.journal.JournalFieldKind
@@ -108,6 +109,10 @@ class JournalViewModel(
     private val _expandedChapter = MutableStateFlow<Int?>(null)
     val expandedChapter: StateFlow<Int?> = _expandedChapter.asStateFlow()
 
+    /** User tapped a step header — show every chapter in that step. */
+    private val _pickAllChapters = MutableStateFlow(false)
+    val pickAllChapters: StateFlow<Boolean> = _pickAllChapters.asStateFlow()
+
     private val _chapterShowsAllPoints = MutableStateFlow<Set<Int>>(emptySet())
     val chapterShowsAllPoints: StateFlow<Set<Int>> = _chapterShowsAllPoints.asStateFlow()
 
@@ -132,23 +137,43 @@ class JournalViewModel(
         if (path == null) {
             _expandedStep.value = null
             _expandedChapter.value = null
+            _pickAllChapters.value = false
             _chapterShowsAllPoints.value = emptySet()
             return
         }
         _expandedStep.value = path.step.id
         _expandedChapter.value = path.chapter?.id
+        _pickAllChapters.value = false
         _chapterShowsAllPoints.value = emptySet()
     }
 
     fun togglePickStep(id: Int) {
-        _expandedStep.value = if (_expandedStep.value == id) null else id
-        if (_expandedStep.value != id) {
-            _expandedChapter.value = null
-            _chapterShowsAllPoints.value = emptySet()
+        when {
+            _expandedStep.value != id -> {
+                _expandedStep.value = id
+                _pickAllChapters.value = true
+                _expandedChapter.value = null
+                _chapterShowsAllPoints.value = emptySet()
+            }
+            _pickAllChapters.value -> {
+                _expandedStep.value = null
+                _pickAllChapters.value = false
+                _expandedChapter.value = null
+                _chapterShowsAllPoints.value = emptySet()
+            }
+            else -> {
+                _pickAllChapters.value = true
+                _expandedChapter.value = null
+                _chapterShowsAllPoints.value = emptySet()
+            }
         }
     }
 
     fun togglePickChapter(id: Int) {
+        if (_pickAllChapters.value) {
+            _chapterShowsAllPoints.update { if (id in it) it - id else it + id }
+            return
+        }
         val currentChapterId = state.value.path?.chapter?.id
         if (_expandedChapter.value == id) {
             if (id == currentChapterId && id !in _chapterShowsAllPoints.value) {
@@ -164,6 +189,9 @@ class JournalViewModel(
     }
 
     fun visiblePickPoints(chapter: TreeNode): List<TreeNode> {
+        if (_pickAllChapters.value && _expandedStep.value == chapter.parentId) {
+            return chapter.children
+        }
         val path = state.value.path ?: return chapter.children
         if (chapter.id != path.chapter?.id) return chapter.children
         val point = path.point ?: return chapter.children
@@ -261,7 +289,8 @@ class JournalViewModel(
 
     fun toggleFieldWord(fieldId: String, word: String) {
         val current = _meta.value.fieldValues[fieldId].orEmpty()
-        setFieldValue(fieldId, JournalFields.toggleWord(current, word))
+        val kind = _meta.value.fields.find { it.id == fieldId }?.kind ?: JournalFieldKind.FEELINGS
+        setFieldValue(fieldId, EmotionCatalog.toggleWord(current, word, kind))
     }
 
     fun addField(title: String, kind: JournalFieldKind) {

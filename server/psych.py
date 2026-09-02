@@ -383,8 +383,10 @@ def build_prompt(kind: str, payload: dict[str, Any]) -> str:
             if answers
             else ""
         )
+        n = question_count(payload)
         return (
             f"{retry}{lang_ctx}{render_difficulty(profile)}{render_length(profile)}{work_note}\n"
+            f"Сгенерируй ровно {n} вопросов.\n"
             f"{anketa}СИТУАЦИЯ:\n{situation}\n{topic}"
             f"{render_qa(answers, empty='Диалога ещё не было.')}{personality}"
         )
@@ -500,17 +502,26 @@ def parse_question(text: str) -> str:
     return (text or "").strip().strip('"')
 
 
-def parse_questions(text: str) -> list[str]:
+def question_count(payload: dict[str, Any], default: int = 5) -> int:
+    try:
+        n = int(payload.get("question_count") or default)
+    except (TypeError, ValueError):
+        n = default
+    return max(1, min(30, n))
+
+
+def parse_questions(text: str, limit: int = 5) -> list[str]:
+    cap = max(1, min(30, int(limit or 5)))
     blob = _extract_json_blob(text)
     try:
         data = json.loads(blob)
         if isinstance(data, list):
             out = [_str(item) for item in data if _str(item)]
-            return out[:5] if out else []
+            return out[:cap] if out else []
         if isinstance(data, dict):
             q = data.get("questions") or data.get("question")
             if isinstance(q, list):
-                return [_str(item) for item in q if _str(item)][:5]
+                return [_str(item) for item in q if _str(item)][:cap]
             if _str(q):
                 return [_str(q)]
     except Exception:
@@ -518,7 +529,7 @@ def parse_questions(text: str) -> list[str]:
     return []
 
 
-def parse_model_output(kind: str, raw_text: str) -> dict[str, Any]:
+def parse_model_output(kind: str, raw_text: str, question_limit: int = 5) -> dict[str, Any]:
     cleaned, personality = extract_personality(raw_text)
     readable, speakable = split_speakable(cleaned)
     if not readable:
@@ -537,7 +548,7 @@ def parse_model_output(kind: str, raw_text: str) -> dict[str, Any]:
         result["text"] = result["question"]
         result["speakable"] = result["question"]
     elif kind in {"questions", "questions_retry"}:
-        questions = parse_questions(readable)
+        questions = parse_questions(readable, question_limit)
         result["questions"] = questions
         result["text"] = json.dumps(questions, ensure_ascii=False) if questions else readable
     elif kind == "reminder_outreach":

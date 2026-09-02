@@ -25,7 +25,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -43,6 +42,8 @@ import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.Step4App
+import ru.na.step4.obidy.MainActivity
+import ru.na.step4.obidy.data.psych.PsychReminderWorker
 import ru.na.step4.obidy.data.InventoryProgressStore
 import ru.na.step4.obidy.data.ResentmentRepository
 import ru.na.step4.obidy.data.TwelveSteps
@@ -225,6 +226,19 @@ fun Step4Nav() {
             navController.currentDestination?.route != Routes.MESSENGER
         ) {
             navController.navigate(Routes.MESSENGER)
+        }
+    }
+    val psychOpenTick = (context as? MainActivity)?.psychOpenTick ?: 0
+    LaunchedEffect(psychOpenTick) {
+        if (psychOpenTick == 0) return@LaunchedEffect
+        val activity = context as? MainActivity ?: return@LaunchedEffect
+        if (!activity.pendingPsychOpen) return@LaunchedEffect
+        val intent = activity.intent
+        if (intent.getBooleanExtra(PsychReminderWorker.EXTRA_OPEN_PSYCH, false)) {
+            intent.removeExtra(PsychReminderWorker.EXTRA_OPEN_PSYCH)
+        }
+        if (navController.currentDestination?.route != Routes.PSYCH) {
+            navController.openMain(Routes.PSYCH)
         }
     }
     val resumeId = remember { app.analysisProgress.lastActiveId() }
@@ -487,9 +501,6 @@ fun Step4Nav() {
                             openInventoryFromJournal(navController, app, repository, scope) {
                                 vm.selectResentmentPlace()
                             }
-                        },
-                        onPickWords = { fieldId, kind ->
-                            navController.navigate(Routes.journalWords(fieldId, kind.name))
                         }
                     )
                 }
@@ -529,10 +540,7 @@ fun Step4Nav() {
                         vm.selectResentmentPlace()
                     }
                 },
-                onEntries = { navController.navigate(Routes.JOURNAL_ENTRIES) },
-                onPickWords = { fieldId, kind ->
-                    navController.navigate(Routes.journalWords(fieldId, kind.name))
-                }
+                onEntries = { navController.navigate(Routes.JOURNAL_ENTRIES) }
             )
         }
         composable(Routes.JOURNAL_ENTRIES) {
@@ -885,7 +893,7 @@ fun Step4Nav() {
                 navController.openMain(Routes.PSYCH)
             }
         },
-        modifier = Modifier.align(Alignment.BottomCenter)
+        modifier = Modifier.fillMaxSize()
     )
     }
     }

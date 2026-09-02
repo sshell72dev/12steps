@@ -29,6 +29,7 @@ class PsychAiClient {
         topic: JSONObject?,
         topics: JSONArray? = null,
         questionNumber: Int = 1,
+        questionCount: Int = 5,
         admin: Boolean = false
     ): Result {
         val payload = JSONObject()
@@ -37,6 +38,7 @@ class PsychAiClient {
             .put("language", settings.languageCode)
             .put("no_history", noHistory)
             .put("question_number", questionNumber)
+            .put("question_count", questionCount)
             .put("premium", settings.isPro)
             .put("admin", admin)
             .put("profile", PsychLogic.profileJson(settings))

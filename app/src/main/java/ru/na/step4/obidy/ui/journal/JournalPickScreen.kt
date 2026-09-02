@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import ru.na.step4.obidy.Ru
-import ru.na.step4.obidy.data.journal.JournalFieldKind
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.journal.NodeType
 import ru.na.step4.obidy.data.journal.TreeNode
@@ -50,6 +49,8 @@ fun JournalPickScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val expandedStep by viewModel.expandedStep.collectAsStateWithLifecycle()
     val expandedChapter by viewModel.expandedChapter.collectAsStateWithLifecycle()
+    val pickAllChapters by viewModel.pickAllChapters.collectAsStateWithLifecycle()
+    val chapterShowsAllPoints by viewModel.chapterShowsAllPoints.collectAsStateWithLifecycle()
     val steps = viewModel.catalog.steps
     val path = state.path
     val currentId = path?.current?.id
@@ -95,13 +96,18 @@ fun JournalPickScreen(
                     StepAccordion(
                         step = step,
                         expanded = expandedStep == step.id,
-                        expandedChapter = expandedChapter,
                         currentId = currentId,
                         count = viewModel.countFor(step.id),
                         chapterCount = { viewModel.countFor(it) },
                         onToggleStep = { viewModel.togglePickStep(step.id) },
                         onToggleChapter = viewModel::togglePickChapter,
-                        visiblePoints = viewModel::visiblePickPoints,
+                        isChapterExpanded = { chapterId ->
+                            expandedStep == step.id && (pickAllChapters || expandedChapter == chapterId)
+                        },
+                        visiblePoints = { chapter ->
+                            chapterShowsAllPoints
+                            viewModel.visiblePickPoints(chapter)
+                        },
                         onSelect = { viewModel.selectPickNode(it, onSelected) },
                         onResentments = onResentments,
                         isResentment = { viewModel.catalog.isResentmentChapter(it) }
@@ -116,12 +122,12 @@ fun JournalPickScreen(
 private fun StepAccordion(
     step: TreeNode,
     expanded: Boolean,
-    expandedChapter: Int?,
     currentId: Int?,
     count: Int,
     chapterCount: (Int) -> Int,
     onToggleStep: () -> Unit,
     onToggleChapter: (Int) -> Unit,
+    isChapterExpanded: (Int) -> Boolean,
     visiblePoints: (TreeNode) -> List<TreeNode>,
     onSelect: (Int) -> Unit,
     onResentments: () -> Unit,
@@ -138,7 +144,7 @@ private fun StepAccordion(
             step.children.forEach { chapter ->
                 ChapterAccordion(
                     chapter = chapter,
-                    expanded = expandedChapter == chapter.id,
+                    expanded = isChapterExpanded(chapter.id),
                     currentId = currentId,
                     count = chapterCount(chapter.id),
                     pointCount = chapterCount,
@@ -198,8 +204,7 @@ fun JournalSelectedScreen(
     onAiHelp: () -> Unit,
     onAiAnalyze: (String) -> Unit,
     onResentments: () -> Unit,
-    onEntries: () -> Unit,
-    onPickWords: (fieldId: String, kind: JournalFieldKind) -> Unit
+    onEntries: () -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val path = state.path
@@ -247,8 +252,7 @@ fun JournalSelectedScreen(
                 if (state.writable) {
                     JournalEntryComposer(
                         state = state,
-                        viewModel = viewModel,
-                        onPickWords = onPickWords
+                        viewModel = viewModel
                     ) {
                         if (state.lastSaved != null) {
                             JournalButton(JournalRu.viewEntries, onEntries)

@@ -30,6 +30,19 @@ class MainActivity : FragmentActivity() {
     var premiumReturnTick by mutableStateOf(0)
         private set
 
+    /** Bumped when a psychologist reminder notification is tapped. */
+    var psychOpenTick by mutableStateOf(0)
+        private set
+
+    var pendingPsychOpen by mutableStateOf(false)
+        private set
+
+    fun consumePendingPsychOpen(): Boolean {
+        if (!pendingPsychOpen) return false
+        pendingPsychOpen = false
+        return true
+    }
+
     /**
      * Lock only when the whole app goes to background — not when the system
      * biometric dialog covers this activity. Xiaomi reports that overlay as
@@ -50,6 +63,7 @@ class MainActivity : FragmentActivity() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
         handlePremiumReturn(intent)
         handleMessengerInvite(intent)
+        handlePsychReminder(intent)
         enableEdgeToEdge()
         setContent {
             Step4Theme {
@@ -78,6 +92,7 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
         handlePremiumReturn(intent)
         handleMessengerInvite(intent)
+        handlePsychReminder(intent)
     }
 
     private fun handlePremiumReturn(intent: Intent?) {
@@ -93,6 +108,18 @@ class MainActivity : FragmentActivity() {
         val data = intent?.data ?: return
         if (data.scheme == "ru.na.steps12" && data.host == "messenger") {
             (application as Step4App).messengerRepository.offerInvite(data.toString())
+            suppressLockUntil = SystemClock.elapsedRealtime() + 5_000
+        }
+    }
+
+    private fun handlePsychReminder(intent: Intent?) {
+        if (intent?.getBooleanExtra(
+                ru.na.step4.obidy.data.psych.PsychReminderWorker.EXTRA_OPEN_PSYCH,
+                false
+            ) == true
+        ) {
+            psychOpenTick += 1
+            pendingPsychOpen = true
             suppressLockUntil = SystemClock.elapsedRealtime() + 5_000
         }
     }

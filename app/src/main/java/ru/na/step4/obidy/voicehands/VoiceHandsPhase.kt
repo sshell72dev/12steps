@@ -21,5 +21,7 @@ data class VoiceHandsUi(
     val draft: String = "",
     val lastHeard: String = "",
     val status: String = "",
+    val commandsHint: String = "",
+    val showListenButton: Boolean = false,
     val error: String? = null
 )

@@ -5,9 +5,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -44,9 +46,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.na.step4.obidy.Ru
+import ru.na.step4.obidy.data.journal.EmotionCatalog
 import ru.na.step4.obidy.data.journal.JournalFieldKind
 import ru.na.step4.obidy.data.journal.JournalFieldSpec
 import ru.na.step4.obidy.data.journal.JournalRu
@@ -206,55 +211,80 @@ fun LeafRow(
 fun JournalEntryComposer(
     state: JournalState,
     viewModel: JournalViewModel,
-    onPickWords: (fieldId: String, kind: JournalFieldKind) -> Unit,
     afterSave: @Composable () -> Unit = {}
 ) {
     val bringIntoView = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .bringIntoViewRequester(bringIntoView),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (state.splitFields) {
-            state.fields.forEach { field ->
-                JournalWriteField(
-                    field = field,
-                    value = state.fieldValues[field.id].orEmpty(),
-                    onValueChange = { viewModel.setFieldValue(field.id, it) },
-                    onPickWords = {
-                        if (field.kind != JournalFieldKind.TEXT) {
-                            onPickWords(field.id, field.kind)
-                        }
-                    },
-                    onFocus = { scope.launch { bringIntoView.bringIntoView() } }
+    var picking by remember { mutableStateOf<Pair<String, JournalFieldKind>?>(null) }
+    Box(Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .bringIntoViewRequester(bringIntoView),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (state.splitFields) {
+                state.fields.forEach { field ->
+                    JournalWriteField(
+                        field = field,
+                        value = state.fieldValues[field.id].orEmpty(),
+                        onValueChange = { viewModel.setFieldValue(field.id, it) },
+                        onPickWords = {
+                            if (field.kind != JournalFieldKind.TEXT) {
+                                picking = field.id to field.kind
+                            }
+                        },
+                        onFocus = { scope.launch { bringIntoView.bringIntoView() } }
+                    )
+                }
+            } else {
+                VoiceOutlinedTextField(
+                    value = state.draft,
+                    onValueChange = viewModel::setDraft,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusEvent {
+                            if (it.isFocused) scope.launch { bringIntoView.bringIntoView() }
+                        },
+                    minLines = 5,
+                    placeholder = { Text(JournalRu.writeHint) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = composerFieldColors()
                 )
             }
-        } else {
-            VoiceOutlinedTextField(
-                value = state.draft,
-                onValueChange = viewModel::setDraft,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusEvent {
-                        if (it.isFocused) scope.launch { bringIntoView.bringIntoView() }
-                    },
-                minLines = 5,
-                placeholder = { Text(JournalRu.writeHint) },
-                shape = RoundedCornerShape(12.dp),
-                colors = composerFieldColors()
+            JournalButton(
+                if (state.editingId != null) Ru.save else JournalRu.saveEntry,
+                viewModel::saveDraft,
+                filled = true
             )
+            if (!state.notice.isNullOrBlank()) {
+                Text(state.notice.orEmpty(), color = Amber, style = MaterialTheme.typography.bodyMedium)
+            }
+            afterSave()
         }
-        JournalButton(
-            if (state.editingId != null) Ru.save else JournalRu.saveEntry,
-            viewModel::saveDraft,
-            filled = true
-        )
-        if (!state.notice.isNullOrBlank()) {
-            Text(state.notice.orEmpty(), color = Amber, style = MaterialTheme.typography.bodyMedium)
+        picking?.let { (fieldId, kind) ->
+            Dialog(
+                onDismissRequest = { picking = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    WordPickerScreen(
+                        title = when (kind) {
+                            JournalFieldKind.FEELINGS -> JournalRu.pickFeelings
+                            JournalFieldKind.THOUGHTS -> JournalRu.pickThoughts
+                            JournalFieldKind.TEXT -> ""
+                        },
+                        kind = kind,
+                        selected = EmotionCatalog.selectedWords(
+                            state.fieldValues[fieldId].orEmpty(),
+                            kind
+                        ),
+                        onToggle = { viewModel.toggleFieldWord(fieldId, it) },
+                        onBack = { picking = null }
+                    )
+                }
+            }
         }
-        afterSave()
     }
 }
 

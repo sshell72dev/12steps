@@ -857,6 +857,7 @@ object SourceBootstrap {
         SourceCatalog.put("voicehands.toStandby", "В ожидание")
         SourceCatalog.put("voicehands.listening", "Слушаю")
         SourceCatalog.put("voicehands.listenButton", "Слушать")
+        SourceCatalog.put("voicehands.quickButton", "Голосовой помощник")
         SourceCatalog.put("voicehands.quiet", "Микрофон выключен")
         SourceCatalog.put(
             "voicehands.hintStandby",

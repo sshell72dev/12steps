@@ -45,7 +45,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.journal.EmotionCatalog
 import ru.na.step4.obidy.data.journal.JournalFieldKind
-import ru.na.step4.obidy.data.journal.JournalFields
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.journal.WordColumn
 import ru.na.step4.obidy.ui.AppNavIcon
@@ -73,7 +72,7 @@ fun JournalWordPickerScreen(
     WordPickerScreen(
         title = title,
         kind = kind,
-        selected = JournalFields.selectedWords(state.fieldValues[fieldId].orEmpty()),
+        selected = EmotionCatalog.selectedWords(state.fieldValues[fieldId].orEmpty(), kind),
         onToggle = { viewModel.toggleFieldWord(fieldId, it) },
         onBack = onBack
     )

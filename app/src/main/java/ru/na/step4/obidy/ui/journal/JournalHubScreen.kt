@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import ru.na.step4.obidy.Ru
-import ru.na.step4.obidy.data.journal.JournalFieldKind
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.journal.NodeType
 import ru.na.step4.obidy.data.notes.NoteIds
@@ -53,8 +52,7 @@ fun JournalHubScreen(
     onSettings: () -> Unit,
     onHelp: () -> Unit,
     onSupport: () -> Unit,
-    onResentments: () -> Unit,
-    onPickWords: (String, JournalFieldKind) -> Unit
+    onResentments: () -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val path = state.path
@@ -149,8 +147,7 @@ fun JournalHubScreen(
                     if (state.writable) {
                         JournalEntryComposer(
                             state = state,
-                            viewModel = viewModel,
-                            onPickWords = onPickWords
+                            viewModel = viewModel
                         ) {
                             if (state.lastSaved != null) {
                                 JournalButton(JournalRu.viewEntries, onEntries)

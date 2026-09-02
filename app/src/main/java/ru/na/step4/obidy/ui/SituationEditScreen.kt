@@ -5,8 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,8 +23,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,7 +65,7 @@ import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.steps12.voice.ui.SpeakableText
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SituationEditScreen(
     viewModel: SituationEditViewModel,
@@ -241,27 +237,6 @@ fun SituationEditScreen(
                     aiInsight = state.insightFor(QuestionFocus.FELT),
                     onInsertAi = { viewModel.applyInsight(QuestionFocus.FELT) }
                 )
-                if (feltSelected.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        feltSelected.forEach { word ->
-                            FilterChip(
-                                selected = true,
-                                onClick = { viewModel.toggleFeltWord(word) },
-                                label = { Text(word) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Forest,
-                                    selectedLabelColor = Sand,
-                                    containerColor = Sand.copy(alpha = 0.85f),
-                                    labelColor = Forest
-                                )
-                            )
-                        }
-                    }
-                }
-                JournalButton(JournalRu.pickFromTable, { pickingFeelings = true })
                 FieldBlock(
                     "",
                     InventoryStructure.DID_TITLE,

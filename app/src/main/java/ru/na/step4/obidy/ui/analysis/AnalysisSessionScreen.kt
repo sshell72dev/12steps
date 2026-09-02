@@ -213,7 +213,9 @@ fun AnalysisSessionScreen(
 
             markActive = false,
 
-            reflection = reflectionViewModel.snapshot()
+            reflection = reflectionViewModel.snapshot(),
+
+            leaving = true
 
         )
 
@@ -825,8 +827,8 @@ internal fun QuestionBody(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 8.dp)
                     .then(if (composing) Modifier.weight(1f) else Modifier)
-                    .heightIn(min = 264.dp),
-                minLines = if (composing) 15 else 6,
+                    .heightIn(min = 176.dp),
+                minLines = if (composing) 10 else 4,
                 maxLines = Int.MAX_VALUE,
                 placeholder = { Text(Ru.analysisAnswerHint) },
                 trailingIcon = {

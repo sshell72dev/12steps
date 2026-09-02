@@ -105,6 +105,11 @@ data class PsychQa(
     val answer: String
 )
 
+data class PsychInboxMessage(
+    val text: String,
+    val createdAt: Long
+)
+
 data class PsychTopicStory(
     val situationId: Long,
     val sessionId: Long?,

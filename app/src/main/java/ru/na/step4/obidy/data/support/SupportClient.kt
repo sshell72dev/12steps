@@ -232,9 +232,12 @@ object SupportClient {
         val status = SupportStatus.normalize(obj.optString("status"))
         val statusLabel = obj.optString("status_label").ifBlank { SupportStatus.label(status) }
         val belonging = SupportBelonging.normalize(obj.optString("belonging"))
-        val belongingLabel = obj.optString("belonging_label").ifBlank {
-            SupportBelonging.label(belonging)
-        }
+        val screen = obj.optString("screen")
+        val belongingLabel = SupportBelonging.displayLabel(
+            belonging,
+            screen,
+            obj.optString("belonging_label")
+        )
         val kind = SupportKind.normalize(obj.optString("kind"))
         val kindLabel = obj.optString("kind_label").ifBlank {
             SupportKind.label(kind)
@@ -243,7 +246,7 @@ object SupportClient {
             id = obj.optLong("id"),
             userId = obj.optString("user_id"),
             userName = obj.optString("user_name"),
-            screen = obj.optString("screen"),
+            screen = screen,
             screenRoute = obj.optString("screen_route"),
             createdAt = obj.optString("created_at"),
             updatedAt = obj.optString("updated_at"),

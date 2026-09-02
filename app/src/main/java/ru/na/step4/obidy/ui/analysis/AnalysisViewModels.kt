@@ -95,6 +95,9 @@ class AnalysisSessionViewModel(
                     snap.optJSONArray("extra")?.toString().orEmpty()
                 )
                 _draft.value = snap.optString("draft")
+                savedOnce = snap.optBoolean("saved_once")
+                recordId = snap.optLong("record_id")
+                _saved.value = savedOnce && recordId > 0L
                 val reflection = snap.optJSONObject("reflection")
                 lastReflection = reflection
                 pendingReflection = reflection
@@ -106,6 +109,9 @@ class AnalysisSessionViewModel(
         _screen.value = engine?.screen()
         publish()
         refreshNav()
+        if (engine?.isDone == true && savedOnce && recordId == 0L) {
+            viewModelScope.launch { persist() }
+        }
     }
 
     fun begin() {
@@ -245,7 +251,8 @@ class AnalysisSessionViewModel(
 
     fun persistProgress(
         markActive: Boolean = true,
-        reflection: JSONObject? = lastReflection
+        reflection: JSONObject? = lastReflection,
+        leaving: Boolean = false
     ) {
         lastReflection = reflection
         val e = engine ?: return
@@ -253,8 +260,9 @@ class AnalysisSessionViewModel(
         val reflectionActive = questions != null &&
             questions.length() > 0 &&
             reflection.optInt("index") < questions.length()
-        if (e.isDone && !reflectionActive) {
+        if (leaving && e.isDone && !reflectionActive) {
             progress.clear(catalogId)
+            if (!markActive) progress.clearLastActive()
             return
         }
         if (!shouldKeep(reflectionActive)) {
@@ -265,6 +273,8 @@ class AnalysisSessionViewModel(
             .put("engine", e.capture())
             .put("extra", JSONArray(AnalysisAnswers.encode(extraAnswers)))
             .put("draft", _draft.value)
+            .put("saved_once", savedOnce)
+            .put("record_id", recordId)
         if (reflectionActive) {
             session.put("reflection", reflection)
         }
@@ -273,7 +283,7 @@ class AnalysisSessionViewModel(
 
     private fun shouldKeep(reflectionActive: Boolean): Boolean {
         if (engine == null) return false
-        if (engine.isDone) return reflectionActive
+        if (engine.isDone) return true
         if (hasProgress || reflectionActive || _draft.value.isNotBlank()) return true
         val s = engine.screen()
         return s is SessionScreen.Question ||
@@ -310,6 +320,7 @@ class AnalysisSessionViewModel(
             spiritual.applyTask(SpiritualSource.ANALYSIS)
         }
         _saved.value = true
+        persistProgress(markActive = true)
     }
 
     private fun publish() {

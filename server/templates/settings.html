@@ -168,6 +168,32 @@
             (от текущего срока или от «сейчас»). По умолчанию 365.
           </div>
 
+          <h1 style="margin-top:28px;font-size:18px;">Электронный психолог</h1>
+          <div class="muted">По умолчанию для всех. Пользователь может задать свои числа в настройках ИИ приложения.</div>
+          <label for="psych_dialogue_extra">Дополнительные вопросы после первого сообщения</label>
+          <input
+            id="psych_dialogue_extra"
+            name="psych_dialogue_extra"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            max="30"
+            autocomplete="off"
+            value="{{ psych_dialogue_extra }}"
+          />
+          <label for="psych_work_questions">Вопросы для проработки</label>
+          <input
+            id="psych_work_questions"
+            name="psych_work_questions"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            max="30"
+            autocomplete="off"
+            value="{{ psych_work_questions }}"
+          />
+          <div class="muted" style="margin-top:8px;">Целые числа от 1 до 30.</div>
+
           <div class="actions">
             <button type="submit" name="action" value="save">Сохранить</button>
             <button class="secondary" type="submit" name="action" value="test">Проверить ключ</button>

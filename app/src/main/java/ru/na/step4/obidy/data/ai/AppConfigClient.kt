@@ -7,7 +7,9 @@ object AppConfigClient {
         val premiumPriceRub: String = "199",
         val premiumDays: Int = 365,
         val paymentsEnabled: Boolean = false,
-        val messengerEnabled: Boolean = true
+        val messengerEnabled: Boolean = true,
+        val psychDialogueExtra: Int = 5,
+        val psychWorkQuestions: Int = 5
     )
 
     fun fetch(): Config {
@@ -20,7 +22,9 @@ object AppConfigClient {
                     premiumPriceRub = obj.optString("premium_price_rub", "199").ifBlank { "199" },
                     premiumDays = obj.optInt("premium_days", 365),
                     paymentsEnabled = obj.optBoolean("premium_payments_enabled", false),
-                    messengerEnabled = obj.optBoolean("messenger_enabled", true)
+                    messengerEnabled = obj.optBoolean("messenger_enabled", true),
+                    psychDialogueExtra = obj.optInt("psych_dialogue_extra", 5).coerceIn(1, 30),
+                    psychWorkQuestions = obj.optInt("psych_work_questions", 5).coerceIn(1, 30)
                 )
             }
         }

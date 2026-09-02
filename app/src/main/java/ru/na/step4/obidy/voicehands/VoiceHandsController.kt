@@ -35,7 +35,14 @@ class VoiceHandsController(
         context = context,
         onFinal = { text -> scope.launch { mutex.withLock { onHeard(text) } } },
         onPartial = { text -> publish { copy(lastHeard = text) } },
-        onState = { listening -> publish { copy(listening = listening) } }
+        onState = { listening ->
+            publish {
+                copy(
+                    listening = listening,
+                    showListenButton = VoiceHandsRu.canTapListen(phase) && !listening && !speaking
+                )
+            }
+        }
     )
 
     private val _ui = MutableStateFlow(VoiceHandsUi())
@@ -72,8 +79,13 @@ class VoiceHandsController(
 
     fun onBackground() {
         foreground = false
-        listener.pause()
-        publish { copy(listening = false) }
+        listener.stop()
+        publish {
+            copy(
+                listening = false,
+                showListenButton = VoiceHandsRu.canTapListen(phase)
+            )
+        }
     }
 
     fun returnToStandby() {
@@ -82,6 +94,17 @@ class VoiceHandsController(
                 if (!settings.enabled.value) return@withLock
                 VoiceHandsPsychGate.bound.value?.goHub()
                 enterStandby()
+            }
+        }
+    }
+
+    fun listenNow() {
+        scope.launch {
+            mutex.withLock {
+                if (!settings.enabled.value || !foreground) return@withLock
+                val phase = _ui.value.phase
+                if (!VoiceHandsRu.canTapListen(phase)) return@withLock
+                startListen(phase)
             }
         }
     }
@@ -119,7 +142,9 @@ class VoiceHandsController(
         spokenQuestion = null
         handledResultKey = null
         skippedTopicPick = false
-        publish { VoiceHandsUi(enabled = false, phase = VoiceHandsPhase.Off, status = VoiceHandsRu.off) }
+        publish {
+            VoiceHandsUi(enabled = false, phase = VoiceHandsPhase.Off, status = VoiceHandsRu.off)
+        }
     }
 
     private suspend fun enterStandby() {
@@ -128,8 +153,9 @@ class VoiceHandsController(
         spokenQuestion = null
         handledResultKey = null
         skippedTopicPick = false
+        if (_ui.value.speaking) speaker.stop()
+        listener.stop()
         setPhase(VoiceHandsPhase.Standby)
-        listenForPhase(VoiceHandsPhase.Standby)
     }
 
     private suspend fun onHeard(text: String) {
@@ -140,7 +166,14 @@ class VoiceHandsController(
             VoiceHandsPhase.Standby -> if (VoiceHandsPhrases.matchCommand(spoken) == VoiceHandsCommand.Start) {
                 beginRecord()
             }
-            VoiceHandsPhase.Dictating -> handleDictation(spoken)
+            VoiceHandsPhase.Dictating -> {
+                if (VoiceHandsPhrases.matchCommand(spoken) == VoiceHandsCommand.Standby) {
+                    VoiceHandsPsychGate.bound.value?.goHub()
+                    enterStandby()
+                } else {
+                    handleDictation(spoken)
+                }
+            }
             VoiceHandsPhase.AwaitingReply -> handleReply(spoken)
             VoiceHandsPhase.AskRead -> handleAskRead(spoken)
             VoiceHandsPhase.AfterRead -> handleAfterRead(spoken)
@@ -150,7 +183,7 @@ class VoiceHandsController(
 
     private suspend fun beginRecord() {
         setPhase(VoiceHandsPhase.Opening)
-        listener.pause()
+        listener.stop()
         openPsych()
         val psych = withTimeoutOrNull(6_000) {
             VoiceHandsPsychGate.bound.first { it != null }
@@ -329,34 +362,46 @@ class VoiceHandsController(
 
     private fun listenForPhase(phase: VoiceHandsPhase) {
         if (!settings.enabled.value || !foreground) {
-            listener.pause()
+            listener.stop()
             return
         }
-        val long = phase == VoiceHandsPhase.Dictating || phase == VoiceHandsPhase.AwaitingReply
         when (phase) {
-            VoiceHandsPhase.Standby,
             VoiceHandsPhase.Dictating,
             VoiceHandsPhase.AwaitingReply,
             VoiceHandsPhase.AskRead,
-            VoiceHandsPhase.AfterRead -> listener.start(longSilence = long)
-            else -> listener.pause()
+            VoiceHandsPhase.AfterRead -> startListen(phase)
+            else -> listener.stop()
+        }
+    }
+
+    private fun startListen(phase: VoiceHandsPhase) {
+        val long = phase == VoiceHandsPhase.Dictating || phase == VoiceHandsPhase.AwaitingReply
+        when (phase) {
+            VoiceHandsPhase.Standby,
+            VoiceHandsPhase.AskRead,
+            VoiceHandsPhase.AfterRead -> listener.listenOnce(longSilence = false)
+            VoiceHandsPhase.Dictating,
+            VoiceHandsPhase.AwaitingReply -> listener.listenLoop(longSilence = long)
+            else -> listener.stop()
         }
     }
 
     private suspend fun say(text: String) {
         val clean = text.trim()
         if (clean.isBlank()) return
-        listener.pause()
+        listener.stop()
         speaker.stop()
-        publish { copy(speaking = true, listening = false) }
+        publish { copy(speaking = true, listening = false, showListenButton = false) }
         speaker.speak(clean)
         delay(120)
         withTimeoutOrNull(1_200) { speaker.speaking.first { it } }
         withTimeoutOrNull(180_000) { speaker.speaking.first { !it } }
         delay(280)
-        publish { copy(speaking = false) }
-        if (settings.enabled.value && foreground) {
-            listenForPhase(_ui.value.phase)
+        publish {
+            copy(
+                speaking = false,
+                showListenButton = VoiceHandsRu.canTapListen(phase) && !listening
+            )
         }
     }
 
@@ -367,6 +412,8 @@ class VoiceHandsController(
                 phase = phase,
                 status = statusFor(phase),
                 draft = draft,
+                commandsHint = VoiceHandsRu.hintsFor(phase),
+                showListenButton = VoiceHandsRu.canTapListen(phase) && !listening && !speaking,
                 error = if (phase == VoiceHandsPhase.Standby) null else error
             )
         }

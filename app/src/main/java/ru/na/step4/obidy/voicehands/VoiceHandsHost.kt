@@ -8,13 +8,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -35,6 +43,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.na.step4.obidy.Step4App
+import ru.na.step4.obidy.ui.components.isImeVisible
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
@@ -89,13 +98,48 @@ fun VoiceHandsHost(
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
     val ui by controller.ui.collectAsStateWithLifecycle()
-    if (!enabled && ui.phase == VoiceHandsPhase.Off) return
-    VoiceHandsOverlay(
-        ui = ui,
-        onStandby = controller::returnToStandby,
-        onDisable = controller::disable,
-        modifier = modifier
-    )
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) settings.setEnabled(true)
+    }
+    fun enableAssistant() {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) settings.setEnabled(true)
+        else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    val showOverlay = enabled || ui.phase != VoiceHandsPhase.Off
+    Box(modifier.fillMaxSize()) {
+        if (showOverlay) {
+            VoiceHandsOverlay(
+                ui = ui,
+                onStandby = controller::returnToStandby,
+                onDisable = controller::disable,
+                onListen = controller::listenNow,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        } else if (!isImeVisible()) {
+            SmallFloatingActionButton(
+                onClick = { enableAssistant() },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, bottom = 88.dp),
+                containerColor = Forest,
+                contentColor = Sand,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Mic,
+                    contentDescription = VoiceHandsRu.quickButton,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -160,6 +204,7 @@ private fun VoiceHandsOverlay(
     ui: VoiceHandsUi,
     onStandby: () -> Unit,
     onDisable: () -> Unit,
+    onListen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val preview = when {
@@ -182,10 +227,31 @@ private fun VoiceHandsOverlay(
             style = MaterialTheme.typography.labelMedium
         )
         Text(
-            if (ui.listening) VoiceHandsRu.listening else ui.status,
+            ui.status,
             color = Sand,
             style = MaterialTheme.typography.titleMedium
         )
+        if (ui.listening) {
+            Text(
+                VoiceHandsRu.listening,
+                color = Amber,
+                style = MaterialTheme.typography.labelMedium
+            )
+        } else if (ui.phase == VoiceHandsPhase.Standby) {
+            Text(
+                VoiceHandsRu.quiet,
+                color = Sand.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+        if (ui.commandsHint.isNotBlank()) {
+            Text(
+                ui.commandsHint,
+                color = Sand.copy(alpha = 0.92f),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
         if (preview.isNotBlank()) {
             Text(
                 preview,
@@ -199,8 +265,14 @@ private fun VoiceHandsOverlay(
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            if (ui.showListenButton) {
+                TextButton(onClick = onListen) {
+                    Text(VoiceHandsRu.listenButton, color = Amber)
+                }
+            }
             if (ui.phase != VoiceHandsPhase.Standby && ui.phase != VoiceHandsPhase.Off) {
                 TextButton(onClick = onStandby) {
                     Text(VoiceHandsRu.toStandby, color = Sand)

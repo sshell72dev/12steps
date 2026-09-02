@@ -172,6 +172,8 @@ def settings():
         db.get_setting("yookassa_secret_key", "") or config.getenv("YOOKASSA_SECRET_KEY", "")
     )
     yk_test_mode = db.get_setting("yookassa_test_mode", "1") in ("1", "true", "on", "yes")
+    psych_dialogue_extra = _psych_int_setting("psych_dialogue_extra", 5)
+    psych_work_questions = _psych_int_setting("psych_work_questions", 5)
     if request.args.get("rotated"):
         notice = "Новый код для приложения создан. Старый больше не действует."
 
@@ -226,6 +228,21 @@ def settings():
                     db.set_setting("yookassa_secret_key", new_yk_secret)
                     yk_secret_saved = True
                 db.set_setting("yookassa_test_mode", "1" if yk_test_mode else "0")
+            if "psych_dialogue_extra" in request.form and not warn:
+                extra_raw = (request.form.get("psych_dialogue_extra") or "").strip()
+                work_raw = (request.form.get("psych_work_questions") or "").strip()
+                try:
+                    extra_val = int(extra_raw)
+                    work_val = int(work_raw)
+                    if extra_val < 1 or extra_val > 30 or work_val < 1 or work_val > 30:
+                        warn = "Лимиты вопросов психолога: целые числа от 1 до 30."
+                    else:
+                        psych_dialogue_extra = extra_val
+                        psych_work_questions = work_val
+                        db.set_setting("psych_dialogue_extra", str(extra_val))
+                        db.set_setting("psych_work_questions", str(work_val))
+                except ValueError:
+                    warn = "Лимиты вопросов психолога должны быть целыми числами."
             if request.form.get("action") != "test" and not warn:
                 notice = "Сохранено."
 
@@ -273,7 +290,18 @@ def settings():
         webhook_url=f"https://{config.DOMAIN}/api/v1/premium/webhook",
         return_url=f"https://{config.DOMAIN}/premium/return",
         admin_code=_admin_app_code(),
+        psych_dialogue_extra=psych_dialogue_extra,
+        psych_work_questions=psych_work_questions,
     )
+
+
+def _psych_int_setting(key: str, default: int = 5) -> int:
+    raw = (db.get_setting(key, str(default)) or str(default)).strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        n = default
+    return max(1, min(30, n))
 
 
 def _admin_app_code() -> str:
@@ -620,7 +648,7 @@ def api_psych():
     except Exception as exc:
         return jsonify({"error": "upstream", "detail": str(exc)}), 502
 
-    parsed = psych.parse_model_output(kind, text)
+    parsed = psych.parse_model_output(kind, text, question_limit=psych.question_count(payload))
     if kind in {"questions", "questions_retry"} and not parsed.get("questions"):
         try:
             retry_prompt = psych.build_prompt("questions_retry", payload)
@@ -635,7 +663,9 @@ def api_psych():
                 timeout=timeout,
                 thinking=False,
             )
-            parsed = psych.parse_model_output("questions_retry", text)
+            parsed = psych.parse_model_output(
+                "questions_retry", text, question_limit=psych.question_count(payload)
+            )
             parsed["kind"] = kind
         except Exception:
             pass
@@ -759,6 +789,8 @@ def api_app_config():
             "premium_payments_enabled": yookassa.is_configured(),
             "messenger_enabled": messenger_on,
             "models": {"free": MODEL_FLASH, "premium": MODEL_PREMIUM},
+            "psych_dialogue_extra": _psych_int_setting("psych_dialogue_extra", 5),
+            "psych_work_questions": _psych_int_setting("psych_work_questions", 5),
         }
     )
 

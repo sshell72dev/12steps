@@ -303,6 +303,16 @@ def _normalize_kind(value: str | None) -> str:
     return "bug"
 
 
+def _belonging_display_label(belonging: str, screen: str = "") -> str:
+    base = SUPPORT_BELONGING_LABELS.get(belonging, belonging)
+    if belonging != "screen":
+        return base
+    title = (screen or "").strip()
+    if not title or title.casefold() in base.casefold():
+        return base
+    return f"{base} · {title}"
+
+
 def support_family_key(route: str | None) -> str:
     r = (route or "").strip().lower()
     if not r or r == "home":
@@ -600,7 +610,7 @@ def _ticket_dict(row: dict[str, Any], messages: list[dict[str, Any]] | None = No
         "status": status,
         "status_label": SUPPORT_STATUS_LABELS[status],
         "belonging": belonging,
-        "belonging_label": SUPPORT_BELONGING_LABELS.get(belonging, belonging),
+        "belonging_label": _belonging_display_label(belonging, str(row.get("screen") or "")),
         "kind": kind,
         "kind_label": SUPPORT_KIND_LABELS.get(kind, kind),
         "admin_source": admin_source,

@@ -1,8 +1,11 @@
 package ru.na.step4.obidy.data.psych
 
 import android.content.Context
+import android.content.SharedPreferences
 import java.util.TimeZone
 import java.util.UUID
+import org.json.JSONArray
+import org.json.JSONObject
 import ru.na.step4.obidy.data.profile.ProfileQuestionnaire
 import ru.na.step4.obidy.data.profile.ProfileStore
 
@@ -131,13 +134,82 @@ class PsychSettings(
         get() = prefs.getBoolean(KEY_REM_PENDING, false)
         set(value) { prefs.edit().putBoolean(KEY_REM_PENDING, value).apply() }
 
+    var lastReminderText: String
+        get() = prefs.getString(KEY_LAST_REM, "").orEmpty()
+        set(value) { prefs.edit().putString(KEY_LAST_REM, value).apply() }
+
+    fun inboxMessages(): List<PsychInboxMessage> {
+        val raw = prefs.getString(KEY_INBOX, "").orEmpty()
+        if (raw.isBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                val text = obj.optString("t").trim()
+                if (text.isBlank()) null
+                else PsychInboxMessage(text, obj.optLong("at"))
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun appendInbox(text: String) {
+        val body = text.trim()
+        if (body.isBlank()) return
+        val now = System.currentTimeMillis()
+        val items = inboxMessages().toMutableList()
+        val last = items.lastOrNull()
+        if (last != null && last.text == body && now - last.createdAt < 8_000L) return
+        items.add(PsychInboxMessage(body, now))
+        while (items.size > 40) items.removeAt(0)
+        val arr = JSONArray()
+        items.forEach { msg ->
+            arr.put(JSONObject().put("t", msg.text).put("at", msg.createdAt))
+        }
+        prefs.edit().putString(KEY_INBOX, arr.toString()).commit()
+    }
+
+    fun watchInbox(onChange: () -> Unit): SharedPreferences.OnSharedPreferenceChangeListener {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_INBOX) onChange()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return listener
+    }
+
+    fun unwatchInbox(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+    }
+
     var voiceEnabled: Boolean
         get() = prefs.getBoolean(KEY_VOICE, true)
         set(value) { prefs.edit().putBoolean(KEY_VOICE, value).apply() }
 
-    var maxQuestions: Int
-        get() = prefs.getInt(KEY_MAX_Q, 36).coerceIn(1, 100)
-        set(value) { prefs.edit().putInt(KEY_MAX_Q, value.coerceIn(1, 100)).apply() }
+    var dialogueExtraLimit: Int
+        get() {
+            val user = prefs.getInt(KEY_DIALOGUE_EXTRA, 0)
+            if (user > 0) return user.coerceIn(1, LIMIT_MAX)
+            return prefs.getInt(KEY_ADMIN_DIALOGUE_EXTRA, DEFAULT_DIALOGUE_EXTRA).coerceIn(1, LIMIT_MAX)
+        }
+        set(value) { prefs.edit().putInt(KEY_DIALOGUE_EXTRA, value.coerceIn(1, LIMIT_MAX)).apply() }
+
+    var workQuestionLimit: Int
+        get() {
+            val user = prefs.getInt(KEY_WORK_Q, 0)
+            if (user > 0) return user.coerceIn(1, LIMIT_MAX)
+            return prefs.getInt(KEY_ADMIN_WORK_Q, DEFAULT_WORK_Q).coerceIn(1, LIMIT_MAX)
+        }
+        set(value) { prefs.edit().putInt(KEY_WORK_Q, value.coerceIn(1, LIMIT_MAX)).apply() }
+
+    fun applyAdminQuestionLimits(dialogueExtra: Int, workQuestions: Int) {
+        if (dialogueExtra in 1..LIMIT_MAX) {
+            prefs.edit().putInt(KEY_ADMIN_DIALOGUE_EXTRA, dialogueExtra).apply()
+        }
+        if (workQuestions in 1..LIMIT_MAX) {
+            prefs.edit().putInt(KEY_ADMIN_WORK_Q, workQuestions).apply()
+        }
+    }
 
     var liveIdleMinutes: Int
         get() = prefs.getInt(KEY_IDLE, 30).coerceIn(5, 180)
@@ -192,7 +264,9 @@ class PsychSettings(
             "ai_response_variant" to aiResponseVariant,
             "ai_response_style" to aiResponseStyle,
             "work_question_difficulty" to workQuestionDifficulty,
-            "work_question_length" to workQuestionLength
+            "work_question_length" to workQuestionLength,
+            "dialogue_extra_limit" to dialogueExtraLimit,
+            "work_question_limit" to workQuestionLimit
         )
     }
 
@@ -219,12 +293,20 @@ class PsychSettings(
         private const val KEY_QUIET_END = "quiet_end"
         private const val KEY_NEXT_REM = "next_reminder"
         private const val KEY_REM_PENDING = "reminder_pending"
+        private const val KEY_LAST_REM = "last_reminder_text"
+        private const val KEY_INBOX = "psych_inbox"
         private const val KEY_VOICE = "voice_enabled"
-        private const val KEY_MAX_Q = "max_questions"
+        private const val KEY_DIALOGUE_EXTRA = "dialogue_extra_q"
+        private const val KEY_WORK_Q = "work_q_limit"
+        private const val KEY_ADMIN_DIALOGUE_EXTRA = "admin_dialogue_extra"
+        private const val KEY_ADMIN_WORK_Q = "admin_work_q"
         private const val KEY_IDLE = "idle_minutes"
         private const val KEY_LAST_Q = "last_question_at"
         private const val KEY_ACTIVE_UID = "active_session_uid"
         private const val KEY_READ_MORE = "pending_read_more"
+        const val DEFAULT_DIALOGUE_EXTRA = 5
+        const val DEFAULT_WORK_Q = 5
+        const val LIMIT_MAX = 30
         const val DAILY_LIMIT_FREE = 20
         const val DAILY_LIMIT_PRO = 40
         const val LOCK_MS = 180_000L

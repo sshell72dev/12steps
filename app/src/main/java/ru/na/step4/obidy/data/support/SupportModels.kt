@@ -113,6 +113,14 @@ object SupportBelonging {
         else -> SupportRu.belongingScreen
     }
 
+    fun displayLabel(belonging: String, screen: String, raw: String = ""): String {
+        val base = raw.trim().ifBlank { label(belonging) }
+        if (normalize(belonging) != SCREEN) return base
+        val title = screen.trim()
+        if (title.isBlank() || base.contains(title, ignoreCase = true)) return base
+        return "$base · $title"
+    }
+
     fun normalize(value: String?): String {
         val v = value.orEmpty().trim().lowercase()
         return if (v in all) v else SCREEN
