@@ -219,7 +219,18 @@ def collect_files(extra_paths: list[str]) -> list[str]:
     return [path for path in files if path and not is_secret(path)]
 
 
-def run_release(notes: str | None, extra_paths: list[str], skip_push: bool) -> int:
+def publish_apk() -> int:
+    script = ROOT / "tools" / "publish_apk.py"
+    print("publishing APK to Google Drive and Google Doc...")
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=ROOT,
+        encoding="utf-8",
+    )
+    return result.returncode
+
+
+def run_release(notes: str | None, extra_paths: list[str], skip_push: bool, do_publish_apk: bool) -> int:
     files = collect_files(extra_paths)
     dirty = dirty_files()
     session_files = [path for path in files if path in dirty]
@@ -280,6 +291,8 @@ def run_release(notes: str | None, extra_paths: list[str], skip_push: bool) -> i
 
     clear_state()
     print(f"released {name} ({code})")
+    if do_publish_apk:
+        return publish_apk()
     return 0
 
 
@@ -303,6 +316,11 @@ def main() -> int:
         help="Commit locally without git push",
     )
     parser.add_argument(
+        "--publish-apk",
+        action="store_true",
+        help="After git push, build APK, upload to Google Drive, update Google Doc",
+    )
+    parser.add_argument(
         "paths",
         nargs="*",
         help="Extra files from this session (in addition to hook-tracked edits)",
@@ -322,7 +340,12 @@ def main() -> int:
         return hook_stop()
     if args.hook == "session-start":
         return hook_session_start()
-    return run_release(args.notes, args.paths, args.skip_push or os.getenv("AGENT_RELEASE_SKIP_PUSH") == "1")
+    return run_release(
+        args.notes,
+        args.paths,
+        args.skip_push or os.getenv("AGENT_RELEASE_SKIP_PUSH") == "1",
+        args.publish_apk or os.getenv("AGENT_PUBLISH_APK") == "1",
+    )
 
 
 if __name__ == "__main__":

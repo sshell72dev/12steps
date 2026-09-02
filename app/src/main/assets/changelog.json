@@ -1,6 +1,23 @@
 {
   "releases": [
     {
+      "version": "1.0.12",
+      "versionCode": 13,
+      "date": "2026-09-02",
+      "items": [
+        "Публикация APK на Google Drive",
+        "ссылка на установку в Google Doc под версией и описанием правок"
+      ]
+    },
+    {
+      "version": "1.0.11",
+      "versionCode": 12,
+      "date": "2026-09-02",
+      "items": [
+        "Обновление приложения и сервера"
+      ]
+    },
+    {
       "version": "1.0.10",
       "versionCode": 11,
       "date": "2026-09-02",

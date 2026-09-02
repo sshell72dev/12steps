@@ -84,6 +84,7 @@ python server/deploy_ftp.py
 | `app/src/main/assets/changelog.json` | Копия для экрана «Версия» в приложении |
 | `tools/bump_version.py` | Повышение версии и синхронизация changelog |
 | `tools/agent_release.py` | Bump + changelog + commit файлов сессии + push на GitHub |
+| `tools/publish_apk.py` | Сборка debug APK → Google Drive → ссылка в [Google Doc](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing) |
 | `.cursor/hooks.json` | Хук: после правок агента не даёт забыть релиз |
 | `.cursor/rules/agent-release.mdc` | Правило для любого агента Cursor |
 
@@ -98,6 +99,34 @@ python tools/agent_release.py --notes "Что сделано;Второй пун
 Это правило репозитория: агент делает bump/commit/push в конце сессии, без отдельной просьбы. Деплой и сборка APK по-прежнему только по явному запросу.
 
 Если агент забыл, хук `stop` напомнит ему дописать релиз (не больше двух автоповторов). Временно отключить: `$env:AGENT_RELEASE_SKIP = "1"`.
+
+### APK для тестеров (Google Drive + Google Doc)
+
+Установочный файл кладётся на Google Диск, а в [документе с версиями](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing) сверху появляется блок: версия, описание правок и ссылка «Скачать APK».
+
+Первый раз (откроется браузер Google — войдите в аккаунт, где лежит документ):
+
+```powershell
+python tools/publish_apk.py --auth
+```
+
+Скрипт сам скачает портативный `rclone` в `tools/.vendor/` (в git не попадает). Нужен доступ в интернет.
+
+Опубликовать текущую версию:
+
+```powershell
+python tools/publish_apk.py
+```
+
+Или сразу после релиза агента:
+
+```powershell
+python tools/agent_release.py --notes "Что сделано" --publish-apk
+```
+
+APK не собирается автоматически после каждой правки — только эта команда или явная просьба. Нужен `rclone` и вход в тот Google-аккаунт, где лежит документ.
+
+Готовый debug APK без пересборки: `python tools/publish_apk.py --skip-build`. Только переписать документ: `python tools/publish_apk.py --doc-only`.
 
 ### Нумерация
 

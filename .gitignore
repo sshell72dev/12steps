@@ -39,3 +39,7 @@ server/tmp/restart.txt
 server/uploads/messenger/*
 !server/uploads/messenger/.gitkeep
 .cursor/hooks/state/
+tools/apk_links.json
+tools/.google_token.json
+tools/google_oauth_client.json
+tools/.vendor/
