@@ -1144,8 +1144,8 @@ class PsychViewModel(
         onOk: suspend (PsychAiClient.Result.Ok) -> Unit
     ) {
         val counts = kind in COUNTED
-        val limit = settings.dailyLimit()
-        if (counts) {
+        val limit = if (isAdmin) 0 else settings.dailyLimit()
+        if (counts && !isAdmin) {
             val used = repository.usageToday(settings.utcOffsetMinutes)
             if (limit > 0 && used >= limit) {
                 _ui.value = _ui.value.copy(
@@ -1207,14 +1207,14 @@ class PsychViewModel(
                     var quotaLine: String? = null
                     var upsell: String? = null
                     if (counts) {
-                        repository.recordUsage(kind, situation.viaVoice)
-                        val used = repository.usageToday(settings.utcOffsetMinutes)
+                        if (!isAdmin) repository.recordUsage(kind, situation.viaVoice)
+                        val used = if (isAdmin) 0 else repository.usageToday(settings.utcOffsetMinutes)
                         quotaLine = if (limit <= 0) {
                             PsychRu.remainingUnlimited
                         } else {
                             PsychRu.quotaLeft.format((limit - used).coerceAtLeast(0), limit)
                         }
-                        if (!settings.isPro && PsychLogic.shouldUpsell(used, limit)) {
+                        if (!isAdmin && !settings.isPro && PsychLogic.shouldUpsell(used, limit)) {
                             upsell = PsychRu.upsell
                         }
                     }
