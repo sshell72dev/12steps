@@ -38,3 +38,4 @@ server/vendor/
 server/tmp/restart.txt
 server/uploads/messenger/*
 !server/uploads/messenger/.gitkeep
+.cursor/hooks/state/

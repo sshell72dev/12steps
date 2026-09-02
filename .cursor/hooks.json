@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "python tools/agent_release.py --hook session-start",
+        "timeout": 10
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "python tools/agent_release.py --hook after-edit",
+        "timeout": 10
+      }
+    ],
+    "stop": [
+      {
+        "command": "python tools/agent_release.py --hook stop",
+        "timeout": 30,
+        "loop_limit": 2
+      }
+    ]
+  }
+}

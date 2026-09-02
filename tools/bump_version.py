@@ -68,7 +68,7 @@ def render_markdown(data: dict) -> str:
         "# История изменений",
         "",
         "Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).",
-        "Версия приложения обновляется скриптом `tools/bump_version.py` при деплое.",
+        "Версия приложения обновляется скриптом `tools/bump_version.py` после работы агента и при деплое.",
         "",
     ]
     for release in data.get("releases", []):

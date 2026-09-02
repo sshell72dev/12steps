@@ -83,6 +83,21 @@ python server/deploy_ftp.py
 | `CHANGELOG.md` | Тот же changelog в Markdown (для людей и git) |
 | `app/src/main/assets/changelog.json` | Копия для экрана «Версия» в приложении |
 | `tools/bump_version.py` | Повышение версии и синхронизация changelog |
+| `tools/agent_release.py` | Bump + changelog + commit файлов сессии + push на GitHub |
+| `.cursor/hooks.json` | Хук: после правок агента не даёт забыть релиз |
+| `.cursor/rules/agent-release.mdc` | Правило для любого агента Cursor |
+
+### После работы агента
+
+После **каждого** изменения агентом (не только при деплое) версия поднимается сама, в changelog пишется описание, коммит уходит на GitHub:
+
+```powershell
+python tools/agent_release.py --notes "Что сделано;Второй пункт"
+```
+
+Это правило репозитория: агент делает bump/commit/push в конце сессии, без отдельной просьбы. Деплой и сборка APK по-прежнему только по явному запросу.
+
+Если агент забыл, хук `stop` напомнит ему дописать релиз (не больше двух автоповторов). Временно отключить: `$env:AGENT_RELEASE_SKIP = "1"`.
 
 ### Нумерация
 
@@ -107,7 +122,9 @@ python server/deploy_ftp.py
 
 ### Команды
 
-**Автоматически при деплое** — `deploy_ftp.py` вызывает `bump_version.py`.
+**Автоматически после работы агента** — `tools/agent_release.py` (хук + правило Cursor).
+
+**Автоматически при деплое** — `deploy_ftp.py` вызывает `bump_version.py`. Если версию уже поднял агент и нужен только FTP, задайте `$env:DEPLOY_SKIP_BUMP = "1"`.
 
 **Вручную поднять версию** (без деплоя):
 
