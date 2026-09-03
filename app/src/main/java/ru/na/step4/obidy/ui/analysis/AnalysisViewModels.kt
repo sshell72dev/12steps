@@ -361,6 +361,11 @@ class AnalysisSessionViewModel(
         )
     }
 
+    override fun onCleared() {
+        activity.analysisLeave(catalogId, engine?.answerCount ?: 0, engine?.isDone == true)
+        super.onCleared()
+    }
+
     companion object {
         fun factory(
             app: Application,
@@ -448,6 +453,9 @@ class AnalysisAiReviewViewModel(application: Application) : AndroidViewModel(app
         }
         viewModelScope.launch {
             _state.value = AiReviewUi.Loading
+            val app = getApplication<Step4App>()
+            val key = "ai-analysis-${title.hashCode()}-${answers.size}"
+            app.activityLog.aiBegin(title, key, "Самоанализ · ${answers.size} отв.")
             val result = withContext(Dispatchers.IO) {
                 AnalysisAiClient.analyze(
                     title,
@@ -458,13 +466,7 @@ class AnalysisAiReviewViewModel(application: Application) : AndroidViewModel(app
                     goals = getApplication<Step4App>().lifeBoard.goalsPromptBlock()
                 )
             }
-            val app = getApplication<Step4App>()
-            app.activityLog.instant(
-                ru.na.step4.obidy.data.activity.ActivityCat.AI,
-                ru.na.step4.obidy.data.activity.ActivityType.AI,
-                title,
-                detail = "Самоанализ · ${answers.size} отв."
-            )
+            app.activityLog.aiDone(key, "Самоанализ · ${answers.size} отв.")
             _state.value = when (result) {
                 is AnalysisAiClient.Result.Ok -> {
                     val eventId = "analysis-" + (title.hashCode().toString() + "-" + answers.size)

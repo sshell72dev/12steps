@@ -84,6 +84,10 @@ class ActivityLog(
         scope.launch {
             val prev = openSpans.remove(key) ?: dao.openByKey(key)?.id
             if (prev != null) dao.close(prev, now, "")
+            if (route.isNullOrBlank() || !route.startsWith("journal")) {
+                val write = openSpans.remove(KEY_JOURNAL) ?: dao.openByKey(KEY_JOURNAL)?.id
+                if (write != null) dao.close(write, now, "")
+            }
             if (route.isNullOrBlank()) return@launch
             val id = dao.insert(
                 ActivityEvent(
@@ -107,6 +111,8 @@ class ActivityLog(
             if (prev != null) dao.close(prev, now, "")
             val listen = openSpans.remove(KEY_LISTEN) ?: dao.openByKey(KEY_LISTEN)?.id
             if (listen != null) dao.close(listen, now, "")
+            val write = openSpans.remove(KEY_JOURNAL) ?: dao.openByKey(KEY_JOURNAL)?.id
+            if (write != null) dao.close(write, now, "")
         }
     }
 
@@ -156,12 +162,18 @@ class ActivityLog(
     }
 
     fun analysisAnswer(title: String, catalogId: String, answered: Int) {
+        val key = "analysis-$catalogId"
+        val detail = "${ActivityRu.questions}: $answered"
+        scope.launch {
+            val id = openSpans[key] ?: dao.openByKey(key)?.id ?: return@launch
+            dao.updateDetail(id, detail)
+        }
         instant(
             ActivityCat.ANALYSIS,
             ActivityType.ANSWER,
             title,
-            detail = ActivityRu.questions + ": $answered",
-            sessionKey = "analysis-$catalogId"
+            detail = detail,
+            sessionKey = key
         )
     }
 
@@ -177,9 +189,52 @@ class ActivityLog(
         )
     }
 
+    fun analysisLeave(catalogId: String, answered: Int, done: Boolean) {
+        if (done) return
+        end(
+            sessionKey = "analysis-$catalogId",
+            detail = "${ActivityRu.unfinished}: ${ActivityRu.questions}: $answered"
+        )
+    }
+
+    fun aiBegin(label: String, key: String, detail: String = "") {
+        start(ActivityCat.AI, ActivityType.AI, label, sessionKey = key, detail = detail)
+    }
+
+    fun aiDone(key: String, detail: String = "") {
+        end(sessionKey = key, detail = detail)
+    }
+
+    fun inventoryStart(title: String, situationId: Long) {
+        start(
+            ActivityCat.INVENTORY,
+            ActivityType.START,
+            title.ifBlank { ActivityRu.category(ActivityCat.INVENTORY) },
+            sessionKey = "situation-$situationId"
+        )
+    }
+
+    fun inventoryEnd(situationId: Long, detail: String = "") {
+        end(sessionKey = "situation-$situationId", detail = detail)
+    }
+
+    fun journalWriteStart(title: String) {
+        start(
+            ActivityCat.JOURNAL,
+            ActivityType.START,
+            title.ifBlank { ActivityRu.category(ActivityCat.JOURNAL) },
+            sessionKey = KEY_JOURNAL
+        )
+    }
+
+    fun journalWriteEnd(detail: String = "") {
+        end(sessionKey = KEY_JOURNAL, detail = detail)
+    }
+
     companion object {
         private const val KEY_SCREEN = "screen"
         private const val KEY_LISTEN = "listen"
+        private const val KEY_JOURNAL = "journal-write"
 
         fun dayBounds(now: Long = System.currentTimeMillis()): Pair<Long, Long> {
             val cal = Calendar.getInstance()
@@ -224,19 +279,35 @@ class ActivityLog(
 data class ActivitySummary(
     val screenMs: Long,
     val listenMs: Long,
+    val analysisMs: Long,
+    val psychMs: Long,
+    val inventoryMs: Long,
+    val journalMs: Long,
+    val aiMs: Long,
     val analysisDone: Int,
     val answers: Int,
     val journalSaves: Int,
     val psychSessions: Int,
+    val inventorySessions: Int,
     val aiCalls: Int,
+    val analysisTitles: List<String>,
     val insights: List<String>
 )
 
 fun List<ActivityEvent>.summarize(): ActivitySummary {
+    fun spanMs(cat: String, type: String = ActivityType.START) =
+        filter { it.category == cat && it.type == type }.sumOf { it.durationMs }
     val screenMs = filter { it.category == ActivityCat.SCREEN }.sumOf { it.durationMs }
     val listenMs = filter {
         it.category == ActivityCat.LISTEN && it.type == ActivityType.LISTEN_START
     }.sumOf { it.durationMs }
+    val analysisMs = spanMs(ActivityCat.ANALYSIS)
+    val psychMs = spanMs(ActivityCat.PSYCH)
+    val inventoryMs = spanMs(ActivityCat.INVENTORY)
+    val journalMs = filter {
+        it.category == ActivityCat.JOURNAL && it.type == ActivityType.START
+    }.sumOf { it.durationMs }
+    val aiMs = filter { it.category == ActivityCat.AI }.sumOf { it.durationMs }
     val analysisDone = count {
         it.category == ActivityCat.ANALYSIS && it.type == ActivityType.FINISH
     }
@@ -249,58 +320,96 @@ fun List<ActivityEvent>.summarize(): ActivitySummary {
     val psychSessions = count {
         it.category == ActivityCat.PSYCH && it.type == ActivityType.FINISH
     }
+    val inventorySessions = count {
+        it.category == ActivityCat.INVENTORY && it.type == ActivityType.START
+    }
     val aiCalls = count { it.type == ActivityType.AI || it.category == ActivityCat.AI }
-    val insights = buildInsights(
-        screenMs, listenMs, analysisDone, answers, journalSaves, psychSessions, aiCalls, isEmpty()
-    )
+    val analysisTitles = filter {
+        it.category == ActivityCat.ANALYSIS && it.type == ActivityType.FINISH && it.label.isNotBlank()
+    }.map { it.label }.distinct()
+    val insights = buildInsights(this, screenMs, listenMs, analysisMs, analysisDone, answers, journalSaves, psychSessions, inventorySessions, aiCalls)
     return ActivitySummary(
-        screenMs, listenMs, analysisDone, answers, journalSaves, psychSessions, aiCalls, insights
+        screenMs, listenMs, analysisMs, psychMs, inventoryMs, journalMs, aiMs,
+        analysisDone, answers, journalSaves, psychSessions, inventorySessions, aiCalls,
+        analysisTitles, insights
     )
 }
 
+fun List<ActivityEvent>.primaryTimeline(): List<ActivityEvent> {
+    val spanKeys = filter { it.durationMs >= 1000L }.map { it.sessionKey }.filter { it.isNotBlank() }.toSet()
+    return filter { event ->
+        when {
+            event.category == ActivityCat.SCREEN -> false
+            event.type == ActivityType.ANSWER -> false
+            event.type == ActivityType.LISTEN_END -> false
+            event.type == ActivityType.FINISH && event.sessionKey in spanKeys && event.durationMs < 1000L -> false
+            else -> true
+        }
+    }
+}
+
 private fun buildInsights(
+    events: List<ActivityEvent>,
     screenMs: Long,
     listenMs: Long,
+    analysisMs: Long,
     analysisDone: Int,
     answers: Int,
     journalSaves: Int,
     psychSessions: Int,
-    aiCalls: Int,
-    empty: Boolean
+    inventorySessions: Int,
+    aiCalls: Int
 ): List<String> {
-    if (empty) return listOf(ActivityRu.empty)
+    if (events.isEmpty()) return listOf(ActivityRu.empty)
     val lines = mutableListOf<String>()
-    lines.add(
-        "В приложении вы провели ${ActivityRu.duration(screenMs)}."
-    )
-    if (analysisDone > 0) {
+    lines.add(ActivityRu.insightTotal.format(ActivityRu.duration(screenMs)))
+    val finished = events.filter {
+        it.category == ActivityCat.ANALYSIS && it.type == ActivityType.FINISH
+    }
+    if (finished.isNotEmpty()) {
+        val names = finished.map { it.label }.filter { it.isNotBlank() }.distinct().joinToString(", ")
+        val named = if (names.isNotBlank()) " ($names)" else ""
         lines.add(
-            "Завершено самоанализов: $analysisDone. Ответов на вопросы: $answers."
+            ActivityRu.insightAnalysis.format(
+                analysisDone,
+                answers,
+                ActivityRu.duration(analysisMs)
+            ) + named
         )
-    } else if (answers > 0) {
-        lines.add("Есть незавершённые ответы в самоанализе ($answers). Стоит довести разбор до конца.")
+    } else if (answers > 0 || analysisMs > 0L) {
+        lines.add(ActivityRu.insightUnfinished.format(answers, ActivityRu.duration(analysisMs)))
     }
     if (journalSaves > 0) {
-        lines.add("Записей в дневнике: $journalSaves.")
+        lines.add(ActivityRu.insightJournal.format(journalSaves))
     }
     if (psychSessions > 0) {
-        lines.add("Сессий с электронным психологом: $psychSessions.")
+        lines.add(ActivityRu.insightPsych.format(psychSessions))
+    }
+    if (inventorySessions > 0) {
+        lines.add(ActivityRu.insightInventory.format(inventorySessions))
     }
     if (aiCalls > 0) {
-        lines.add("Обращений к ИИ: $aiCalls — разборы и рекомендации сохраняются в ленте.")
+        val aiMs = events.filter { it.category == ActivityCat.AI }.sumOf { it.durationMs }
+        val extra = if (aiMs >= 1000L) " (${ActivityRu.duration(aiMs)})" else ""
+        lines.add(ActivityRu.insightAi.format(aiCalls) + extra)
     }
     if (listenMs > 0L) {
-        lines.add("Прослушивание вслух: ${ActivityRu.duration(listenMs)}.")
+        val listens = events.count {
+            it.category == ActivityCat.LISTEN && it.type == ActivityType.LISTEN_START
+        }
+        lines.add(ActivityRu.insightListen.format(listens, ActivityRu.duration(listenMs)))
     }
     when {
-        screenMs < 3 * 60_000L && analysisDone == 0 && journalSaves == 0 ->
-            lines.add("Короткий заход: практики почти не было. Даже 10 минут самоанализа уже меняют день.")
+        screenMs < 3 * 60_000L && analysisDone == 0 && journalSaves == 0 && psychSessions == 0 ->
+            lines.add(ActivityRu.insightShort)
         analysisDone > 0 && journalSaves > 0 ->
-            lines.add("Самоанализ и дневник шли рядом — так материал закрепляется лучше.")
+            lines.add(ActivityRu.insightCombo)
         listenMs > 5 * 60_000L ->
-            lines.add("Вы слушали ответы дольше пяти минут: полезно возвращаться к своим словам, а не только писать.")
+            lines.add(ActivityRu.insightListenLong)
         analysisDone >= 3 ->
-            lines.add("Плотная серия самоанализов. Имеет смысл отметить, что именно повторяется в ответах.")
+            lines.add(ActivityRu.insightSeries)
+        inventorySessions > 0 && aiCalls > 0 ->
+            lines.add(ActivityRu.insightInventoryAi)
     }
     return lines
 }

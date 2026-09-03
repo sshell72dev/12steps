@@ -1191,25 +1191,31 @@ class PsychViewModel(
                     prompt = cached.promptText
                 )
             } else {
-                val topics = if (!situation.noHistory) repository.topicsPayload(situation) else null
-                val topic = topics?.optJSONObject(0)
-                withContext(Dispatchers.IO) {
-                    client.request(
-                        kind = kind,
-                        situation = situation.text,
-                        answers = answers,
-                        settings = settings,
-                        noHistory = situation.noHistory,
-                        topic = topic,
-                        topics = topics,
-                        questionNumber = questionNumber,
-                        questionCount = if (kind.startsWith("question")) {
-                            settings.workQuestionLimit
-                        } else {
-                            settings.dialogueExtraLimit
-                        },
-                        admin = isAdmin
-                    )
+                val aiKey = "ai-psych-${situation.id}-$kind"
+                activityLog?.aiBegin(kind, aiKey, situation.text.take(80))
+                try {
+                    val topics = if (!situation.noHistory) repository.topicsPayload(situation) else null
+                    val topic = topics?.optJSONObject(0)
+                    withContext(Dispatchers.IO) {
+                        client.request(
+                            kind = kind,
+                            situation = situation.text,
+                            answers = answers,
+                            settings = settings,
+                            noHistory = situation.noHistory,
+                            topic = topic,
+                            topics = topics,
+                            questionNumber = questionNumber,
+                            questionCount = if (kind.startsWith("question")) {
+                                settings.workQuestionLimit
+                            } else {
+                                settings.dialogueExtraLimit
+                            },
+                            admin = isAdmin
+                        )
+                    }
+                } finally {
+                    activityLog?.aiDone(aiKey, situation.text.take(80))
                 }
             }
             when (ok) {
@@ -1218,12 +1224,6 @@ class PsychViewModel(
                 }
                     is PsychAiClient.Result.Ok -> {
                     if (!cacheUsable) repository.putCache(key, kind, ok.text, ok.prompt)
-                    activityLog?.instant(
-                        ru.na.step4.obidy.data.activity.ActivityCat.AI,
-                        ru.na.step4.obidy.data.activity.ActivityType.AI,
-                        kind,
-                        detail = situation.text.take(80)
-                    )
                     ok.personality?.let { if (settings.personalityCollectEnabled) settings.myPersonality = it }
                     var quotaLine: String? = null
                     var upsell: String? = null

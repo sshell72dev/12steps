@@ -261,6 +261,7 @@ class JournalViewModel(
     fun setDraft(text: String) {
         persistDraft(text, _meta.value.editingId)
         _meta.update { it.copy(draft = text) }
+        if (text.isNotBlank()) markJournalWriting()
     }
 
     fun setSplitFields(split: Boolean) {
@@ -290,6 +291,7 @@ class JournalViewModel(
         if (text.isBlank()) next.remove(id) else next[id] = text
         prefs.fieldValues = next
         _meta.update { it.copy(fieldValues = next) }
+        if (text.isNotBlank()) markJournalWriting()
     }
 
     fun toggleFieldWord(fieldId: String, word: String) {
@@ -370,6 +372,7 @@ class JournalViewModel(
             }
             persistDraft("", null)
             prefs.fieldValues = emptyMap()
+            (app as Step4App).activityLog.journalWriteEnd(text.take(80))
             (app as Step4App).activityLog.instant(
                 ru.na.step4.obidy.data.activity.ActivityCat.JOURNAL,
                 ru.na.step4.obidy.data.activity.ActivityType.SAVE,
@@ -524,6 +527,9 @@ class JournalViewModel(
         }
         viewModelScope.launch {
             _ai.value = AiUi.Loading
+            val log = (app as Step4App).activityLog
+            val key = "ai-journal-help-${path.current.id}"
+            log.aiBegin("Дневник · помощь", key, path.current.displayTitle())
             val program = currentProgram()
             val personality = personalityForPrompt()
             val questionnaire = LifeBoardPrompts.merge(
@@ -544,6 +550,7 @@ class JournalViewModel(
                     admin = prefs.isAdmin
                 )
             }
+            log.aiDone(key, path.current.displayTitle())
             _ai.value = when (result) {
                 is JournalAiClient.Result.Ok -> {
                     prefs.consumeAi()
@@ -569,6 +576,9 @@ class JournalViewModel(
         }
         viewModelScope.launch {
             _ai.value = AiUi.Loading
+            val log = (app as Step4App).activityLog
+            val key = "ai-journal-help-entry-$entryId"
+            log.aiBegin("Дневник · помощь", key, path.current.displayTitle())
             val program = currentProgram()
             val personality = personalityForPrompt()
             val questionnaire = LifeBoardPrompts.merge(
@@ -590,6 +600,7 @@ class JournalViewModel(
                     admin = prefs.isAdmin
                 )
             }
+            log.aiDone(key, path.current.displayTitle())
             _ai.value = when (result) {
                 is JournalAiClient.Result.Ok -> {
                     prefs.consumeAi()
@@ -632,6 +643,9 @@ class JournalViewModel(
         }
         viewModelScope.launch {
             _ai.value = AiUi.Loading
+            val log = (app as Step4App).activityLog
+            val key = "ai-journal-analyze-${entryId ?: path.current.id}"
+            log.aiBegin("Дневник · ИИ-анализ", key, path.current.displayTitle())
             val program = currentProgram()
             val personality = personalityForAnalyze()
             val questionnaire = LifeBoardPrompts.merge(
@@ -655,6 +669,7 @@ class JournalViewModel(
                     admin = prefs.isAdmin
                 )
             }
+            log.aiDone(key, path.current.displayTitle())
             _ai.value = when (result) {
                 is JournalAiClient.Result.Ok -> {
                     prefs.consumeAi()
@@ -663,12 +678,6 @@ class JournalViewModel(
                         entries.joinToString("-") { it.id }.hashCode()
                     val parsed = JournalPrompts.parsePersonality(result.text)
                     val visible = (app as Step4App).spiritualRating.consumeAiText(eventId, parsed.first)
-                    (app as Step4App).activityLog.instant(
-                        ru.na.step4.obidy.data.activity.ActivityCat.AI,
-                        ru.na.step4.obidy.data.activity.ActivityType.AI,
-                        "Дневник",
-                        detail = (entryId ?: path.current.id.toString())
-                    )
                     if (prefs.profile.personalityCollectEnabled && !parsed.second.isNullOrBlank()) {
                         applyPortrait(parsed.second.orEmpty())
                     }
@@ -820,6 +829,11 @@ class JournalViewModel(
 
     private fun premiumActive(): Boolean =
         prefs.isPro || prefs.isAdmin || (app as Step4App).psychSettings.isPro
+
+    private fun markJournalWriting() {
+        val title = state.value.path?.current?.displayTitle().orEmpty()
+        (app as Step4App).activityLog.journalWriteStart(title)
+    }
 
     private fun syncPsychPremium(on: Boolean) {
         val psych = (app as Step4App).psychSettings

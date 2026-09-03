@@ -35,6 +35,7 @@ import java.util.Date
 import ru.na.step4.obidy.data.activity.ActivityEvent
 import ru.na.step4.obidy.data.activity.ActivityLog
 import ru.na.step4.obidy.data.activity.ActivityRu
+import ru.na.step4.obidy.data.activity.primaryTimeline
 import ru.na.step4.obidy.data.activity.summarize
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
@@ -53,6 +54,7 @@ fun ActivityStatsScreen(
     onBack: () -> Unit
 ) {
     var range by remember { mutableStateOf(ActivityRange.DAY) }
+    var showAll by remember { mutableStateOf(false) }
     val (from, until) = remember(range) {
         when (range) {
             ActivityRange.DAY -> ActivityLog.dayBounds()
@@ -62,6 +64,9 @@ fun ActivityStatsScreen(
     }
     val events by log.observe(from, until).collectAsStateWithLifecycle(emptyList())
     val summary = remember(events) { events.summarize() }
+    val visible = remember(events, showAll) {
+        if (showAll) events else events.primaryTimeline()
+    }
     val timeFmt = remember { SimpleDateFormat("HH:mm", ru.na.step4.obidy.data.i18n.I18n.locale()) }
     val dateFmt = remember { SimpleDateFormat("dd.MM HH:mm", ru.na.step4.obidy.data.i18n.I18n.locale()) }
 
@@ -94,15 +99,25 @@ fun ActivityStatsScreen(
                     RangeChip(ActivityRu.week, range == ActivityRange.WEEK) { range = ActivityRange.WEEK }
                     RangeChip(ActivityRu.month, range == ActivityRange.MONTH) { range = ActivityRange.MONTH }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RangeChip(ActivityRu.showMain, !showAll) { showAll = false }
+                    RangeChip(ActivityRu.showAll, showAll) { showAll = true }
+                }
                 StatCard {
                     Text(ActivityRu.results, style = MaterialTheme.typography.labelMedium, color = Amber)
                     Spacer(Modifier.height(8.dp))
                     StatLine(ActivityRu.totalTime, ActivityRu.duration(summary.screenMs))
+                    StatLine(ActivityRu.analysisTime, ActivityRu.duration(summary.analysisMs))
+                    StatLine(ActivityRu.psychTime, ActivityRu.duration(summary.psychMs))
+                    StatLine(ActivityRu.inventoryTime, ActivityRu.duration(summary.inventoryMs))
+                    StatLine(ActivityRu.journalTime, ActivityRu.duration(summary.journalMs))
                     StatLine(ActivityRu.listenTime, ActivityRu.duration(summary.listenMs))
+                    StatLine(ActivityRu.aiTime, ActivityRu.duration(summary.aiMs))
                     StatLine(ActivityRu.analysisCount, summary.analysisDone.toString())
                     StatLine(ActivityRu.questions, summary.answers.toString())
                     StatLine(ActivityRu.journalCount, summary.journalSaves.toString())
                     StatLine(ActivityRu.psychCount, summary.psychSessions.toString())
+                    StatLine(ActivityRu.inventoryCount, summary.inventorySessions.toString())
                     StatLine(ActivityRu.aiCount, summary.aiCalls.toString())
                 }
                 StatCard {
@@ -118,10 +133,10 @@ fun ActivityStatsScreen(
                     }
                 }
                 Text(ActivityRu.timeline, style = MaterialTheme.typography.titleMedium, color = Forest)
-                if (events.isEmpty()) {
+                if (visible.isEmpty()) {
                     Text(ActivityRu.empty, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    events.forEach { event ->
+                    visible.forEach { event ->
                         TimelineRow(event, range != ActivityRange.DAY, timeFmt, dateFmt)
                     }
                 }
@@ -177,14 +192,10 @@ private fun TimelineRow(
     dateFmt: SimpleDateFormat
 ) {
     val start = if (showDate) dateFmt.format(Date(event.startedAt)) else timeFmt.format(Date(event.startedAt))
-    val end = event.endedAt?.let { ended ->
-        if (ended != event.startedAt) {
-            val stamp = if (showDate) dateFmt.format(Date(ended)) else timeFmt.format(Date(ended))
-            " – $stamp"
-        } else {
-            ""
-        }
-    }.orEmpty()
+    val endStamp = event.endedAt?.takeIf { it != event.startedAt }?.let { ended ->
+        if (showDate) dateFmt.format(Date(ended)) else timeFmt.format(Date(ended))
+    }
+    val rangeLabel = if (endStamp != null) ActivityRu.fromTo.format(start, endStamp) else start
     val dur = event.durationMs
     val durLabel = if (dur >= 1000L) " · ${ActivityRu.duration(dur)}" else ""
     Column(
@@ -203,7 +214,7 @@ private fun TimelineRow(
             Text(event.label, style = MaterialTheme.typography.bodyLarge, color = Forest)
         }
         Text(
-            "$start$end$durLabel",
+            "$rangeLabel$durLabel",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

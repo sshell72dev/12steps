@@ -12,6 +12,7 @@ object ActivityCat {
     const val ANALYSIS = "analysis"
     const val PSYCH = "psych"
     const val JOURNAL = "journal"
+    const val INVENTORY = "inventory"
     const val AI = "ai"
     const val LISTEN = "listen"
     const val SCREEN = "screen"
@@ -59,6 +60,9 @@ interface ActivityDao {
 
     @Query("UPDATE activity_events SET endedAt = :endedAt, detail = :detail WHERE id = :id")
     suspend fun close(id: Long, endedAt: Long, detail: String)
+
+    @Query("UPDATE activity_events SET detail = :detail WHERE id = :id")
+    suspend fun updateDetail(id: Long, detail: String)
 
     @Query(
         """

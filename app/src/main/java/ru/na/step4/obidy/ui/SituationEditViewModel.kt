@@ -27,6 +27,7 @@ import ru.na.step4.obidy.data.journal.JournalPrompts
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.life.LifeBoardPrompts
 import ru.na.step4.obidy.data.life.LifeBoardStore
+import ru.na.step4.obidy.data.activity.ActivityLog
 
 data class SituationEditUiState(
     val id: Long = 0,
@@ -80,7 +81,8 @@ class SituationEditViewModel(
     private val situationId: Long,
     private val prefs: JournalPrefs,
     private val lifeBoard: LifeBoardStore? = null,
-    private val aiCache: InventoryAiCache
+    private val aiCache: InventoryAiCache,
+    private val activityLog: ActivityLog? = null
 ) : ViewModel() {
     private val form = MutableStateFlow(SituationEditUiState(id = situationId, isPro = prefs.isPro, isAdmin = prefs.isAdmin))
     val uiState: StateFlow<SituationEditUiState> = form.asStateFlow()
@@ -92,6 +94,10 @@ class SituationEditViewModel(
                 val target = repository.getById(item.resentmentId)?.target.orEmpty()
                 val cached = aiCache.get(item.id)
                 form.value = item.toUiState(target).withCachedAi(cached)
+                activityLog?.inventoryStart(
+                    item.title.ifBlank { target },
+                    item.id
+                )
             }
         }
     }
@@ -163,6 +169,12 @@ class SituationEditViewModel(
                     fullAnalysis = if (fullMode) "" else it.fullAnalysis
                 )
             }
+            val aiKey = "ai-inventory-$situationId"
+            activityLog?.aiBegin(
+                if (fullMode) "Инвентарь · полный разбор" else "Инвентарь · подсказки",
+                aiKey,
+                snap.title.ifBlank { snap.target }
+            )
             val target = snap.target.ifBlank {
                 repository.getById(snap.resentmentId)?.target.orEmpty()
             }
@@ -207,6 +219,7 @@ class SituationEditViewModel(
                     admin = prefs.isAdmin
                 )
             }
+            activityLog?.aiDone(aiKey, snap.title.ifBlank { snap.target })
             form.update { current ->
                 when (result) {
                     is JournalAiClient.Result.Ok -> {
@@ -277,10 +290,16 @@ class SituationEditViewModel(
     fun delete(onDeleted: () -> Unit) {
         viewModelScope.launch {
             autosaveJob?.cancel()
+            activityLog?.inventoryEnd(situationId, form.value.title)
             aiCache.clear(situationId)
             repository.getSituation(situationId)?.let { repository.deleteSituation(it) }
             onDeleted()
         }
+    }
+
+    override fun onCleared() {
+        activityLog?.inventoryEnd(situationId, form.value.title)
+        super.onCleared()
     }
 
     private fun scheduleAutosave() {
@@ -344,11 +363,12 @@ class SituationEditViewModel(
             id: Long,
             prefs: JournalPrefs,
             lifeBoard: LifeBoardStore? = null,
-            aiCache: InventoryAiCache
+            aiCache: InventoryAiCache,
+            activityLog: ActivityLog? = null
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                SituationEditViewModel(repository, id, prefs, lifeBoard, aiCache) as T
+                SituationEditViewModel(repository, id, prefs, lifeBoard, aiCache, activityLog) as T
         }
     }
 }

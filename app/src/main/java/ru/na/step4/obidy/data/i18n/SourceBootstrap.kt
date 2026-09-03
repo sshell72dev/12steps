@@ -937,13 +937,58 @@ object SourceBootstrap {
         SourceCatalog.put("activity.month", "Месяц")
         SourceCatalog.put("activity.totalTime", "Всего в приложении")
         SourceCatalog.put("activity.listenTime", "Прослушивание")
+        SourceCatalog.put("activity.analysisTime", "Время самоанализа")
+        SourceCatalog.put("activity.psychTime", "Время с психологом")
+        SourceCatalog.put("activity.inventoryTime", "Время инвентаря")
+        SourceCatalog.put("activity.journalTime", "Время дневника")
+        SourceCatalog.put("activity.aiTime", "Время ИИ-запросов")
         SourceCatalog.put("activity.analysisCount", "Самоанализы")
         SourceCatalog.put("activity.questions", "Ответы на вопросы")
         SourceCatalog.put("activity.journalCount", "Записи дневника")
         SourceCatalog.put("activity.psychCount", "Сессии психолога")
+        SourceCatalog.put("activity.inventoryCount", "Ситуации инвентаря")
         SourceCatalog.put("activity.aiCount", "Запросы к ИИ")
+        SourceCatalog.put("activity.sessions", "Сессии")
+        SourceCatalog.put("activity.showAll", "Все события")
+        SourceCatalog.put("activity.showMain", "Основные")
         SourceCatalog.put("activity.timeline", "Лента действий")
         SourceCatalog.put("activity.conclusions", "Выводы")
+        SourceCatalog.put("activity.unfinished", "Не завершён")
+        SourceCatalog.put("activity.fromTo", "%1\$s — %2\$s")
+        SourceCatalog.put("activity.insightTotal", "В приложении вы провели %1\$s.")
+        SourceCatalog.put(
+            "activity.insightAnalysis",
+            "Завершено самоанализов: %1\$d. Ответов: %2\$d. Время разбора: %3\$s."
+        )
+        SourceCatalog.put(
+            "activity.insightUnfinished",
+            "Самоанализ не доведён до конца (%1\$d отв., %2\$s). Стоит закончить разбор."
+        )
+        SourceCatalog.put("activity.insightJournal", "Записей в дневнике: %1\$d.")
+        SourceCatalog.put("activity.insightPsych", "Сессий с электронным психологом: %1\$d.")
+        SourceCatalog.put("activity.insightInventory", "Работы над ситуациями инвентаря: %1\$d.")
+        SourceCatalog.put("activity.insightAi", "Обращений к ИИ: %1\$d.")
+        SourceCatalog.put("activity.insightListen", "Прослушиваний вслух: %1\$d, всего %2\$s.")
+        SourceCatalog.put(
+            "activity.insightShort",
+            "Короткий заход: практики почти не было. Даже 10 минут самоанализа уже меняют день."
+        )
+        SourceCatalog.put(
+            "activity.insightCombo",
+            "Самоанализ и дневник шли рядом — так материал закрепляется лучше."
+        )
+        SourceCatalog.put(
+            "activity.insightListenLong",
+            "Вы слушали ответы дольше пяти минут: полезно возвращаться к своим словам, а не только писать."
+        )
+        SourceCatalog.put(
+            "activity.insightSeries",
+            "Плотная серия самоанализов. Имеет смысл отметить, что именно повторяется в ответах."
+        )
+        SourceCatalog.put(
+            "activity.insightInventoryAi",
+            "Инвентарь шёл вместе с ИИ-разбором — ответы и подсказки лучше сверить ещё раз на следующий день."
+        )
         SourceCatalog.put(
             "activity.empty",
             "За выбранный период действий пока нет. Они появятся, как только вы начнёте работу в приложении."
@@ -955,6 +1000,7 @@ object SourceBootstrap {
         SourceCatalog.put("activity.catAnalysis", "Самоанализ")
         SourceCatalog.put("activity.catPsych", "Психолог")
         SourceCatalog.put("activity.catJournal", "Дневник")
+        SourceCatalog.put("activity.catInventory", "Инвентарь")
         SourceCatalog.put("activity.catAi", "ИИ")
         SourceCatalog.put("activity.catListen", "Прослушивание")
         SourceCatalog.put("activity.catScreen", "Экран")
