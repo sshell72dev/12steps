@@ -48,6 +48,7 @@ class AnalysisSessionViewModel(
     private val streakStore = (app as Step4App).analysisStreak
     private val spiritual = (app as Step4App).spiritualRating
     private val challenges = (app as Step4App).messengerChallenges
+    private val activity = (app as Step4App).activityLog
     private val engine: AnalysisEngine?
     private val _screen = MutableStateFlow<SessionScreen?>(null)
     val screen: StateFlow<SessionScreen?> = _screen.asStateFlow()
@@ -117,6 +118,7 @@ class AnalysisSessionViewModel(
 
     fun begin() {
         engine?.begin()
+        activity.analysisStart(engine?.title ?: catalogId, catalogId)
         publish()
         persistProgress(markActive = true)
     }
@@ -296,6 +298,10 @@ class AnalysisSessionViewModel(
         _reviewIndex.value = null
         publish()
         refreshNav()
+        val answered = engine?.answerCount ?: 0
+        if (answered > 0 && engine?.isDone != true) {
+            activity.analysisAnswer(engine?.title ?: catalogId, catalogId, answered)
+        }
         val next = engine?.screen()
         if (next is SessionScreen.Done && !savedOnce) {
             savedOnce = true
@@ -319,6 +325,7 @@ class AnalysisSessionViewModel(
         if (firstSave) {
             streakStore.recordCompletion()
             spiritual.applyTask(SpiritualSource.ANALYSIS)
+            activity.analysisFinish(done.title, catalogId, all.size)
             val title = done.title
             viewModelScope.launch {
                 challenges.shareAnalysis(title)
@@ -451,6 +458,13 @@ class AnalysisAiReviewViewModel(application: Application) : AndroidViewModel(app
                     goals = getApplication<Step4App>().lifeBoard.goalsPromptBlock()
                 )
             }
+            val app = getApplication<Step4App>()
+            app.activityLog.instant(
+                ru.na.step4.obidy.data.activity.ActivityCat.AI,
+                ru.na.step4.obidy.data.activity.ActivityType.AI,
+                title,
+                detail = "Самоанализ · ${answers.size} отв."
+            )
             _state.value = when (result) {
                 is AnalysisAiClient.Result.Ok -> {
                     val eventId = "analysis-" + (title.hashCode().toString() + "-" + answers.size)

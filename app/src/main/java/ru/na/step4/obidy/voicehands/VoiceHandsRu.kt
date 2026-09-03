@@ -48,7 +48,14 @@ object VoiceHandsRu {
         "voicehands.hintAfterRead",
         "«Вернись в режим ожидания» · «разобрать ситуацию» · «рекомендации по ситуации» · «Давай запишем»"
     )
-    val hintThinking: String get() = I18n.t("voicehands.hintThinking", "Жду ответ ИИ…")
+    val hintThinking: String get() = I18n.t(
+        "voicehands.hintThinking",
+        "Жду ответ ИИ. Если зависло — «В ожидание» или «Выключить»."
+    )
+    val thinkTimeout: String get() = I18n.t(
+        "voicehands.thinkTimeout",
+        "Не дождался ответа. Можно «В ожидание» или другую команду."
+    )
     val hintOpening: String get() = I18n.t("voicehands.hintOpening", "Открываю новую запись…")
     val hintReading: String get() = I18n.t("voicehands.hintReading", "Читаю ответ. Подождите.")
     val needMic: String get() = I18n.t("voicehands.needMic", "Нужен доступ к микрофону.")
@@ -63,6 +70,7 @@ object VoiceHandsRu {
     const val SAY_THINKING = "думаю"
     const val SAY_READY_READ = "готово. читать?"
     const val SAY_READ_DONE = "прочитал, что дальше"
+    const val SAY_TIMEOUT = "не дождался ответа"
 
     fun hintsFor(phase: VoiceHandsPhase): String = when (phase) {
         VoiceHandsPhase.Standby -> hintStandby

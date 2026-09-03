@@ -863,6 +863,7 @@ object UiSourceKeys {
         "voicehands.hintAskRead",
         "voicehands.hintAfterRead",
         "voicehands.hintThinking",
+        "voicehands.thinkTimeout",
         "voicehands.hintOpening",
         "voicehands.hintReading",
         "voicehands.needMic",

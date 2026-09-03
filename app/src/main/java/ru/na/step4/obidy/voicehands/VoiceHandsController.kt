@@ -54,6 +54,7 @@ class VoiceHandsController(
     private var handledResultKey: String? = null
     private var skippedTopicPick = false
     private var psychJob: Job? = null
+    private var thinkJob: Job? = null
     private var foreground = true
 
     init {
@@ -89,6 +90,9 @@ class VoiceHandsController(
     }
 
     fun returnToStandby() {
+        speaker.stop()
+        listener.stop()
+        thinkJob?.cancel()
         scope.launch {
             mutex.withLock {
                 if (!settings.enabled.value) return@withLock
@@ -110,12 +114,17 @@ class VoiceHandsController(
     }
 
     fun disable() {
+        speaker.stop()
+        listener.stop()
+        thinkJob?.cancel()
         settings.setEnabled(false)
     }
 
     fun release() {
+        thinkJob?.cancel()
         psychJob?.cancel()
         listener.stop()
+        speaker.stop()
         scope.cancel()
     }
 
@@ -142,6 +151,7 @@ class VoiceHandsController(
         spokenQuestion = null
         handledResultKey = null
         skippedTopicPick = false
+        thinkJob?.cancel()
         publish {
             VoiceHandsUi(enabled = false, phase = VoiceHandsPhase.Off, status = VoiceHandsRu.off)
         }
@@ -153,6 +163,7 @@ class VoiceHandsController(
         spokenQuestion = null
         handledResultKey = null
         skippedTopicPick = false
+        thinkJob?.cancel()
         if (_ui.value.speaking) speaker.stop()
         listener.stop()
         setPhase(VoiceHandsPhase.Standby)
@@ -230,7 +241,7 @@ class VoiceHandsController(
             return
         }
         say(VoiceHandsRu.SAY_THINKING)
-        setPhase(VoiceHandsPhase.ThinkingQuestion)
+        beginThinking(VoiceHandsPhase.ThinkingQuestion)
         bound.submitSituation(draft)
     }
 
@@ -249,7 +260,7 @@ class VoiceHandsController(
                 val psych = VoiceHandsPsychGate.bound.value ?: return
                 spokenQuestion = null
                 say(VoiceHandsRu.SAY_THINKING)
-                setPhase(VoiceHandsPhase.ThinkingQuestion)
+                beginThinking(VoiceHandsPhase.ThinkingQuestion)
                 psych.answerDialogue(spoken)
             }
         }
@@ -285,7 +296,7 @@ class VoiceHandsController(
         val psych = VoiceHandsPsychGate.bound.value ?: return
         handledResultKey = null
         say(VoiceHandsRu.SAY_THINKING)
-        setPhase(VoiceHandsPhase.ThinkingResult)
+        beginThinking(VoiceHandsPhase.ThinkingResult)
         block(psych)
     }
 
@@ -304,58 +315,95 @@ class VoiceHandsController(
     }
 
     private suspend fun onPsychUi(psych: VoiceHandsPsych, ui: PsychUi) {
+        val follow = mutex.withLock { inspectPsych(psych, ui) } ?: return
+        thinkJob?.cancel()
+        say(follow.text)
         mutex.withLock {
-            when (_ui.value.phase) {
-                VoiceHandsPhase.ThinkingQuestion -> {
-                    if (ui.isPaywall) {
-                        say(VoiceHandsRu.psychMissing)
-                        setPhase(VoiceHandsPhase.AfterRead)
-                        listenForPhase(VoiceHandsPhase.AfterRead)
-                        return@withLock
-                    }
-                    if (!ui.error.isNullOrBlank() && !ui.waiting) {
-                        say(ui.error)
-                        setPhase(VoiceHandsPhase.AfterRead)
-                        listenForPhase(VoiceHandsPhase.AfterRead)
-                        return@withLock
-                    }
-                    val topicId = ui.topicPickId
-                    if (topicId != null && !skippedTopicPick) {
-                        skippedTopicPick = true
-                        psych.pickTopicNoHistory(topicId)
-                    }
-                    val question = ui.dialogueQuestion
-                    if (question != null && !ui.waiting && spokenQuestion != question) {
-                        spokenQuestion = question
-                        say(question)
-                        setPhase(VoiceHandsPhase.AwaitingReply)
-                        listenForPhase(VoiceHandsPhase.AwaitingReply)
-                    }
+            when (follow.kind) {
+                FollowKind.Question -> if (_ui.value.phase == VoiceHandsPhase.ThinkingQuestion) {
+                    setPhase(VoiceHandsPhase.AwaitingReply)
+                    listenForPhase(VoiceHandsPhase.AwaitingReply)
                 }
-                VoiceHandsPhase.ThinkingResult -> {
-                    if (ui.isPaywall) {
-                        say(VoiceHandsRu.psychMissing)
-                        setPhase(VoiceHandsPhase.AfterRead)
-                        listenForPhase(VoiceHandsPhase.AfterRead)
-                        return@withLock
-                    }
-                    if (!ui.error.isNullOrBlank() && !ui.waiting) {
-                        say(ui.error)
-                        setPhase(VoiceHandsPhase.AfterRead)
-                        listenForPhase(VoiceHandsPhase.AfterRead)
-                        return@withLock
-                    }
-                    val key = ui.resultKey
-                    val speakable = ui.resultSpeakable
-                    if (key != null && speakable != null && !ui.waiting && handledResultKey != key) {
-                        handledResultKey = key
-                        pendingRead = speakable
-                        say(VoiceHandsRu.SAY_READY_READ)
-                        setPhase(VoiceHandsPhase.AskRead)
-                        listenForPhase(VoiceHandsPhase.AskRead)
-                    }
+                FollowKind.ReadyRead -> if (_ui.value.phase == VoiceHandsPhase.ThinkingResult) {
+                    pendingRead = follow.speakable
+                    setPhase(VoiceHandsPhase.AskRead)
+                    listenForPhase(VoiceHandsPhase.AskRead)
                 }
-                else -> Unit
+                FollowKind.Error -> {
+                    setPhase(VoiceHandsPhase.AfterRead)
+                    listenForPhase(VoiceHandsPhase.AfterRead)
+                    publish { copy(error = follow.text) }
+                }
+            }
+        }
+    }
+
+    private fun inspectPsych(psych: VoiceHandsPsych, ui: PsychUi): FollowUp? {
+        return when (_ui.value.phase) {
+            VoiceHandsPhase.ThinkingQuestion -> {
+                if (ui.isPaywall) {
+                    return FollowUp(FollowKind.Error, VoiceHandsRu.psychMissing)
+                }
+                if (!ui.error.isNullOrBlank() && !ui.waiting) {
+                    return FollowUp(FollowKind.Error, ui.error)
+                }
+                val topicId = ui.topicPickId
+                if (topicId != null && !skippedTopicPick) {
+                    skippedTopicPick = true
+                    psych.pickTopicNoHistory(topicId)
+                    return null
+                }
+                val question = ui.dialogueQuestion
+                if (question != null && spokenQuestion != question) {
+                    spokenQuestion = question
+                    FollowUp(FollowKind.Question, question)
+                } else {
+                    null
+                }
+            }
+            VoiceHandsPhase.ThinkingResult -> {
+                if (ui.isPaywall) {
+                    return FollowUp(FollowKind.Error, VoiceHandsRu.psychMissing)
+                }
+                if (!ui.error.isNullOrBlank() && !ui.waiting) {
+                    return FollowUp(FollowKind.Error, ui.error)
+                }
+                val key = ui.resultKey
+                val speakable = ui.resultSpeakable
+                if (key != null && speakable != null && handledResultKey != key) {
+                    handledResultKey = key
+                    FollowUp(FollowKind.ReadyRead, VoiceHandsRu.SAY_READY_READ, speakable)
+                } else {
+                    null
+                }
+            }
+            else -> null
+        }
+    }
+
+    private fun beginThinking(phase: VoiceHandsPhase) {
+        setPhase(phase)
+        armThinkWatch()
+    }
+
+    private fun armThinkWatch() {
+        thinkJob?.cancel()
+        thinkJob = scope.launch {
+            delay(THINK_TIMEOUT_MS)
+            val stuck = mutex.withLock {
+                val phase = _ui.value.phase
+                phase == VoiceHandsPhase.ThinkingQuestion || phase == VoiceHandsPhase.ThinkingResult
+            }
+            if (!stuck) return@launch
+            speaker.stop()
+            say(VoiceHandsRu.SAY_TIMEOUT)
+            mutex.withLock {
+                val phase = _ui.value.phase
+                if (phase == VoiceHandsPhase.ThinkingQuestion || phase == VoiceHandsPhase.ThinkingResult) {
+                    setPhase(VoiceHandsPhase.AfterRead)
+                    listenForPhase(VoiceHandsPhase.AfterRead)
+                    publish { copy(error = VoiceHandsRu.thinkTimeout) }
+                }
             }
         }
     }
@@ -393,10 +441,13 @@ class VoiceHandsController(
         speaker.stop()
         publish { copy(speaking = true, listening = false, showListenButton = false) }
         speaker.speak(clean)
-        delay(120)
-        withTimeoutOrNull(1_200) { speaker.speaking.first { it } }
-        withTimeoutOrNull(180_000) { speaker.speaking.first { !it } }
-        delay(280)
+        delay(100)
+        val began = withTimeoutOrNull(1_000) { speaker.speaking.first { it } }
+        if (began == true) {
+            withTimeoutOrNull(45_000) { speaker.speaking.first { !it } }
+        }
+        if (speaker.speaking.value) speaker.stop()
+        delay(200)
         publish {
             copy(
                 speaking = false,
@@ -442,5 +493,17 @@ class VoiceHandsController(
         if (current.isBlank()) return piece
         if (current.endsWith(piece, ignoreCase = true)) return current
         return "$current $piece".replace(Regex("\\s+"), " ").trim()
+    }
+
+    private enum class FollowKind { Question, ReadyRead, Error }
+
+    private data class FollowUp(
+        val kind: FollowKind,
+        val text: String,
+        val speakable: String = ""
+    )
+
+    companion object {
+        private const val THINK_TIMEOUT_MS = 60_000L
     }
 }

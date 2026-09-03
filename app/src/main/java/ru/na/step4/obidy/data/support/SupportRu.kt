@@ -109,6 +109,7 @@ object SupportScreens {
             r == "support/idea" -> SupportRu.ideaTitle
             r == "cover" || r == "lock" -> SupportRu.belongingCover
             r == "general" -> SupportRu.belongingGeneral
+            r.startsWith("activity") -> "Моя статистика"
             r.startsWith("family:") -> familyTitle(r.removePrefix("family:")) + " (все экраны)"
             else -> "Экран приложения"
         }
@@ -125,6 +126,7 @@ object SupportScreens {
             r.startsWith("analysis") -> "analysis"
             r.startsWith("journal") -> "journal"
             r.startsWith("life") -> "life"
+            r.startsWith("activity") -> "activity"
             r.startsWith("messenger") -> "messenger"
             r.startsWith("edit") ||
                 r.startsWith("situation") ||
@@ -145,6 +147,7 @@ object SupportScreens {
         "analysis" -> "Самоанализ"
         "journal" -> "Дневник 12 шагов"
         "life" -> "Цели и заметки"
+        "activity" -> "Моя статистика"
         "messenger" -> "Мессенджер"
         "resentments" -> "Обиды / 4 шаг"
         "admin" -> "Админка"

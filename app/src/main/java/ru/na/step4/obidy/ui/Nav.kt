@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Notes
 import androidx.compose.material.icons.outlined.Person
@@ -52,6 +53,7 @@ import ru.na.step4.obidy.data.analysis.AnalysisCatalog
 import ru.na.step4.obidy.data.i18n.ScreenBundle
 import ru.na.step4.obidy.data.journal.JournalFieldKind
 import ru.na.step4.obidy.data.journal.JournalRu
+import ru.na.step4.obidy.data.activity.ActivityRu
 import ru.na.step4.obidy.data.life.LifeBoardRu
 import ru.na.step4.obidy.data.life.LifeKind
 import ru.na.step4.obidy.data.messenger.MessengerRu
@@ -80,6 +82,7 @@ import ru.na.step4.obidy.ui.journal.JournalSimpleScreen
 import ru.na.step4.obidy.ui.journal.VersionScreen
 import ru.na.step4.obidy.ui.journal.JournalViewModel
 import ru.na.step4.obidy.ui.journal.JournalWordPickerScreen
+import ru.na.step4.obidy.ui.activity.ActivityStatsScreen
 import ru.na.step4.obidy.ui.life.LifeBoardScreen
 import ru.na.step4.obidy.ui.life.LifeBoardViewModel
 import ru.na.step4.obidy.ui.messenger.MessengerHostScreen
@@ -117,6 +120,7 @@ private object Routes {
     const val PSYCH = "psych"
     const val PROFILE = "profile"
     const val SPIRITUAL_STATS = "spiritual/stats"
+    const val ACTIVITY_STATS = "activity/stats"
     const val JOURNAL = "journal"
     const val JOURNAL_PICK = "journal/pick"
     const val JOURNAL_SELECTED = "journal/selected"
@@ -248,6 +252,9 @@ fun Step4Nav() {
         Routes.analysisSession(resumeId)
     }
     val currentRoute by navController.currentBackStackEntryAsState()
+    LaunchedEffect(currentRoute) {
+        app.activityLog.screenChanged(currentRoute?.filledRoute())
+    }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val menuItems = remember(revision, messengerOn) {
         buildList {
@@ -260,6 +267,7 @@ fun Step4Nav() {
             add(AppMenuItem(Routes.life(LifeKind.IDEA), LifeBoardRu.ideas, Icons.Outlined.Lightbulb))
             add(AppMenuItem(Routes.life(LifeKind.EVENT), LifeBoardRu.calendar, Icons.Outlined.CalendarMonth))
             add(AppMenuItem(Routes.life(LifeKind.NOTE), LifeBoardRu.notes, Icons.Outlined.Notes))
+            add(AppMenuItem(Routes.ACTIVITY_STATS, ActivityRu.title, Icons.Outlined.Insights))
             add(AppMenuItem(Routes.JOURNAL, Ru.sectionSteps, Icons.Outlined.AutoStories))
             add(AppMenuItem(Routes.ANALYSIS, Ru.sectionAnalysis, Icons.Outlined.SelfImprovement))
             add(AppMenuItem(Routes.PSYCH, Ru.sectionPsych, Icons.Outlined.Psychology))
@@ -288,6 +296,7 @@ fun Step4Nav() {
                     onIdeas = { navController.navigate(Routes.life(LifeKind.IDEA)) },
                     onCalendar = { navController.navigate(Routes.life(LifeKind.EVENT)) },
                     onNotes = { navController.navigate(Routes.life(LifeKind.NOTE)) },
+                    onActivity = { navController.navigate(Routes.ACTIVITY_STATS) },
                     onProfile = { navController.navigate(Routes.PROFILE) },
                     onSettings = { navController.navigate(Routes.JOURNAL_SETTINGS) },
                     showMessenger = messengerOn,
@@ -318,6 +327,15 @@ fun Step4Nav() {
             EnsureTranslations(ScreenBundle.LIFE) {
                 LifeBoardScreen(
                     viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onActivity = { navController.navigate(Routes.ACTIVITY_STATS) }
+                )
+            }
+        }
+        composable(Routes.ACTIVITY_STATS) {
+            EnsureTranslations(ScreenBundle.ACTIVITY) {
+                ActivityStatsScreen(
+                    log = app.activityLog,
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -462,7 +480,8 @@ fun Step4Nav() {
                     app.psychRepository,
                     app.psychSettings,
                     app.spiritualRating,
-                    app.journalPrefs
+                    app.journalPrefs,
+                    app.activityLog
                 )
             )
             DisposableEffect(vm) {
@@ -922,6 +941,7 @@ private fun drawerSelection(route: String?): String {
     return when {
         r == Routes.HOME -> Routes.HOME
         r == Routes.SPIRITUAL_STATS -> Routes.HOME
+        r == Routes.ACTIVITY_STATS -> Routes.ACTIVITY_STATS
         r == Routes.PROFILE -> Routes.PROFILE
         r.startsWith("messenger") -> Routes.MESSENGER
         r.startsWith("life/") -> r

@@ -8,6 +8,7 @@ import kotlinx.coroutines.launch
 import ru.na.step4.obidy.auth.AppLockStore
 import ru.na.step4.obidy.data.AppDatabase
 import ru.na.step4.obidy.data.ResentmentRepository
+import ru.na.step4.obidy.data.activity.ActivityLog
 import ru.na.step4.obidy.data.analysis.AnalysisProgressStore
 import ru.na.step4.obidy.data.analysis.AnalysisRepository
 import ru.na.step4.obidy.data.analysis.AnalysisSettings
@@ -105,6 +106,9 @@ class Step4App : Application() {
     lateinit var voiceHandsSettings: VoiceHandsSettings
         private set
 
+    lateinit var activityLog: ActivityLog
+        private set
+
     override fun onCreate() {
         super.onCreate()
         appLockStore = AppLockStore(this)
@@ -143,6 +147,17 @@ class Step4App : Application() {
             spiritualRating
         )
         voiceHandsSettings = VoiceHandsSettings(this)
+        activityLog = ActivityLog(db.activityDao(), appScope)
+        voicePlugin.speaker.speakingListener = { on, preview ->
+            activityLog.speakingChanged(on, preview)
+        }
+        androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
+            object : androidx.lifecycle.DefaultLifecycleObserver {
+                override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
+                    activityLog.appBackground()
+                }
+            }
+        )
 
         ru.na.step4.obidy.data.i18n.SourceBootstrap.registerAll()
         ru.na.step4.obidy.data.i18n.ContentI18n.registerStatic()

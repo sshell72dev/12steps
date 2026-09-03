@@ -12,6 +12,7 @@ enum class ScreenBundle {
     LIFE,
     LOCK,
     SPIRITUAL,
+    ACTIVITY,
     MESSENGER,
     COMMON;
 
@@ -28,6 +29,7 @@ enum class ScreenBundle {
         LIFE -> UiSourceKeys.life + UiSourceKeys.common
         LOCK -> UiSourceKeys.lock + UiSourceKeys.common
         SPIRITUAL -> UiSourceKeys.spiritual + UiSourceKeys.common
+        ACTIVITY -> UiSourceKeys.activity + UiSourceKeys.common
         MESSENGER -> UiSourceKeys.messenger + UiSourceKeys.common
     }
 }

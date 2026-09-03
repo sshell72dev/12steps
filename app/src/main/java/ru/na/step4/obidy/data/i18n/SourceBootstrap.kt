@@ -905,7 +905,14 @@ object SourceBootstrap {
             "voicehands.hintAfterRead",
             "«Вернись в режим ожидания» · «разобрать ситуацию» · «рекомендации по ситуации» · «Давай запишем»"
         )
-        SourceCatalog.put("voicehands.hintThinking", "Жду ответ ИИ…")
+        SourceCatalog.put(
+            "voicehands.hintThinking",
+            "Жду ответ ИИ. Если зависло — «В ожидание» или «Выключить»."
+        )
+        SourceCatalog.put(
+            "voicehands.thinkTimeout",
+            "Не дождался ответа. Можно «В ожидание» или другую команду."
+        )
         SourceCatalog.put("voicehands.hintOpening", "Открываю новую запись…")
         SourceCatalog.put("voicehands.hintReading", "Читаю ответ. Подождите.")
         SourceCatalog.put("voicehands.needMic", "Нужен доступ к микрофону.")

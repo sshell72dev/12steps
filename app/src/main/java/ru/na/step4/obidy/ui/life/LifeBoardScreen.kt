@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -64,7 +66,8 @@ import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 @Composable
 fun LifeBoardScreen(
     viewModel: LifeBoardViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onActivity: (() -> Unit)? = null
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val kind = viewModel.kind
@@ -92,6 +95,13 @@ fun LifeBoardScreen(
                     }
                 },
                 navigationIcon = { AppNavIcon(onBack = onBack) },
+                actions = {
+                    if (onActivity != null) {
+                        IconButton(onClick = onActivity) {
+                            Icon(Icons.Outlined.Insights, contentDescription = ru.na.step4.obidy.data.activity.ActivityRu.title, tint = Forest)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Sand.copy(alpha = 0.92f))
             )
         },

@@ -84,9 +84,13 @@ class VoiceSpeaker(
         if (left == 0) markSpeaking(false)
     }
 
+    var speakingListener: ((Boolean, String) -> Unit)? = null
+    private var lastPreview: String = ""
+
     fun speak(text: String) {
         val clean = text.trim()
         if (clean.isBlank()) return
+        lastPreview = clean.replace('\n', ' ').take(120)
         ensureReady()
         if (!_ready.value) {
             pending = clean
@@ -169,6 +173,7 @@ class VoiceSpeaker(
         if (was == on) return
         _speaking.value = on
         if (on) holdPlayback() else releasePlayback()
+        speakingListener?.invoke(on, lastPreview)
     }
 
     private fun holdPlayback() {

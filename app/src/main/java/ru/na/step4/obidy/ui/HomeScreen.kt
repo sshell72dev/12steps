@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Notes
@@ -42,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import ru.na.step4.obidy.Ru
+import ru.na.step4.obidy.data.activity.ActivityRu
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.life.LifeBoardRu
 import ru.na.step4.obidy.data.messenger.MessengerRu
@@ -68,6 +70,7 @@ fun HomeScreen(
     onIdeas: () -> Unit,
     onCalendar: () -> Unit,
     onNotes: () -> Unit,
+    onActivity: () -> Unit,
     onProfile: () -> Unit,
     onSettings: () -> Unit,
     showMessenger: Boolean = false,
@@ -145,6 +148,13 @@ fun HomeScreen(
                     icon = Icons.Outlined.Psychology,
                     ready = true,
                     onClick = onPsych
+                )
+                SectionCard(
+                    title = ActivityRu.title,
+                    body = ActivityRu.homeBody,
+                    icon = Icons.Outlined.Insights,
+                    ready = true,
+                    onClick = onActivity
                 )
                 if (showMessenger) {
                     SectionCard(

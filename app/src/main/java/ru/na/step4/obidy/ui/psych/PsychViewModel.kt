@@ -130,7 +130,8 @@ class PsychViewModel(
     private val repository: PsychRepository,
     val settings: PsychSettings,
     private val spiritual: SpiritualRatingStore? = null,
-    private val journalPrefs: ru.na.step4.obidy.data.journal.JournalPrefs? = null
+    private val journalPrefs: ru.na.step4.obidy.data.journal.JournalPrefs? = null,
+    private val activityLog: ru.na.step4.obidy.data.activity.ActivityLog? = null
 ) : ViewModel() {
     private val client = PsychAiClient()
     private val _ui = MutableStateFlow(PsychUi())
@@ -937,6 +938,12 @@ class PsychViewModel(
         val uid = settings.newSessionUid()
         val session = repository.createSession(flagged.id, uid, PsychSession.SEQ_LIVE)
         settings.activeSessionUid = uid
+        activityLog?.start(
+            ru.na.step4.obidy.data.activity.ActivityCat.PSYCH,
+            ru.na.step4.obidy.data.activity.ActivityType.START,
+            sit.text.take(80).ifBlank { "Психолог" },
+            sessionKey = "psych-$uid"
+        )
         setPage(PsychPage.Dialogue(flagged, session, question = "", answers = emptyList()))
         askDialogueQuestion(flagged, session, emptyList())
     }
@@ -1101,6 +1108,14 @@ class PsychViewModel(
         )
         repository.updateSession(updated)
         settings.activeSessionUid = ""
+        activityLog?.end("psych-${session.sessionUid}", "${answers.size} отв.")
+        activityLog?.instant(
+            ru.na.step4.obidy.data.activity.ActivityCat.PSYCH,
+            ru.na.step4.obidy.data.activity.ActivityType.FINISH,
+            situation.text.take(80).ifBlank { "Психолог" },
+            detail = "${answers.size} отв.",
+            sessionKey = "psych-${session.sessionUid}"
+        )
         setPage(PsychPage.Done(situation, updated, answers))
     }
 
@@ -1201,8 +1216,14 @@ class PsychViewModel(
                 is PsychAiClient.Result.Err -> {
                     _ui.value = _ui.value.copy(waiting = false, error = ok.message)
                 }
-                is PsychAiClient.Result.Ok -> {
+                    is PsychAiClient.Result.Ok -> {
                     if (!cacheUsable) repository.putCache(key, kind, ok.text, ok.prompt)
+                    activityLog?.instant(
+                        ru.na.step4.obidy.data.activity.ActivityCat.AI,
+                        ru.na.step4.obidy.data.activity.ActivityType.AI,
+                        kind,
+                        detail = situation.text.take(80)
+                    )
                     ok.personality?.let { if (settings.personalityCollectEnabled) settings.myPersonality = it }
                     var quotaLine: String? = null
                     var upsell: String? = null
@@ -1335,12 +1356,13 @@ class PsychViewModel(
             repository: PsychRepository,
             settings: PsychSettings,
             spiritual: SpiritualRatingStore? = null,
-            journalPrefs: ru.na.step4.obidy.data.journal.JournalPrefs? = null
+            journalPrefs: ru.na.step4.obidy.data.journal.JournalPrefs? = null,
+            activityLog: ru.na.step4.obidy.data.activity.ActivityLog? = null
         ) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return PsychViewModel(repository, settings, spiritual, journalPrefs) as T
+                    return PsychViewModel(repository, settings, spiritual, journalPrefs, activityLog) as T
                 }
             }
     }

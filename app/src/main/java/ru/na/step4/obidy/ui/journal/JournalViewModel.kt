@@ -370,6 +370,12 @@ class JournalViewModel(
             }
             persistDraft("", null)
             prefs.fieldValues = emptyMap()
+            (app as Step4App).activityLog.instant(
+                ru.na.step4.obidy.data.activity.ActivityCat.JOURNAL,
+                ru.na.step4.obidy.data.activity.ActivityType.SAVE,
+                node.displayTitle(),
+                detail = text.take(80)
+            )
             _meta.update {
                 it.copy(
                     draft = "",
@@ -657,6 +663,12 @@ class JournalViewModel(
                         entries.joinToString("-") { it.id }.hashCode()
                     val parsed = JournalPrompts.parsePersonality(result.text)
                     val visible = (app as Step4App).spiritualRating.consumeAiText(eventId, parsed.first)
+                    (app as Step4App).activityLog.instant(
+                        ru.na.step4.obidy.data.activity.ActivityCat.AI,
+                        ru.na.step4.obidy.data.activity.ActivityType.AI,
+                        "Дневник",
+                        detail = (entryId ?: path.current.id.toString())
+                    )
                     if (prefs.profile.personalityCollectEnabled && !parsed.second.isNullOrBlank()) {
                         applyPortrait(parsed.second.orEmpty())
                     }

@@ -31,9 +31,10 @@ import ru.na.step4.obidy.data.psych.PsychTopic
         PsychTopic::class,
         PsychSituationTopic::class,
         PsychAiCache::class,
-        PsychAiUsage::class
+        PsychAiUsage::class,
+        ru.na.step4.obidy.data.activity.ActivityEvent::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +43,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun situationDao(): SituationDao
     abstract fun analysisDao(): AnalysisDao
     abstract fun psychDao(): PsychDao
+    abstract fun activityDao(): ru.na.step4.obidy.data.activity.ActivityDao
 
     companion object {
         @Volatile
@@ -403,6 +405,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS activity_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        category TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        label TEXT NOT NULL,
+                        detail TEXT NOT NULL,
+                        startedAt INTEGER NOT NULL,
+                        endedAt INTEGER,
+                        sessionKey TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_activity_events_startedAt ON activity_events(startedAt)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_activity_events_sessionKey ON activity_events(sessionKey)"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -417,7 +444,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
-                        MIGRATION_7_8
+                        MIGRATION_7_8,
+                        MIGRATION_8_9
                     )
                     .build()
                     .also { instance = it }
