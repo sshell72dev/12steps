@@ -125,6 +125,8 @@ fun JournalPickScreen(
                         StepAccordion(
                             step = step,
                             expanded = expandedStep == step.id,
+                            pickAllChapters = pickAllChapters && expandedStep == step.id,
+                            focusedChapterId = if (expandedStep == step.id) expandedChapter else null,
                             currentId = currentId,
                             count = viewModel.countFor(step.id),
                             chapterCount = { viewModel.countFor(it) },
@@ -351,6 +353,8 @@ private fun PickEntryCard(
 private fun StepAccordion(
     step: TreeNode,
     expanded: Boolean,
+    pickAllChapters: Boolean,
+    focusedChapterId: Int?,
     currentId: Int?,
     count: Int,
     chapterCount: (Int) -> Int,
@@ -363,6 +367,10 @@ private fun StepAccordion(
     onResentments: () -> Unit,
     isResentment: (TreeNode) -> Boolean
 ) {
+    val chapters = when {
+        pickAllChapters || focusedChapterId == null -> step.children
+        else -> step.children.filter { it.id == focusedChapterId }
+    }
     Column {
         AccordionHeader(
             title = step.displayTitle(),
@@ -371,8 +379,8 @@ private fun StepAccordion(
             onClick = onToggleStep,
             onCountClick = { onCountClick(step.id) }
         )
-        AnimatedChildren(expanded && step.hasChildren) {
-            step.children.forEach { chapter ->
+        AnimatedChildren(expanded && chapters.isNotEmpty()) {
+            chapters.forEach { chapter ->
                 ChapterAccordion(
                     chapter = chapter,
                     expanded = isChapterExpanded(chapter.id),

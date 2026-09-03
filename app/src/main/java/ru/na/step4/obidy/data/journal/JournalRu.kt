@@ -23,7 +23,7 @@ object JournalRu {
     val pickTitle: String get() = I18n.t("journal.pickTitle", "Выбор Шага")
     val pickHint: String get() = I18n.t(
         "journal.pickHint",
-        "Только навигация: шаг → глава → точка. Цифра рядом — записи в этом месте: нажмите, чтобы просмотреть. В текущей главе сначала видна ваша точка; нажмите на главу, чтобы открыть все точки."
+        "Только навигация: шаг → глава → точка. Сначала видна глава с вашей точкой; нажмите на шаг, чтобы открыть все главы. Цифра рядом — записи: нажмите, чтобы просмотреть."
     )
     val chaptersOf: String get() = I18n.t("journal.chaptersOf", "Главы")
     val pointsOf: String get() = I18n.t("journal.pointsOf", "Точки")
