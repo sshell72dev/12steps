@@ -47,6 +47,7 @@ class AnalysisSessionViewModel(
     private val progress = (app as Step4App).analysisProgress
     private val streakStore = (app as Step4App).analysisStreak
     private val spiritual = (app as Step4App).spiritualRating
+    private val challenges = (app as Step4App).messengerChallenges
     private val engine: AnalysisEngine?
     private val _screen = MutableStateFlow<SessionScreen?>(null)
     val screen: StateFlow<SessionScreen?> = _screen.asStateFlow()
@@ -318,6 +319,10 @@ class AnalysisSessionViewModel(
         if (firstSave) {
             streakStore.recordCompletion()
             spiritual.applyTask(SpiritualSource.ANALYSIS)
+            val title = done.title
+            viewModelScope.launch {
+                challenges.shareAnalysis(title)
+            }
         }
         _saved.value = true
         persistProgress(markActive = true)

@@ -42,14 +42,17 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import ru.na.step4.obidy.data.messenger.MessengerChallenge
 import ru.na.step4.obidy.data.messenger.MessengerChat
 import ru.na.step4.obidy.data.messenger.MessengerRu
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.journal.JournalButton
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.step4.obidy.ui.theme.SandDeep
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,9 +62,12 @@ fun MessengerHubScreen(
     onOpenChat: (MessengerChat) -> Unit,
     onMyQr: () -> Unit,
     onScan: () -> Unit,
-    onNewGroup: () -> Unit
+    onNewGroup: () -> Unit,
+    onJoinChallenge: (String) -> Unit
 ) {
     val chats by viewModel.chats.collectAsStateWithLifecycle()
+    val challenges by viewModel.challenges.collectAsStateWithLifecycle()
+    val openChallenges = challenges.filterNot { it.joined }
     DisposableEffect(Unit) {
         viewModel.startHubPolling()
         onDispose { viewModel.stopHubPolling() }
@@ -91,7 +97,7 @@ fun MessengerHubScreen(
     ) { padding ->
         Box(Modifier.imeScaffoldContent(padding)) {
             AtmosphereBackground(Modifier.fillMaxSize())
-            if (chats.isEmpty()) {
+            if (chats.isEmpty() && openChallenges.isEmpty()) {
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -107,6 +113,22 @@ fun MessengerHubScreen(
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
+                    if (openChallenges.isNotEmpty()) {
+                        item {
+                            Text(
+                                MessengerRu.challenges,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Forest
+                            )
+                        }
+                        items(openChallenges, key = { "challenge-${it.key}" }) { item ->
+                            ChallengeJoinCard(
+                                challenge = item,
+                                onJoin = { onJoinChallenge(item.key) }
+                            )
+                        }
+                    }
                     items(chats, key = { it.id }) { chat ->
                         ChatRow(chat = chat, onClick = { onOpenChat(chat) })
                     }
@@ -114,6 +136,41 @@ fun MessengerHubScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ChallengeJoinCard(
+    challenge: MessengerChallenge,
+    onJoin: () -> Unit
+) {
+    val title = MessengerRu.challengeTitle(challenge.key, challenge.name)
+    val body = MessengerRu.challengeBody(challenge.key)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(SandDeep.copy(alpha = 0.72f))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = Forest)
+        if (body.isNotBlank()) {
+            Text(
+                body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (challenge.members > 0) {
+            Text(
+                "${challenge.members} ${MessengerRu.challengeMembers}",
+                style = MaterialTheme.typography.labelMedium,
+                color = Amber
+            )
+        }
+        JournalButton(MessengerRu.challengeJoin, onJoin, filled = true)
     }
 }
 

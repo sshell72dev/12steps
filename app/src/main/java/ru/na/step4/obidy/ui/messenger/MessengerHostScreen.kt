@@ -112,7 +112,19 @@ fun MessengerHostScreen(
                         nav.navigate(MRoutes.QR)
                     },
                     onScan = { nav.navigate(MRoutes.SCAN) },
-                    onNewGroup = { nav.navigate(MRoutes.GROUP_NEW) }
+                    onNewGroup = { nav.navigate(MRoutes.GROUP_NEW) },
+                    onJoinChallenge = { key ->
+                        viewModel.joinChallenge(key) { created ->
+                            if (created != null && created.chatId.isNotBlank()) {
+                                viewModel.openChat(
+                                    created.chatId,
+                                    created.title.ifBlank { MessengerRu.challengeTitle(key, created.title) },
+                                    created.groupId
+                                )
+                                nav.navigate(MRoutes.chat(created.chatId))
+                            }
+                        }
+                    }
                 )
             }
             composable(

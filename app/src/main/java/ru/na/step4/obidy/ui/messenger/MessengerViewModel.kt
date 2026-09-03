@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import ru.na.step4.obidy.data.messenger.MessengerChallenge
 import ru.na.step4.obidy.data.messenger.MessengerChat
 import ru.na.step4.obidy.data.messenger.MessengerContact
 import ru.na.step4.obidy.data.messenger.MessengerGroupInfo
@@ -59,6 +60,9 @@ class MessengerViewModel(
     private val _groupInfo = MutableStateFlow<MessengerGroupInfo?>(null)
     val groupInfo: StateFlow<MessengerGroupInfo?> = _groupInfo.asStateFlow()
 
+    private val _challenges = MutableStateFlow<List<MessengerChallenge>>(emptyList())
+    val challenges: StateFlow<List<MessengerChallenge>> = _challenges.asStateFlow()
+
     private var hubPoll: Job? = null
     private var chatPoll: Job? = null
 
@@ -87,6 +91,7 @@ class MessengerViewModel(
         if (ready) {
             repository.refreshChats()
             repository.refreshContacts()
+            _challenges.value = repository.refreshChallenges()
         }
     }
 
@@ -103,6 +108,7 @@ class MessengerViewModel(
             if (ok) {
                 repository.refreshChats()
                 repository.refreshContacts()
+                _challenges.value = repository.refreshChallenges()
             }
         }
     }
@@ -112,6 +118,7 @@ class MessengerViewModel(
         hubPoll = viewModelScope.launch {
             while (isActive) {
                 repository.refreshChats()
+                _challenges.value = repository.refreshChallenges()
                 delay(8_000)
             }
         }
@@ -188,6 +195,14 @@ class MessengerViewModel(
 
     fun createGroup(name: String, userIds: List<String>, onDone: (MessengerJoinResult?) -> Unit) {
         viewModelScope.launch { onDone(repository.createGroup(name, userIds)) }
+    }
+
+    fun joinChallenge(key: String, onDone: (MessengerJoinResult?) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.joinChallenge(key)
+            _challenges.value = repository.refreshChallenges()
+            onDone(result)
+        }
     }
 
     fun loadGroup(groupId: String) {

@@ -53,7 +53,22 @@ data class MessengerJoinResult(
     val kind: String,
     val chatId: String,
     val title: String = "",
-    val groupId: String = ""
+    val groupId: String = "",
+    val challengeKey: String = ""
+)
+
+object MessengerChallengeKeys {
+    const val STEPS = "steps"
+    const val ANALYSIS = "analysis"
+}
+
+data class MessengerChallenge(
+    val key: String,
+    val name: String,
+    val groupId: String = "",
+    val chatId: String = "",
+    val joined: Boolean = false,
+    val members: Int = 0
 )
 
 sealed class MessengerResult<out T> {

@@ -27,6 +27,32 @@ class MessengerPrefs(context: Context) {
             prefs.edit().putBoolean(KEY_ENABLED, value).apply()
         }
 
+    fun challengeChatId(key: String): String =
+        prefs.getString(challengeKey(key), "").orEmpty()
+
+    fun putChallenges(items: List<MessengerChallenge>) {
+        if (items.isEmpty()) return
+        val editor = prefs.edit()
+        val known = items.map { it.key }.toMutableSet()
+        known += listOf(MessengerChallengeKeys.STEPS, MessengerChallengeKeys.ANALYSIS)
+        known.forEach { key ->
+            val item = items.find { it.key == key }
+            if (item != null && item.joined && item.chatId.isNotBlank()) {
+                editor.putString(challengeKey(key), item.chatId)
+            } else {
+                editor.remove(challengeKey(key))
+            }
+        }
+        editor.apply()
+    }
+
+    fun putChallengeChat(key: String, chatId: String) {
+        if (key.isBlank() || chatId.isBlank()) return
+        prefs.edit().putString(challengeKey(key), chatId).apply()
+    }
+
+    private fun challengeKey(key: String) = "challenge_chat_$key"
+
     companion object {
         private const val PREFS = "messenger_prefs"
         private const val KEY_ID = "messenger_id"

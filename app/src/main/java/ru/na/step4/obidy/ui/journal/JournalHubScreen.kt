@@ -23,11 +23,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.journal.NodeType
 import ru.na.step4.obidy.data.notes.NoteIds
@@ -55,10 +55,12 @@ fun JournalHubScreen(
     onResentments: () -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val streakDays by viewModel.streakDays.collectAsStateWithLifecycle()
     val path = state.path
     val next = viewModel.nextPoint()
     val showResentments = viewModel.catalog.isResentmentPlace(path)
     val resentmentPlace = showResentments && path?.point == null
+    val streakLabel = remember(streakDays) { viewModel.streakLabel(streakDays) }
 
     LaunchedEffect(state.notice) {
         if (state.notice != null) {
@@ -97,6 +99,13 @@ fun JournalHubScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 NoteView(NoteIds.JOURNAL_HUB_INTRO, JournalRu.hubIntro, JournalRu.hubTitle)
+                if (streakLabel != null) {
+                    Text(
+                        streakLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Amber
+                    )
+                }
                 JournalCard {
                     if (path == null) {
                         Text(JournalRu.noPlace, color = Forest)

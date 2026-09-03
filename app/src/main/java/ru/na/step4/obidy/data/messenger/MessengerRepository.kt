@@ -123,6 +123,48 @@ class MessengerRepository(
         }
     }
 
+    suspend fun refreshChallenges(): List<MessengerChallenge> = withContext(Dispatchers.IO) {
+        when (val result = client.challenges()) {
+            is MessengerResult.Ok -> {
+                prefs.putChallenges(result.value)
+                result.value
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                emptyList()
+            }
+            is MessengerResult.Err -> emptyList()
+        }
+    }
+
+    suspend fun joinChallenge(key: String): MessengerJoinResult? = withContext(Dispatchers.IO) {
+        when (val result = client.joinChallenge(key)) {
+            is MessengerResult.Ok -> {
+                if (result.value.chatId.isNotBlank()) {
+                    prefs.putChallengeChat(key, result.value.chatId)
+                }
+                refreshChats()
+                refreshChallenges()
+                result.value
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                null
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                null
+            }
+        }
+    }
+
+    suspend fun shareChallenge(key: String, body: String): Boolean = withContext(Dispatchers.IO) {
+        if (!enabled.value || body.isBlank()) return@withContext false
+        val chatId = prefs.challengeChatId(key)
+        if (chatId.isBlank()) return@withContext false
+        sendText(chatId, body)
+    }
+
     suspend fun refreshMessages(chatId: String) = withContext(Dispatchers.IO) {
         val after = dao.lastMessageId(chatId)
         when (val result = client.messages(chatId, after)) {

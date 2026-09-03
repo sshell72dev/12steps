@@ -43,4 +43,31 @@ object MessengerRu {
     val joined: String get() = I18n.t("messenger.joined", "Подключение выполнено.")
     val send: String get() = I18n.t("messenger.send", "Отправить")
     val owner: String get() = I18n.t("messenger.owner", "создатель")
+    val challenges: String get() = I18n.t("messenger.challenges", "Челленджи")
+    val challengeSteps: String get() = I18n.t("messenger.challengeSteps", "Челлендж шагов")
+    val challengeAnalysis: String get() = I18n.t("messenger.challengeAnalysis", "Челлендж самоанализов")
+    val challengeStepsBody: String get() = I18n.t(
+        "messenger.challengeStepsBody",
+        "После записи в точку дневника в группу уходит ударный режим, название точки и рейтинг духовной деятельности."
+    )
+    val challengeAnalysisBody: String get() = I18n.t(
+        "messenger.challengeAnalysisBody",
+        "После прохождения самоанализа в группу уходит ударный режим, название самоанализа и рейтинг духовной деятельности."
+    )
+    val challengeJoin: String get() = I18n.t("messenger.challengeJoin", "Подключиться")
+    val challengePoint: String get() = I18n.t("messenger.challengePoint", "Точка")
+    val challengeAnalysisLabel: String get() = I18n.t("messenger.challengeAnalysisLabel", "Самоанализ")
+    val challengeMembers: String get() = I18n.t("messenger.challengeMembers", "участников")
+
+    fun challengeTitle(key: String, fallback: String): String = when (key) {
+        "steps" -> challengeSteps
+        "analysis" -> challengeAnalysis
+        else -> fallback.ifBlank { challenges }
+    }
+
+    fun challengeBody(key: String): String = when (key) {
+        "steps" -> challengeStepsBody
+        "analysis" -> challengeAnalysisBody
+        else -> ""
+    }
 }

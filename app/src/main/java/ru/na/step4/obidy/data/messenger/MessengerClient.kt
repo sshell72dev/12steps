@@ -56,7 +56,8 @@ class MessengerClient(private val messengerId: () -> String) {
                 kind = obj.optString("kind"),
                 chatId = obj.optString("chat_id"),
                 title = obj.optString("title"),
-                groupId = obj.optString("group_id")
+                groupId = obj.optString("group_id"),
+                challengeKey = obj.optString("key")
             )
         }
     }
@@ -116,6 +117,26 @@ class MessengerClient(private val messengerId: () -> String) {
                 chatId = obj.optString("chat_id"),
                 title = group.optString("name").ifBlank { name },
                 groupId = group.optString("id")
+            )
+        }
+    }
+
+    fun challenges(): MessengerResult<List<MessengerChallenge>> {
+        return map(MessengerHttp.get("/api/v1/messenger/challenges", messengerId())) { obj ->
+            parseChallenges(obj.optJSONArray("challenges"))
+        }
+    }
+
+    fun joinChallenge(key: String): MessengerResult<MessengerJoinResult> {
+        return map(
+            MessengerHttp.post("/api/v1/messenger/challenges/$key/join", messengerId(), JSONObject())
+        ) { obj ->
+            MessengerJoinResult(
+                kind = obj.optString("kind").ifBlank { "group" },
+                chatId = obj.optString("chat_id"),
+                title = obj.optString("title"),
+                groupId = obj.optString("group_id"),
+                challengeKey = obj.optString("key").ifBlank { key }
             )
         }
     }
@@ -186,6 +207,25 @@ class MessengerClient(private val messengerId: () -> String) {
             "self_invite" -> MessengerRu.selfInvite
             "invite_not_found", "bad_token" -> MessengerRu.badQr
             else -> MessengerRu.error
+        }
+    }
+
+    private fun parseChallenges(arr: JSONArray?): List<MessengerChallenge> {
+        if (arr == null) return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val row = arr.optJSONObject(i) ?: continue
+                add(
+                    MessengerChallenge(
+                        key = row.optString("key"),
+                        name = row.optString("name"),
+                        groupId = row.optString("group_id"),
+                        chatId = row.optString("chat_id"),
+                        joined = row.optBoolean("joined"),
+                        members = row.optInt("members")
+                    )
+                )
+            }
         }
     }
 

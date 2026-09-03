@@ -20,6 +20,13 @@ MAX_TEXT = 4000
 MAX_VOICE_BYTES = 1_048_576
 MAX_VOICE_MS = 60_000
 SETTING_KEY = "messenger_enabled"
+SYSTEM_USER_ID = "steps12_system"
+SYSTEM_USER_NAME = "Челленджи"
+CHALLENGES = (
+    ("steps", "challenge_steps", "Челлендж шагов"),
+    ("analysis", "challenge_analysis", "Челлендж самоанализов"),
+)
+CHALLENGE_KEYS = {item[0] for item in CHALLENGES}
 
 
 def is_enabled() -> bool:
@@ -71,7 +78,9 @@ def init_schema() -> None:
                 id VARCHAR(64) NOT NULL PRIMARY KEY,
                 name VARCHAR(80) NOT NULL,
                 owner_id VARCHAR(64) NOT NULL,
-                created_at DATETIME NOT NULL
+                created_at DATETIME NOT NULL,
+                challenge_key VARCHAR(32) NULL,
+                UNIQUE KEY messenger_groups_challenge (challenge_key)
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             """
         )
@@ -126,6 +135,118 @@ def init_schema() -> None:
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             """
         )
+        _ensure_challenge_schema(cur)
+
+
+def _has_column(cur, table: str, column: str) -> bool:
+    cur.execute(
+        """
+        SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+          AND COLUMN_NAME = %s
+        """,
+        (table, column),
+    )
+    return int((cur.fetchone() or {}).get("c") or 0) > 0
+
+
+def _has_index(cur, table: str, name: str) -> bool:
+    cur.execute(
+        """
+        SELECT COUNT(*) AS c FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+          AND INDEX_NAME = %s
+        """,
+        (table, name),
+    )
+    return int((cur.fetchone() or {}).get("c") or 0) > 0
+
+
+def _ensure_challenge_schema(cur) -> None:
+    if not _has_column(cur, "messenger_groups", "challenge_key"):
+        cur.execute(
+            "ALTER TABLE messenger_groups ADD COLUMN challenge_key VARCHAR(32) NULL"
+        )
+    if not _has_index(cur, "messenger_groups", "messenger_groups_challenge"):
+        cur.execute(
+            "ALTER TABLE messenger_groups ADD UNIQUE KEY messenger_groups_challenge (challenge_key)"
+        )
+    _ensure_challenge_groups(cur)
+
+
+def _ensure_challenge_groups(cur) -> None:
+    now = db.utc_now()
+    cur.execute("SELECT id FROM messenger_users WHERE id = %s", (SYSTEM_USER_ID,))
+    if not cur.fetchone():
+        cur.execute(
+            """
+            INSERT INTO messenger_users (id, display_name, created_at, updated_at)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (SYSTEM_USER_ID, SYSTEM_USER_NAME, now, now),
+        )
+    for key, group_id, name in CHALLENGES:
+        cur.execute(
+            "SELECT id FROM messenger_groups WHERE challenge_key = %s",
+            (key,),
+        )
+        row = cur.fetchone()
+        if row:
+            _ensure_group_chat(cur, row["id"])
+            continue
+        cur.execute("SELECT id FROM messenger_groups WHERE id = %s", (group_id,))
+        existing = cur.fetchone()
+        if existing:
+            cur.execute(
+                "UPDATE messenger_groups SET challenge_key = %s, name = %s WHERE id = %s",
+                (key, name, group_id),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO messenger_groups (id, name, owner_id, created_at, challenge_key)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (group_id, name, SYSTEM_USER_ID, now, key),
+            )
+            cur.execute(
+                """
+                INSERT IGNORE INTO messenger_group_members (group_id, user_id, role, created_at)
+                VALUES (%s, %s, 'owner', %s)
+                """,
+                (group_id, SYSTEM_USER_ID, now),
+            )
+        _ensure_group_chat(cur, group_id)
+
+
+def _challenge_json(cur, key: str, group_id: str, name: str, messenger_id: str) -> dict:
+    cur.execute(
+        "SELECT 1 FROM messenger_group_members WHERE group_id = %s AND user_id = %s",
+        (group_id, messenger_id),
+    )
+    joined = cur.fetchone() is not None
+    cur.execute(
+        """
+        SELECT COUNT(*) AS c FROM messenger_group_members
+        WHERE group_id = %s AND user_id <> %s
+        """,
+        (group_id, SYSTEM_USER_ID),
+    )
+    members = int((cur.fetchone() or {}).get("c") or 0)
+    chat_id = ""
+    if joined:
+        chat_id = _ensure_group_chat(cur, group_id)
+        _add_chat_member(cur, chat_id, messenger_id)
+    return {
+        "key": key,
+        "name": name,
+        "group_id": group_id,
+        "chat_id": chat_id,
+        "joined": joined,
+        "members": members,
+    }
 
 
 def _new_id() -> str:
@@ -332,6 +453,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
     peer_id = ""
     group_id = chat.get("group_id") or ""
     is_owner = False
+    challenge_key = ""
     if kind == "direct":
         cur.execute(
             """
@@ -348,12 +470,13 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         title = peer.get("display_name") or ""
     else:
         cur.execute(
-            "SELECT id, name, owner_id FROM messenger_groups WHERE id = %s",
+            "SELECT id, name, owner_id, challenge_key FROM messenger_groups WHERE id = %s",
             (group_id,),
         )
         group = cur.fetchone() or {}
         title = group.get("name") or ""
         is_owner = group.get("owner_id") == me
+        challenge_key = group.get("challenge_key") or ""
     cur.execute(
         """
         SELECT id, kind, body, sender_id,
@@ -383,6 +506,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         "peer_id": peer_id,
         "group_id": group_id,
         "is_owner": is_owner,
+        "challenge_key": challenge_key,
         "last_body": preview,
         "last_kind": last_kind,
         "last_at": last_at,
@@ -800,6 +924,55 @@ def register(app, login_required, api_ok) -> None:
                 _add_chat_member(cur, chat_id, peer_id)
                 added.append(peer_id)
         return jsonify({"ok": True, "added": added, "chat_id": chat_id})
+
+    @app.get("/api/v1/messenger/challenges")
+    @guard(need_user=True)
+    def api_messenger_challenges(messenger_id: str):
+        with db.cursor() as cur:
+            user = _require_user(cur, messenger_id)
+            if not user:
+                return jsonify({"error": "not_registered"}), 404
+            _ensure_challenge_groups(cur)
+            items = []
+            for key, group_id, name in CHALLENGES:
+                items.append(_challenge_json(cur, key, group_id, name, messenger_id))
+        return jsonify({"challenges": items})
+
+    @app.post("/api/v1/messenger/challenges/<key>/join")
+    @guard(need_user=True)
+    def api_messenger_join_challenge(messenger_id: str, key: str):
+        key = (key or "").strip().lower()
+        if key not in CHALLENGE_KEYS:
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            user = _require_user(cur, messenger_id)
+            if not user:
+                return jsonify({"error": "not_registered"}), 404
+            _ensure_challenge_groups(cur)
+            meta = next((item for item in CHALLENGES if item[0] == key), None)
+            if not meta:
+                return jsonify({"error": "not_found"}), 404
+            _, group_id, name = meta
+            now = db.utc_now()
+            cur.execute(
+                """
+                INSERT IGNORE INTO messenger_group_members (group_id, user_id, role, created_at)
+                VALUES (%s, %s, 'member', %s)
+                """,
+                (group_id, messenger_id, now),
+            )
+            chat_id = _ensure_group_chat(cur, group_id)
+            _add_chat_member(cur, chat_id, messenger_id)
+        return jsonify(
+            {
+                "ok": True,
+                "kind": "group",
+                "key": key,
+                "chat_id": chat_id,
+                "group_id": group_id,
+                "title": name,
+            }
+        )
 
     @app.get("/api/v1/messenger/chats")
     @guard(need_user=True)
