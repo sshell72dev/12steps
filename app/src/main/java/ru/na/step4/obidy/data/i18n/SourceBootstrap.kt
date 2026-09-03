@@ -925,5 +925,46 @@ object SourceBootstrap {
             "voicehands.psychMissing",
             "Не удалось открыть психолога. Скажите «Давай запишем» ещё раз."
         )
+
+        SourceCatalog.put("activity.title", "Моя статистика")
+        SourceCatalog.put("activity.eyebrow", "Трекер")
+        SourceCatalog.put(
+            "activity.homeBody",
+            "Все действия в приложении: самоанализы, дневник, психолог, ИИ и прослушивание — с временем от и до."
+        )
+        SourceCatalog.put("activity.day", "День")
+        SourceCatalog.put("activity.week", "Неделя")
+        SourceCatalog.put("activity.month", "Месяц")
+        SourceCatalog.put("activity.totalTime", "Всего в приложении")
+        SourceCatalog.put("activity.listenTime", "Прослушивание")
+        SourceCatalog.put("activity.analysisCount", "Самоанализы")
+        SourceCatalog.put("activity.questions", "Ответы на вопросы")
+        SourceCatalog.put("activity.journalCount", "Записи дневника")
+        SourceCatalog.put("activity.psychCount", "Сессии психолога")
+        SourceCatalog.put("activity.aiCount", "Запросы к ИИ")
+        SourceCatalog.put("activity.timeline", "Лента действий")
+        SourceCatalog.put("activity.conclusions", "Выводы")
+        SourceCatalog.put(
+            "activity.empty",
+            "За выбранный период действий пока нет. Они появятся, как только вы начнёте работу в приложении."
+        )
+        SourceCatalog.put("activity.results", "Результаты")
+        SourceCatalog.put("activity.durHms", "%1\$d ч %2\$d мин")
+        SourceCatalog.put("activity.durMs", "%1\$d мин %2\$d сек")
+        SourceCatalog.put("activity.durSec", "%1\$d сек")
+        SourceCatalog.put("activity.catAnalysis", "Самоанализ")
+        SourceCatalog.put("activity.catPsych", "Психолог")
+        SourceCatalog.put("activity.catJournal", "Дневник")
+        SourceCatalog.put("activity.catAi", "ИИ")
+        SourceCatalog.put("activity.catListen", "Прослушивание")
+        SourceCatalog.put("activity.catScreen", "Экран")
+        SourceCatalog.put("activity.typeStart", "Начало")
+        SourceCatalog.put("activity.typeAnswer", "Ответ")
+        SourceCatalog.put("activity.typeFinish", "Завершение")
+        SourceCatalog.put("activity.typeAi", "ИИ-анализ")
+        SourceCatalog.put("activity.typeListenStart", "Начало прослушивания")
+        SourceCatalog.put("activity.typeListenEnd", "Конец прослушивания")
+        SourceCatalog.put("activity.typeScreen", "Экран")
+        SourceCatalog.put("activity.typeSave", "Сохранение")
     }
 }

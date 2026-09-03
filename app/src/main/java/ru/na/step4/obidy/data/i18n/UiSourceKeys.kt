@@ -872,8 +872,45 @@ object UiSourceKeys {
         "voicehands.psychMissing",
     )
 
+    val activity: Set<String> = setOf(
+        "activity.title",
+        "activity.eyebrow",
+        "activity.homeBody",
+        "activity.day",
+        "activity.week",
+        "activity.month",
+        "activity.totalTime",
+        "activity.listenTime",
+        "activity.analysisCount",
+        "activity.questions",
+        "activity.journalCount",
+        "activity.psychCount",
+        "activity.aiCount",
+        "activity.timeline",
+        "activity.conclusions",
+        "activity.empty",
+        "activity.results",
+        "activity.durHms",
+        "activity.durMs",
+        "activity.durSec",
+        "activity.catAnalysis",
+        "activity.catPsych",
+        "activity.catJournal",
+        "activity.catAi",
+        "activity.catListen",
+        "activity.catScreen",
+        "activity.typeStart",
+        "activity.typeAnswer",
+        "activity.typeFinish",
+        "activity.typeAi",
+        "activity.typeListenStart",
+        "activity.typeListenEnd",
+        "activity.typeScreen",
+        "activity.typeSave",
+    )
+
     val common: Set<String>
-        get() = ui + support + spiritual + voice + life + messenger + voicehands +
+        get() = ui + support + spiritual + voice + life + messenger + voicehands + activity +
             SourceCatalog.keys().filter { it.startsWith("profile.") || it.startsWith("note.") }.toSet()
     val home: Set<String> get() = ui
     val profile: Set<String>
