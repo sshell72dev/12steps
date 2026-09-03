@@ -158,50 +158,6 @@ fun SituationEditScreen(
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
-                JournalButton(
-                    InventoryStructure.workThrough,
-                    onClick = { viewModel.requestWorkThrough() },
-                    filled = true
-                )
-                if (!state.isPro && !state.isAdmin) {
-                    JournalButton(JournalRu.proNeededTitle, onClick = onPro)
-                }
-                Text(
-                    InventoryStructure.workThroughHint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (state.aiLoading) {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Forest)
-                            Text(JournalRu.aiLoading, color = Forest, modifier = Modifier.padding(top = 8.dp))
-                        }
-                    }
-                }
-                if (state.isAdmin && state.aiPrompt.isNotBlank()) {
-                    ru.na.step4.obidy.ui.components.AdminPromptBlock(state.aiPrompt)
-                }
-                state.aiNotice?.let { notice ->
-                    Text(notice, color = Forest, style = MaterialTheme.typography.bodyMedium)
-                }
-                if (state.fullAnalysis.isNotBlank()) {
-                    Text(
-                        InventoryStructure.workThroughFullTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = Forest
-                    )
-                    JournalCard {
-                        SpeakableText(state.fullAnalysis) {
-                            Text(
-                                state.fullAnalysis,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    JournalButton(InventoryStructure.dismissAnalysis, viewModel::dismissAnalysis)
-                }
 
                 FieldBlock(
                     "",
@@ -296,12 +252,50 @@ fun SituationEditScreen(
                     )
                 }
 
-                NoteView(
-                    NoteIds.INVENTORY_POINT_G,
-                    InventoryStructure.POINT_G_BODY,
-                    InventoryStructure.POINT_G,
-                    defaultMode = NoteMode.COLLAPSED
+                JournalButton(
+                    InventoryStructure.workThroughAssistant,
+                    onClick = { viewModel.requestWorkThrough() },
+                    filled = true
                 )
+                if (!state.isPro && !state.isAdmin) {
+                    JournalButton(JournalRu.proNeededTitle, onClick = onPro)
+                }
+                Text(
+                    InventoryStructure.workThroughBottomHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (state.aiLoading) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = Forest)
+                            Text(JournalRu.aiLoading, color = Forest, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                }
+                if (state.isAdmin && state.aiPrompt.isNotBlank()) {
+                    ru.na.step4.obidy.ui.components.AdminPromptBlock(state.aiPrompt)
+                }
+                state.aiNotice?.let { notice ->
+                    Text(notice, color = Forest, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (state.fullAnalysis.isNotBlank()) {
+                    Text(
+                        InventoryStructure.workThroughFullTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Forest
+                    )
+                    JournalCard {
+                        SpeakableText(state.fullAnalysis) {
+                            Text(
+                                state.fullAnalysis,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    JournalButton(InventoryStructure.dismissAnalysis, viewModel::dismissAnalysis)
+                }
             }
         }
     }

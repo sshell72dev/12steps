@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,6 +84,7 @@ class SituationEditViewModel(
 ) : ViewModel() {
     private val form = MutableStateFlow(SituationEditUiState(id = situationId, isPro = prefs.isPro, isAdmin = prefs.isAdmin))
     val uiState: StateFlow<SituationEditUiState> = form.asStateFlow()
+    private var autosaveJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -93,14 +96,35 @@ class SituationEditViewModel(
         }
     }
 
-    fun updateTitle(value: String) = form.update { it.copy(title = value) }
-    fun updateWhatHappened(value: String) = form.update { it.copy(whatHappened = value) }
-    fun updateIFelt(value: String) = form.update { it.copy(iFelt = value) }
-    fun toggleFeltWord(word: String) =
+    fun updateTitle(value: String) {
+        form.update { it.copy(title = value) }
+        scheduleAutosave()
+    }
+
+    fun updateWhatHappened(value: String) {
+        form.update { it.copy(whatHappened = value) }
+        scheduleAutosave()
+    }
+
+    fun updateIFelt(value: String) {
+        form.update { it.copy(iFelt = value) }
+        scheduleAutosave()
+    }
+
+    fun toggleFeltWord(word: String) {
         form.update { it.copy(iFelt = EmotionCatalog.toggleWord(it.iFelt, word)) }
-    fun updateIDid(value: String) = form.update { it.copy(iDid = value) }
-    fun updateAnswer(number: Int, value: String) =
+        scheduleAutosave()
+    }
+
+    fun updateIDid(value: String) {
+        form.update { it.copy(iDid = value) }
+        scheduleAutosave()
+    }
+
+    fun updateAnswer(number: Int, value: String) {
         form.update { it.copy(answers = it.answers + (number to value)) }
+        scheduleAutosave()
+    }
 
     fun requestWorkThrough() {
         val snap = form.value
@@ -129,6 +153,8 @@ class SituationEditViewModel(
         val filled = snap.filledKeys()
         val fullMode = empty.isEmpty()
         viewModelScope.launch {
+            autosaveJob?.cancel()
+            repository.saveSituation(snap.toSituation().trimmed())
             form.update {
                 it.copy(
                     aiLoading = true,
@@ -238,6 +264,7 @@ class SituationEditViewModel(
 
     fun saveThen(onSaved: (Long) -> Unit) {
         viewModelScope.launch {
+            autosaveJob?.cancel()
             val id = repository.saveSituation(form.value.toSituation().trimmed())
             val savedId = if (id > 0) id else form.value.id
             if (savedId != form.value.id) form.update { it.copy(id = savedId) }
@@ -249,9 +276,21 @@ class SituationEditViewModel(
 
     fun delete(onDeleted: () -> Unit) {
         viewModelScope.launch {
+            autosaveJob?.cancel()
             aiCache.clear(situationId)
             repository.getSituation(situationId)?.let { repository.deleteSituation(it) }
             onDeleted()
+        }
+    }
+
+    private fun scheduleAutosave() {
+        autosaveJob?.cancel()
+        autosaveJob = viewModelScope.launch {
+            delay(450)
+            val snap = form.value
+            if (!snap.loaded || snap.id <= 0L) return@launch
+            val id = repository.saveSituation(snap.toSituation().trimmed())
+            if (id > 0 && id != snap.id) form.update { it.copy(id = id) }
         }
     }
 

@@ -127,10 +127,18 @@ object InventoryStructure {
         questionsOf(from, to).joinToString("\n") { "• ${it.title}" }
 
     val workThrough: String get() = I18n.t("inventory.workThrough", "Проработка обиды")
+    val workThroughAssistant: String get() = I18n.t(
+        "inventory.workThroughAssistant",
+        "Проработать ситуацию с ИИ-ассистентом"
+    )
     val workThroughPro: String get() = I18n.t("inventory.workThroughPro", "Проработка обиды с ИИ")
     val workThroughHint: String get() = I18n.t(
         "inventory.workThroughHint",
         "ИИ положит черновики и слепые зоны в подсказки у полей (значок i). Если всё заполнено — даст полный разбор ситуации. Это не замена спонсора."
+    )
+    val workThroughBottomHint: String get() = I18n.t(
+        "inventory.workThroughBottomHint",
+        "Когда поля заполнены, ИИ-ассистент сделает полный разбор ситуации. Если что-то пусто — предложит черновики в подсказках у полей."
     )
     val workThroughNeedText: String get() = I18n.t(
         "inventory.workThroughNeedText",
