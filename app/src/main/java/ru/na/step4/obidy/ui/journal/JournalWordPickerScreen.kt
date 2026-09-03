@@ -284,8 +284,8 @@ private fun WordChip(
 }
 
 /**
- * Таблица чувств/мыслей: выбор слова → новая строка «Слово - » → голосовой ввод →
- * снова таблица на той же вкладке.
+ * Таблица чувств/мыслей: выбор слова → новая строка «Слово - » → голосовой ввод.
+ * После диктовки остаёмся в поле; вкладка таблицы запоминается до следующего открытия.
  */
 @Composable
 fun WordPickDictateHost(
@@ -300,6 +300,7 @@ fun WordPickDictateHost(
 ) {
     if (!visible) return
     val latestValue = androidx.compose.runtime.rememberUpdatedState(value)
+    val latestDismiss = androidx.compose.runtime.rememberUpdatedState(onDismiss)
     var page by remember(visible) { mutableStateOf(savedPage) }
     var showPicker by remember(visible) { mutableStateOf(true) }
     var pendingDictate by remember { mutableStateOf(false) }
@@ -316,11 +317,12 @@ fun WordPickDictateHost(
             }
             onValueChange(merged.trimEnd())
         }
-        showPicker = true
+        latestDismiss.value()
     }
 
     LaunchedEffect(pendingDictate) {
         if (!pendingDictate) return@LaunchedEffect
+        onSavePage(page)
         showPicker = false
         startDictation()
     }
