@@ -23,7 +23,7 @@ object JournalRu {
     val pickTitle: String get() = I18n.t("journal.pickTitle", "Выбор Шага")
     val pickHint: String get() = I18n.t(
         "journal.pickHint",
-        "Только навигация: шаг → глава → точка. В текущей главе сначала видна ваша точка; нажмите на главу, чтобы открыть все точки."
+        "Только навигация: шаг → глава → точка. Цифра рядом — записи в этом месте: нажмите, чтобы просмотреть. В текущей главе сначала видна ваша точка; нажмите на главу, чтобы открыть все точки."
     )
     val chaptersOf: String get() = I18n.t("journal.chaptersOf", "Главы")
     val pointsOf: String get() = I18n.t("journal.pointsOf", "Точки")
@@ -132,6 +132,20 @@ object JournalRu {
     val personalityUpdated: String get() = I18n.t("journal.personalityUpdated", "Портрет «Моя личность» обновлён")
     val remainingAi: String get() = I18n.t("journal.remainingAi", "Запросов ИИ сегодня: %1\$d из 3")
     val fromCache: String get() = I18n.t("journal.fromCache", "Ответ из кэша по этой точке.")
+    val fromCacheAnalyze: String get() = I18n.t(
+        "journal.fromCacheAnalyze",
+        "Сохранённый анализ ИИ по этой записи."
+    )
+    val aiAnalyzeCached: String get() = I18n.t("journal.aiAnalyzeCached", "Показать анализ ИИ")
+    val aiAnalyzePrevious: String get() = I18n.t(
+        "journal.aiAnalyzePrevious",
+        "Предыдущий анализ ИИ (запись менялась)"
+    )
+    val aiAnalyzeNew: String get() = I18n.t("journal.aiAnalyzeNew", "Новый анализ ИИ")
+    val pickEntriesTitle: String get() = I18n.t("journal.pickEntriesTitle", "Записи")
+    val pickEntryExpand: String get() = I18n.t("journal.pickEntryExpand", "Посмотреть полностью")
+    val pickEntryCollapse: String get() = I18n.t("journal.pickEntryCollapse", "Свернуть")
+    val pickEntryWork: String get() = I18n.t("journal.pickEntryWork", "Работа с записью")
     val emptyDraft: String get() = I18n.t("journal.emptyDraft", "Напишите текст записи.")
     val deleteEntry: String get() = I18n.t("journal.deleteEntry", "Удалить запись?")
     val deleteEntryBody: String get() = I18n.t("journal.deleteEntryBody", "Запись будет удалена с устройства без восстановления.")

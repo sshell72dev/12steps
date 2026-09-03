@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.na.step4.obidy.data.journal.CachedEntryAnalyze
 import ru.na.step4.obidy.data.journal.EmotionCatalog
 import ru.na.step4.obidy.data.journal.JournalAiClient
 import ru.na.step4.obidy.data.journal.JournalEntry
@@ -87,6 +88,10 @@ class JournalViewModel(
     private val prefs: JournalPrefs
 ) : ViewModel() {
     val catalog: TreeCatalog.Catalog = TreeCatalog.load(app)
+    val streakDays: StateFlow<Int> = (app as Step4App).journalStreak.days
+
+    fun streakLabel(days: Int = streakDays.value): String? =
+        (app as Step4App).journalStreak.label(days)
 
     private val _meta = MutableStateFlow(readMeta())
     val state: StateFlow<JournalState> = combine(store.entries, _meta, prefs.profile.snapshot) { entries, meta, profile ->
@@ -355,8 +360,12 @@ class JournalViewModel(
             val saved = if (snap.editingId != null) {
                 store.update(snap.editingId, text)
             } else {
+                val pointTitle = node.displayTitle()
                 store.add(node.id, text).also {
-                    (app as Step4App).spiritualRating.applyTask(SpiritualSource.JOURNAL)
+                    val app = app as Step4App
+                    app.spiritualRating.applyTask(SpiritualSource.JOURNAL)
+                    app.journalStreak.recordCompletion()
+                    launch { app.messengerChallenges.shareJournal(pointTitle) }
                 }
             }
             persistDraft("", null)
@@ -399,7 +408,10 @@ class JournalViewModel(
     }
 
     fun deleteEntry(id: String) {
-        viewModelScope.launch { store.delete(id) }
+        viewModelScope.launch {
+            store.delete(id)
+            (app as Step4App).journalAnalyzeCache.clear(id)
+        }
     }
 
     fun register(name: String, problems: Set<String>) {
@@ -583,7 +595,15 @@ class JournalViewModel(
         }
     }
 
-    fun requestAnalyze(entryId: String?) {
+    fun requestAnalyze(entryId: String?, forceRefresh: Boolean = false) {
+        if (!forceRefresh && entryId != null) {
+            val entry = store.byId(entryId)
+            val cached = entry?.let { analyzeCacheFresh(it) }
+            if (cached != null) {
+                _ai.value = AiUi.Ready(cached.text, null, fromCache = true)
+                return
+            }
+        }
         if (!prefs.canUseAi()) {
             _ai.value = AiUi.Error(JournalRu.aiLimit)
             return
@@ -640,6 +660,11 @@ class JournalViewModel(
                     if (prefs.profile.personalityCollectEnabled && !parsed.second.isNullOrBlank()) {
                         applyPortrait(parsed.second.orEmpty())
                     }
+                    if (entryId != null) {
+                        entries.firstOrNull()?.let {
+                            (app as Step4App).journalAnalyzeCache.save(it, visible)
+                        }
+                    }
                     AiUi.Ready(visible, parsed.second, fromCache = false, prompt = result.prompt)
                 }
                 is JournalAiClient.Result.Err -> AiUi.Error(result.message)
@@ -677,6 +702,45 @@ class JournalViewModel(
 
     fun countFor(nodeId: Int): Int =
         catalog.countInSubtree(nodeId, store.entries.value)
+
+    fun entriesForNode(nodeId: Int): List<JournalEntry> {
+        val ids = catalog.descendantIds(nodeId)
+        return store.entries.value
+            .filter { it.nodeId in ids }
+            .sortedByDescending { it.createdAt }
+    }
+
+    fun analyzeCacheFor(entryId: String): CachedEntryAnalyze? =
+        (app as Step4App).journalAnalyzeCache.get(entryId)
+
+    fun analyzeCacheFresh(entry: JournalEntry): CachedEntryAnalyze? {
+        val cached = analyzeCacheFor(entry.id) ?: return null
+        return if (cached.matches(entry)) cached else null
+    }
+
+    private var analyzeForceOnce = false
+
+    fun prepareAnalyzeNavigation(forceNew: Boolean) {
+        analyzeForceOnce = forceNew
+    }
+
+    fun consumeAnalyzeForce(): Boolean {
+        val value = analyzeForceOnce
+        analyzeForceOnce = false
+        return value
+    }
+
+    fun showCachedAnalyze(entryId: String): Boolean {
+        val cached = analyzeCacheFor(entryId) ?: return false
+        _ai.value = AiUi.Ready(cached.text, null, fromCache = true)
+        return true
+    }
+
+    /** Place + draft for editing without wiping the draft. */
+    fun editEntryFromPick(entry: JournalEntry) {
+        setCurrentPlace(entry.nodeId, clearDraft = false)
+        startEdit(entry)
+    }
 
     fun formatDate(millis: Long): String {
         val locale = ru.na.step4.obidy.data.i18n.I18n.locale()

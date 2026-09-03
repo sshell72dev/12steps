@@ -350,7 +350,10 @@ object SourceBootstrap {
         SourceCatalog.put("journal.versionOpen", "Версия и изменения")
         SourceCatalog.put("journal.pickEyebrow", "Навигация")
         SourceCatalog.put("journal.pickTitle", "Выбор Шага")
-        SourceCatalog.put("journal.pickHint", "Порядок как в Руководстве. Откройте шаг, затем главу, затем точку.")
+        SourceCatalog.put(
+            "journal.pickHint",
+            "Только навигация: шаг → глава → точка. Цифра рядом — записи в этом месте: нажмите, чтобы просмотреть. В текущей главе сначала видна ваша точка; нажмите на главу, чтобы открыть все точки."
+        )
         SourceCatalog.put("journal.chaptersOf", "Главы")
         SourceCatalog.put("journal.pointsOf", "Точки")
         SourceCatalog.put("journal.noDescription", "")
@@ -453,6 +456,14 @@ object SourceBootstrap {
         SourceCatalog.put("journal.personalityUpdated", "Портрет «Моя личность» обновлён")
         SourceCatalog.put("journal.remainingAi", "Запросов ИИ сегодня: %1\$d из 3")
         SourceCatalog.put("journal.fromCache", "Ответ из кэша по этой точке.")
+        SourceCatalog.put("journal.fromCacheAnalyze", "Сохранённый анализ ИИ по этой записи.")
+        SourceCatalog.put("journal.aiAnalyzeCached", "Показать анализ ИИ")
+        SourceCatalog.put("journal.aiAnalyzePrevious", "Предыдущий анализ ИИ (запись менялась)")
+        SourceCatalog.put("journal.aiAnalyzeNew", "Новый анализ ИИ")
+        SourceCatalog.put("journal.pickEntriesTitle", "Записи")
+        SourceCatalog.put("journal.pickEntryExpand", "Посмотреть полностью")
+        SourceCatalog.put("journal.pickEntryCollapse", "Свернуть")
+        SourceCatalog.put("journal.pickEntryWork", "Работа с записью")
         SourceCatalog.put("journal.emptyDraft", "Напишите текст записи.")
         SourceCatalog.put("journal.deleteEntry", "Удалить запись?")
         SourceCatalog.put("journal.deleteEntryBody", "Запись будет удалена с устройства без восстановления.")
@@ -834,6 +845,21 @@ object SourceBootstrap {
         SourceCatalog.put("messenger.joined", "Подключение выполнено.")
         SourceCatalog.put("messenger.send", "Отправить")
         SourceCatalog.put("messenger.owner", "создатель")
+        SourceCatalog.put("messenger.challenges", "Челленджи")
+        SourceCatalog.put("messenger.challengeSteps", "Челлендж шагов")
+        SourceCatalog.put("messenger.challengeAnalysis", "Челлендж самоанализов")
+        SourceCatalog.put(
+            "messenger.challengeStepsBody",
+            "После записи в точку дневника в группу уходит ударный режим, название точки и рейтинг духовной деятельности."
+        )
+        SourceCatalog.put(
+            "messenger.challengeAnalysisBody",
+            "После прохождения самоанализа в группу уходит ударный режим, название самоанализа и рейтинг духовной деятельности."
+        )
+        SourceCatalog.put("messenger.challengeJoin", "Подключиться")
+        SourceCatalog.put("messenger.challengePoint", "Точка")
+        SourceCatalog.put("messenger.challengeAnalysisLabel", "Самоанализ")
+        SourceCatalog.put("messenger.challengeMembers", "участников")
         SourceCatalog.put("voicehands.title", "Голосовой режим ожидания")
         SourceCatalog.put("voicehands.experiment", "Эксперимент")
         SourceCatalog.put(

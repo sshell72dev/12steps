@@ -517,6 +517,13 @@ fun Step4Nav() {
                         openInventoryFromJournal(navController, app, repository, scope) {
                             vm.selectResentmentPlace()
                         }
+                    },
+                    onEditEntry = {
+                        navController.popBackStack(Routes.JOURNAL, inclusive = false)
+                    },
+                    onAiAnalyze = { entryId, forceNew ->
+                        vm.prepareAnalyzeNavigation(forceNew)
+                        navController.navigate(Routes.journalAnalyzeEntry(entryId))
                     }
                 )
             }

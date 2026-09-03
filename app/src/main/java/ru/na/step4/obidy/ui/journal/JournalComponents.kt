@@ -124,13 +124,24 @@ fun DescriptionBlock(text: String, initiallyExpanded: Boolean = false) {
 }
 
 @Composable
-fun CountPrefix(count: Int) {
+fun CountPrefix(count: Int, onClick: (() -> Unit)? = null) {
     if (count <= 0) return
     Text(
         "($count)",
         style = MaterialTheme.typography.labelMedium,
         color = Amber,
-        modifier = Modifier.padding(end = 6.dp)
+        modifier = Modifier
+            .padding(end = 6.dp)
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onClick)
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                } else {
+                    Modifier
+                }
+            )
     )
 }
 
@@ -140,6 +151,7 @@ fun AccordionHeader(
     count: Int,
     expanded: Boolean,
     onClick: () -> Unit,
+    onCountClick: (() -> Unit)? = null,
     subtitle: String? = null
 ) {
     Row(
@@ -151,7 +163,7 @@ fun AccordionHeader(
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        CountPrefix(count)
+        CountPrefix(count, onClick = if (count > 0) onCountClick else null)
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = Forest)
             if (!subtitle.isNullOrBlank()) {
@@ -176,6 +188,7 @@ fun LeafRow(
     title: String,
     count: Int,
     onClick: () -> Unit,
+    onCountClick: (() -> Unit)? = null,
     highlighted: Boolean = false
 ) {
     Row(
@@ -190,7 +203,7 @@ fun LeafRow(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        CountPrefix(count)
+        CountPrefix(count, onClick = if (count > 0) onCountClick else null)
         Text(
             "•",
             style = MaterialTheme.typography.titleLarge,

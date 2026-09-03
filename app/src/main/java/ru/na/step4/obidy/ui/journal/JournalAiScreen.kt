@@ -60,7 +60,13 @@ fun JournalAiScreen(
         if (mode == JournalAiMode.HELP) {
             if (viewModel.prepareAiHelp()) viewModel.requestHelp(entryId)
         } else {
-            if (viewModel.prepareAiHelp()) viewModel.requestAnalyze(entryId)
+            val forceNew = viewModel.consumeAnalyzeForce()
+            if (entryId != null && !forceNew && viewModel.showCachedAnalyze(entryId)) {
+                return@LaunchedEffect
+            }
+            if (viewModel.prepareAiHelp()) {
+                viewModel.requestAnalyze(entryId, forceRefresh = true)
+            }
         }
     }
 
@@ -167,7 +173,18 @@ fun JournalAiScreen(
                             )
                         }
                         if (ui.fromCache) {
-                            Text(JournalRu.fromCache, color = Amber)
+                            Text(
+                                if (mode == JournalAiMode.ANALYZE) JournalRu.fromCacheAnalyze
+                                else JournalRu.fromCache,
+                                color = Amber
+                            )
+                            if (mode == JournalAiMode.ANALYZE) {
+                                JournalButton(JournalRu.aiAnalyzeNew, {
+                                    if (viewModel.prepareAiHelp()) {
+                                        viewModel.requestAnalyze(entryId, forceRefresh = true)
+                                    }
+                                })
+                            }
                         }
                         SpeakableText(ui.text) {
                             Text(ui.text, style = MaterialTheme.typography.bodyLarge, color = Forest)
@@ -208,6 +225,6 @@ private fun continueAi(viewModel: JournalViewModel, mode: JournalAiMode, entryId
     if (mode == JournalAiMode.HELP) {
         if (viewModel.prepareAiHelp()) viewModel.requestHelp(entryId)
     } else {
-        viewModel.requestAnalyze(entryId)
+        if (viewModel.prepareAiHelp()) viewModel.requestAnalyze(entryId, forceRefresh = true)
     }
 }

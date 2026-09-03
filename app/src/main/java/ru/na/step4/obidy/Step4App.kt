@@ -14,8 +14,10 @@ import ru.na.step4.obidy.data.analysis.AnalysisSettings
 import ru.na.step4.obidy.data.analysis.AnalysisStreakStore
 import ru.na.step4.obidy.data.InventoryProgressStore
 import ru.na.step4.obidy.data.InventoryAiCache
+import ru.na.step4.obidy.data.journal.JournalAnalyzeCache
 import ru.na.step4.obidy.data.journal.JournalPrefs
 import ru.na.step4.obidy.data.journal.JournalStore
+import ru.na.step4.obidy.data.journal.JournalStreakStore
 import ru.na.step4.obidy.data.life.LifeBoardStore
 import ru.na.step4.obidy.data.profile.ProfileStore
 import ru.na.step4.obidy.data.psych.PsychReminderWorker
@@ -23,6 +25,7 @@ import ru.na.step4.obidy.data.psych.PsychRepository
 import ru.na.step4.obidy.data.psych.PsychSettings
 import ru.na.step4.obidy.data.spiritual.SpiritualRatingStore
 import ru.na.step4.obidy.data.messenger.MessengerRepository
+import ru.na.step4.obidy.data.messenger.MessengerChallengeShare
 import ru.na.step4.obidy.data.support.SupportRepository
 import ru.na.step4.obidy.voicehands.VoiceHandsSettings
 import ru.na.steps12.voice.VoicePlugin
@@ -51,7 +54,13 @@ class Step4App : Application() {
     lateinit var analysisStreak: AnalysisStreakStore
         private set
 
+    lateinit var journalStreak: JournalStreakStore
+        private set
+
     lateinit var journalStore: JournalStore
+        private set
+
+    lateinit var journalAnalyzeCache: JournalAnalyzeCache
         private set
 
     lateinit var profileStore: ProfileStore
@@ -90,6 +99,9 @@ class Step4App : Application() {
     lateinit var messengerRepository: MessengerRepository
         private set
 
+    lateinit var messengerChallenges: MessengerChallengeShare
+        private set
+
     lateinit var voiceHandsSettings: VoiceHandsSettings
         private set
 
@@ -108,7 +120,9 @@ class Step4App : Application() {
         inventoryProgress = InventoryProgressStore(this)
         inventoryAiCache = InventoryAiCache(this)
         analysisStreak = AnalysisStreakStore(this)
+        journalStreak = JournalStreakStore(this)
         journalStore = JournalStore(this)
+        journalAnalyzeCache = JournalAnalyzeCache(this)
         profileStore = ProfileStore(this)
         journalPrefs = JournalPrefs(this, profileStore)
         lifeBoard = LifeBoardStore(this)
@@ -122,6 +136,12 @@ class Step4App : Application() {
         psychSettings.expireProIfNeeded()
         voicePlugin = VoicePlugin(this)
         messengerRepository = MessengerRepository(this, profileStore)
+        messengerChallenges = MessengerChallengeShare(
+            messengerRepository,
+            journalStreak,
+            analysisStreak,
+            spiritualRating
+        )
         voiceHandsSettings = VoiceHandsSettings(this)
 
         ru.na.step4.obidy.data.i18n.SourceBootstrap.registerAll()

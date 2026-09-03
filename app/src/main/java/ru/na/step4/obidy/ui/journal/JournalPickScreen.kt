@@ -1,18 +1,31 @@
 package ru.na.step4.obidy.ui.journal
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -21,11 +34,18 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import ru.na.step4.obidy.Ru
+import ru.na.step4.obidy.data.journal.JournalEntry
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.journal.NodeType
 import ru.na.step4.obidy.data.journal.TreeNode
@@ -37,6 +57,7 @@ import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.step4.obidy.ui.theme.SandDeep
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +65,9 @@ fun JournalPickScreen(
     viewModel: JournalViewModel,
     onBack: () -> Unit,
     onSelected: () -> Unit,
-    onResentments: () -> Unit
+    onResentments: () -> Unit,
+    onEditEntry: () -> Unit,
+    onAiAnalyze: (entryId: String, forceNew: Boolean) -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val expandedStep by viewModel.expandedStep.collectAsStateWithLifecycle()
@@ -54,66 +77,272 @@ fun JournalPickScreen(
     val steps = viewModel.catalog.steps
     val path = state.path
     val currentId = path?.current?.id
+    var previewNodeId by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.syncPickExpansion()
     }
 
-    Scaffold(
-        containerColor = Sand,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(JournalRu.pickEyebrow, style = MaterialTheme.typography.labelMedium, color = Amber)
-                        Text(JournalRu.pickTitle, style = MaterialTheme.typography.headlineMedium, color = Forest)
+    BackHandler(enabled = previewNodeId != null) {
+        previewNodeId = null
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = Sand,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(JournalRu.pickEyebrow, style = MaterialTheme.typography.labelMedium, color = Amber)
+                            Text(JournalRu.pickTitle, style = MaterialTheme.typography.headlineMedium, color = Forest)
+                        }
+                    },
+                    navigationIcon = { AppNavIcon(onBack = onBack) },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Sand.copy(alpha = 0.92f))
+                )
+            }
+        ) { padding ->
+            Box(Modifier.imeScaffoldContent(padding)) {
+                AtmosphereBackground(Modifier.fillMaxSize())
+                LazyColumn(
+                    contentPadding = PaddingValues(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        NoteView(NoteIds.JOURNAL_PICK_HINT, JournalRu.pickHint, JournalRu.pickTitle)
+                        if (path != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(path.line(), style = MaterialTheme.typography.bodyMedium, color = Forest)
+                        }
+                        if (path?.point != null) {
+                            Spacer(Modifier.height(10.dp))
+                            JournalButton(JournalRu.returnToCurrentPoint, onBack, filled = true)
+                        }
+                        Spacer(Modifier.height(6.dp))
                     }
+                    items(steps, key = { it.id }) { step ->
+                        StepAccordion(
+                            step = step,
+                            expanded = expandedStep == step.id,
+                            currentId = currentId,
+                            count = viewModel.countFor(step.id),
+                            chapterCount = { viewModel.countFor(it) },
+                            onToggleStep = { viewModel.togglePickStep(step.id) },
+                            onToggleChapter = viewModel::togglePickChapter,
+                            isChapterExpanded = { chapterId ->
+                                expandedStep == step.id && (pickAllChapters || expandedChapter == chapterId)
+                            },
+                            visiblePoints = { chapter ->
+                                chapterShowsAllPoints
+                                viewModel.visiblePickPoints(chapter)
+                            },
+                            onSelect = { viewModel.selectPickNode(it, onSelected) },
+                            onCountClick = { nodeId -> previewNodeId = nodeId },
+                            onResentments = onResentments,
+                            isResentment = { viewModel.catalog.isResentmentChapter(it) }
+                        )
+                    }
+                }
+            }
+        }
+
+        previewNodeId?.let { nodeId ->
+            val node = viewModel.catalog.node(nodeId)
+            val entries = viewModel.entriesForNode(nodeId)
+            PickEntriesPanel(
+                title = node?.displayTitle().orEmpty().ifBlank { JournalRu.myEntries },
+                entries = entries,
+                viewModel = viewModel,
+                onClose = { previewNodeId = null },
+                onEdit = { entry ->
+                    viewModel.editEntryFromPick(entry)
+                    previewNodeId = null
+                    onEditEntry()
                 },
-                navigationIcon = { AppNavIcon(onBack = onBack) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Sand.copy(alpha = 0.92f))
+                onAiAnalyze = { entryId, forceNew ->
+                    previewNodeId = null
+                    onAiAnalyze(entryId, forceNew)
+                }
             )
         }
-    ) { padding ->
-        Box(Modifier.imeScaffoldContent(padding)) {
-            AtmosphereBackground(Modifier.fillMaxSize())
-            LazyColumn(
-                contentPadding = PaddingValues(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+    }
+}
+
+@Composable
+private fun PickEntriesPanel(
+    title: String,
+    entries: List<JournalEntry>,
+    viewModel: JournalViewModel,
+    onClose: () -> Unit,
+    onEdit: (JournalEntry) -> Unit,
+    onAiAnalyze: (entryId: String, forceNew: Boolean) -> Unit
+) {
+    var expandedId by remember { mutableStateOf<String?>(null) }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Sand.copy(alpha = 0.96f))
+    ) {
+        AtmosphereBackground(Modifier.fillMaxSize())
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                item {
-                    NoteView(NoteIds.JOURNAL_PICK_HINT, JournalRu.pickHint, JournalRu.pickTitle)
-                    if (path != null) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(path.line(), style = MaterialTheme.typography.bodyMedium, color = Forest)
-                    }
-                    if (path?.point != null) {
-                        Spacer(Modifier.height(10.dp))
-                        JournalButton(JournalRu.returnToCurrentPoint, onBack, filled = true)
-                    }
-                    Spacer(Modifier.height(6.dp))
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Text(JournalRu.pickEntriesTitle, style = MaterialTheme.typography.labelMedium, color = Amber)
+                    Text(title, style = MaterialTheme.typography.titleLarge, color = Forest, maxLines = 2)
                 }
-                items(steps, key = { it.id }) { step ->
-                    StepAccordion(
-                        step = step,
-                        expanded = expandedStep == step.id,
-                        currentId = currentId,
-                        count = viewModel.countFor(step.id),
-                        chapterCount = { viewModel.countFor(it) },
-                        onToggleStep = { viewModel.togglePickStep(step.id) },
-                        onToggleChapter = viewModel::togglePickChapter,
-                        isChapterExpanded = { chapterId ->
-                            expandedStep == step.id && (pickAllChapters || expandedChapter == chapterId)
-                        },
-                        visiblePoints = { chapter ->
-                            chapterShowsAllPoints
-                            viewModel.visiblePickPoints(chapter)
-                        },
-                        onSelect = { viewModel.selectPickNode(it, onSelected) },
-                        onResentments = onResentments,
-                        isResentment = { viewModel.catalog.isResentmentChapter(it) }
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Outlined.Close, contentDescription = Ru.back, tint = Forest)
+                }
+            }
+            if (entries.isEmpty()) {
+                Text(
+                    JournalRu.noEntriesHere,
+                    color = Forest,
+                    modifier = Modifier.padding(20.dp)
+                )
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(entries, key = { it.id }) { entry ->
+                        PickEntryCard(
+                            entry = entry,
+                            pathLine = viewModel.catalog.pathOf(entry.nodeId)?.line().orEmpty(),
+                            date = viewModel.formatDate(entry.createdAt),
+                            expanded = expandedId == entry.id,
+                            hasFreshAnalyze = viewModel.analyzeCacheFresh(entry) != null,
+                            hasStaleAnalyze = viewModel.analyzeCacheFor(entry.id)
+                                ?.let { !it.matches(entry) } == true,
+                            onToggle = {
+                                expandedId = if (expandedId == entry.id) null else entry.id
+                            },
+                            onEdit = { onEdit(entry) },
+                            onAiCached = { onAiAnalyze(entry.id, false) },
+                            onAiNew = { onAiAnalyze(entry.id, true) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickEntryCard(
+    entry: JournalEntry,
+    pathLine: String,
+    date: String,
+    expanded: Boolean,
+    hasFreshAnalyze: Boolean,
+    hasStaleAnalyze: Boolean,
+    onToggle: () -> Unit,
+    onEdit: () -> Unit,
+    onAiCached: () -> Unit,
+    onAiNew: () -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SandDeep.copy(alpha = 0.72f))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onToggle)
+            ) {
+                Text(date, style = MaterialTheme.typography.labelMedium, color = Amber)
+                if (pathLine.isNotBlank()) {
+                    Text(
+                        pathLine,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Outlined.Build, contentDescription = JournalRu.pickEntryWork, tint = Forest)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(JournalRu.edit) },
+                        onClick = {
+                            menuOpen = false
+                            onEdit()
+                        }
+                    )
+                    if (hasFreshAnalyze) {
+                        DropdownMenuItem(
+                            text = { Text(JournalRu.aiAnalyzeCached) },
+                            onClick = {
+                                menuOpen = false
+                                onAiCached()
+                            }
+                        )
+                    }
+                    if (hasStaleAnalyze) {
+                        DropdownMenuItem(
+                            text = { Text(JournalRu.aiAnalyzePrevious) },
+                            onClick = {
+                                menuOpen = false
+                                onAiCached()
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (hasFreshAnalyze || hasStaleAnalyze) JournalRu.aiAnalyzeNew
+                                else JournalRu.aiAnalyze
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onAiNew()
+                        }
+                    )
+                }
+            }
+        }
+        if (expanded) {
+            JournalEntryBody(entry.text)
+            Text(
+                JournalRu.pickEntryCollapse,
+                style = MaterialTheme.typography.labelMedium,
+                color = Amber,
+                modifier = Modifier.clickable(onClick = onToggle)
+            )
+        } else {
+            JournalEntryBody(
+                entry.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 4
+            )
+            Text(
+                JournalRu.pickEntryExpand,
+                style = MaterialTheme.typography.labelMedium,
+                color = Amber,
+                modifier = Modifier.clickable(onClick = onToggle)
+            )
         }
     }
 }
@@ -130,6 +359,7 @@ private fun StepAccordion(
     isChapterExpanded: (Int) -> Boolean,
     visiblePoints: (TreeNode) -> List<TreeNode>,
     onSelect: (Int) -> Unit,
+    onCountClick: (Int) -> Unit,
     onResentments: () -> Unit,
     isResentment: (TreeNode) -> Boolean
 ) {
@@ -138,7 +368,8 @@ private fun StepAccordion(
             title = step.displayTitle(),
             count = count,
             expanded = expanded,
-            onClick = onToggleStep
+            onClick = onToggleStep,
+            onCountClick = { onCountClick(step.id) }
         )
         AnimatedChildren(expanded && step.hasChildren) {
             step.children.forEach { chapter ->
@@ -151,6 +382,7 @@ private fun StepAccordion(
                     onToggle = { onToggleChapter(chapter.id) },
                     visiblePoints = visiblePoints(chapter),
                     onSelect = onSelect,
+                    onCountClick = onCountClick,
                     showResentments = isResentment(chapter),
                     onResentments = onResentments
                 )
@@ -169,6 +401,7 @@ private fun ChapterAccordion(
     onToggle: () -> Unit,
     visiblePoints: List<TreeNode>,
     onSelect: (Int) -> Unit,
+    onCountClick: (Int) -> Unit,
     showResentments: Boolean,
     onResentments: () -> Unit
 ) {
@@ -177,7 +410,8 @@ private fun ChapterAccordion(
             title = chapter.name,
             count = count,
             expanded = expanded,
-            onClick = onToggle
+            onClick = onToggle,
+            onCountClick = { onCountClick(chapter.id) }
         )
         AnimatedChildren(expanded && (chapter.hasChildren || showResentments)) {
             if (showResentments) {
@@ -188,7 +422,8 @@ private fun ChapterAccordion(
                     title = point.name,
                     count = pointCount(point.id),
                     highlighted = point.id == currentId,
-                    onClick = { onSelect(point.id) }
+                    onClick = { onSelect(point.id) },
+                    onCountClick = { onCountClick(point.id) }
                 )
             }
         }
