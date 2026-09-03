@@ -108,11 +108,11 @@ fun DescriptionBlock(text: String, initiallyExpanded: Boolean = false) {
     val shown = if (expanded) text else text.take(360).trimEnd() + "…"
     Column {
         SpeakableText(if (expanded) text else shown) {
-            Text(
-                shown,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Text(
+            shown,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         }
         if (text.length >= 420) {
             TextButton(onClick = { expanded = !expanded }) {
@@ -259,9 +259,9 @@ fun JournalEntryComposer(
                         .onFocusEvent {
                             if (it.isFocused) scope.launch { bringIntoView.bringIntoView() }
                         },
-                    minLines = 5,
-                    placeholder = { Text(JournalRu.writeHint) },
-                    shape = RoundedCornerShape(12.dp),
+        minLines = 5,
+        placeholder = { Text(JournalRu.writeHint) },
+        shape = RoundedCornerShape(12.dp),
                     colors = composerFieldColors()
                 )
             }
@@ -484,12 +484,12 @@ private fun AddFieldDialog(
 
 @Composable
 private fun composerFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = Forest,
-    unfocusedBorderColor = Moss.copy(alpha = 0.35f),
-    focusedContainerColor = Sand.copy(alpha = 0.7f),
-    unfocusedContainerColor = Sand.copy(alpha = 0.45f),
-    cursorColor = Forest
-)
+            focusedBorderColor = Forest,
+            unfocusedBorderColor = Moss.copy(alpha = 0.35f),
+            focusedContainerColor = Sand.copy(alpha = 0.7f),
+            unfocusedContainerColor = Sand.copy(alpha = 0.45f),
+            cursorColor = Forest
+        )
 
 @Composable
 fun JournalEntryBody(

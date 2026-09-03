@@ -64,7 +64,7 @@ Paywall → `POST /api/v1/premium/create-payment` → браузер ЮKassa (С
 ### Деплой сервера
 
 ```powershell
-python server/deploy_ftp.py
+python server/deploy_ftp.py 
 ```
 
 Перед загрузкой на FTP автоматически повышается версия релиза (см. раздел **Версии и история изменений** ниже).

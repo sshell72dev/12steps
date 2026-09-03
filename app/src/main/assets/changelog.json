@@ -1,6 +1,15 @@
 {
   "releases": [
     {
+      "version": "1.0.27",
+      "versionCode": 28,
+      "date": "2026-09-03",
+      "items": [
+        "В .env.example добавлены переменные публикации APK на Google Drive",
+        "Мелкие правки форматирования JournalComponents"
+      ]
+    },
+    {
       "version": "1.0.26",
       "versionCode": 27,
       "date": "2026-09-03",
