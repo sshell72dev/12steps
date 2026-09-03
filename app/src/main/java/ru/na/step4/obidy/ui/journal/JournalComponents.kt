@@ -51,7 +51,6 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.na.step4.obidy.Ru
-import ru.na.step4.obidy.data.journal.EmotionCatalog
 import ru.na.step4.obidy.data.journal.JournalFieldKind
 import ru.na.step4.obidy.data.journal.JournalFieldSpec
 import ru.na.step4.obidy.data.journal.JournalRu
@@ -229,6 +228,7 @@ fun JournalEntryComposer(
     val bringIntoView = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf<Pair<String, JournalFieldKind>?>(null) }
+    var pickPages by remember { mutableStateOf(mapOf<String, Int>()) }
     Box(Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -281,19 +281,19 @@ fun JournalEntryComposer(
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
                 Box(Modifier.fillMaxSize()) {
-                    WordPickerScreen(
+                    WordPickDictateHost(
+                        visible = true,
                         title = when (kind) {
                             JournalFieldKind.FEELINGS -> JournalRu.pickFeelings
                             JournalFieldKind.THOUGHTS -> JournalRu.pickThoughts
                             JournalFieldKind.TEXT -> ""
                         },
                         kind = kind,
-                        selected = EmotionCatalog.selectedWords(
-                            state.fieldValues[fieldId].orEmpty(),
-                            kind
-                        ),
-                        onToggle = { viewModel.toggleFieldWord(fieldId, it) },
-                        onBack = { picking = null }
+                        value = state.fieldValues[fieldId].orEmpty(),
+                        onValueChange = { viewModel.setFieldValue(fieldId, it) },
+                        onDismiss = { picking = null },
+                        savedPage = pickPages[fieldId] ?: 0,
+                        onSavePage = { page -> pickPages = pickPages + (fieldId to page) }
                     )
                 }
             }

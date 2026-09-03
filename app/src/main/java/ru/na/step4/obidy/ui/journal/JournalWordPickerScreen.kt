@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +54,7 @@ import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Moss
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.steps12.voice.ui.rememberDictationStarter
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -69,12 +71,16 @@ fun JournalWordPickerScreen(
         JournalFieldKind.THOUGHTS -> JournalRu.pickThoughts
         JournalFieldKind.TEXT -> field?.title.orEmpty()
     }
-    WordPickerScreen(
+    var page by remember { mutableStateOf(0) }
+    WordPickDictateHost(
+        visible = true,
         title = title,
         kind = kind,
-        selected = EmotionCatalog.selectedWords(state.fieldValues[fieldId].orEmpty(), kind),
-        onToggle = { viewModel.toggleFieldWord(fieldId, it) },
-        onBack = onBack
+        value = state.fieldValues[fieldId].orEmpty(),
+        onValueChange = { viewModel.setFieldValue(fieldId, it) },
+        onDismiss = onBack,
+        savedPage = page,
+        onSavePage = { page = it }
     )
 }
 
@@ -85,14 +91,30 @@ fun WordPickerScreen(
     kind: JournalFieldKind,
     selected: List<String>,
     onToggle: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    initialPage: Int = 0,
+    onPageChange: (Int) -> Unit = {}
 ) {
     val columns = EmotionCatalog.columns(kind)
     var query by remember { mutableStateOf("") }
-    val pagerState = rememberPagerState(pageCount = { columns.size })
+    val startPage = initialPage.coerceIn(0, (columns.size - 1).coerceAtLeast(0))
+    val pagerState = rememberPagerState(
+        initialPage = startPage,
+        pageCount = { columns.size }
+    )
     val scope = rememberCoroutineScope()
     val q = query.trim()
     val searching = q.isNotBlank()
+
+    LaunchedEffect(pagerState.currentPage) {
+        onPageChange(pagerState.currentPage)
+    }
+    LaunchedEffect(initialPage, columns.size) {
+        val target = initialPage.coerceIn(0, (columns.size - 1).coerceAtLeast(0))
+        if (pagerState.currentPage != target && columns.isNotEmpty()) {
+            pagerState.scrollToPage(target)
+        }
+    }
 
     Scaffold(
         containerColor = Sand,
@@ -259,4 +281,70 @@ private fun WordChip(
             labelColor = Forest
         )
     )
+}
+
+/**
+ * Таблица чувств/мыслей: выбор слова → новая строка «Слово - » → голосовой ввод →
+ * снова таблица на той же вкладке.
+ */
+@Composable
+fun WordPickDictateHost(
+    visible: Boolean,
+    title: String,
+    kind: JournalFieldKind,
+    value: String,
+    onValueChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    savedPage: Int = 0,
+    onSavePage: (Int) -> Unit = {}
+) {
+    if (!visible) return
+    val latestValue = androidx.compose.runtime.rememberUpdatedState(value)
+    var page by remember(visible) { mutableStateOf(savedPage) }
+    var showPicker by remember(visible) { mutableStateOf(true) }
+    var pendingDictate by remember { mutableStateOf(false) }
+
+    val startDictation = rememberDictationStarter { spoken ->
+        pendingDictate = false
+        if (spoken.isNotBlank()) {
+            val base = latestValue.value
+            val merged = when {
+                base.endsWith(" - ") -> base + spoken
+                base.endsWith(" -") -> "$base $spoken"
+                base.isBlank() -> spoken
+                else -> "$base $spoken"
+            }
+            onValueChange(merged.trimEnd())
+        }
+        showPicker = true
+    }
+
+    LaunchedEffect(pendingDictate) {
+        if (!pendingDictate) return@LaunchedEffect
+        showPicker = false
+        startDictation()
+    }
+
+    if (showPicker) {
+        WordPickerScreen(
+            title = title,
+            kind = kind,
+            selected = EmotionCatalog.selectedWords(value, kind),
+            initialPage = page,
+            onPageChange = {
+                page = it
+                onSavePage(it)
+            },
+            onToggle = { word ->
+                val (next, dictate) = EmotionCatalog.pickWordForDictate(
+                    latestValue.value,
+                    word,
+                    kind
+                )
+                onValueChange(next)
+                if (dictate) pendingDictate = true
+            },
+            onBack = onDismiss
+        )
+    }
 }

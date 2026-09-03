@@ -44,7 +44,6 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.InventoryStructure
 import ru.na.step4.obidy.data.QuestionFocus
 import ru.na.step4.obidy.data.Situation
-import ru.na.step4.obidy.data.journal.EmotionCatalog
 import ru.na.step4.obidy.data.journal.JournalFieldKind
 import ru.na.step4.obidy.data.journal.JournalPrefs
 import ru.na.step4.obidy.data.journal.JournalRu
@@ -58,12 +57,17 @@ import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.components.navigationBarsPaddingIfImeHidden
 import ru.na.step4.obidy.ui.journal.JournalButton
 import ru.na.step4.obidy.ui.journal.JournalCard
-import ru.na.step4.obidy.ui.journal.WordPickerScreen
+import ru.na.step4.obidy.ui.journal.WordPickDictateHost
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Danger
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.steps12.voice.ui.SpeakableText
+
+private sealed class SituationWordPick {
+    data object Felt : SituationWordPick()
+    data class Answer(val number: Int) : SituationWordPick()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,9 +80,10 @@ fun SituationEditScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showDelete by remember { mutableStateOf(false) }
-    var pickingFeelings by remember { mutableStateOf(false) }
+    var wordPick by remember { mutableStateOf<SituationWordPick?>(null) }
+    var feltPage by remember { mutableStateOf(0) }
+    var answerPages by remember { mutableStateOf(mapOf<Int, Int>()) }
     val scrollState = rememberScrollState()
-    val feltSelected = remember(state.iFelt) { EmotionCatalog.selectedWords(state.iFelt) }
 
     fun openAssist(focusKey: String) {
         viewModel.saveThen { situationId ->
@@ -86,7 +91,7 @@ fun SituationEditScreen(
         }
     }
 
-    BackHandler(enabled = pickingFeelings) { pickingFeelings = false }
+    BackHandler(enabled = wordPick != null) { wordPick = null }
 
     Box(Modifier.fillMaxSize()) {
     Scaffold(
@@ -231,7 +236,7 @@ fun SituationEditScreen(
                     state.iFelt,
                     viewModel::updateIFelt,
                     onAssistantClick = { openAssist(QuestionFocus.FELT) },
-                    onPickFromTable = { pickingFeelings = true },
+                    onPickFromTable = { wordPick = SituationWordPick.Felt },
                     pickFromTableCd = InventoryStructure.feelingsTable,
                     noteId = NoteIds.INVENTORY_FELT,
                     aiInsight = state.insightFor(QuestionFocus.FELT),
@@ -271,6 +276,7 @@ fun SituationEditScreen(
                 )
                 InventoryStructure.questionsOf(5, 13).forEach { question ->
                     val key = QuestionFocus.q(question.number)
+                    val feelingsQ = question.number == 13
                     FieldBlock(
                         "",
                         question.title,
@@ -278,6 +284,12 @@ fun SituationEditScreen(
                         state.answers[question.number].orEmpty(),
                         { viewModel.updateAnswer(question.number, it) },
                         onAssistantClick = { openAssist(key) },
+                        onPickFromTable = if (feelingsQ) {
+                            { wordPick = SituationWordPick.Answer(question.number) }
+                        } else {
+                            null
+                        },
+                        pickFromTableCd = if (feelingsQ) InventoryStructure.feelingsTable else null,
                         noteId = NoteIds.inventoryQuestion(question.number),
                         aiInsight = state.insightFor(key),
                         onInsertAi = { viewModel.applyInsight(key) }
@@ -294,14 +306,28 @@ fun SituationEditScreen(
         }
     }
 
-    if (pickingFeelings) {
-        WordPickerScreen(
+    when (val pick = wordPick) {
+        SituationWordPick.Felt -> WordPickDictateHost(
+            visible = true,
             title = InventoryStructure.feelingsTable,
             kind = JournalFieldKind.FEELINGS,
-            selected = feltSelected,
-            onToggle = viewModel::toggleFeltWord,
-            onBack = { pickingFeelings = false }
+            value = state.iFelt,
+            onValueChange = viewModel::updateIFelt,
+            onDismiss = { wordPick = null },
+            savedPage = feltPage,
+            onSavePage = { feltPage = it }
         )
+        is SituationWordPick.Answer -> WordPickDictateHost(
+            visible = true,
+            title = InventoryStructure.feelingsTable,
+            kind = JournalFieldKind.FEELINGS,
+            value = state.answers[pick.number].orEmpty(),
+            onValueChange = { viewModel.updateAnswer(pick.number, it) },
+            onDismiss = { wordPick = null },
+            savedPage = answerPages[pick.number] ?: 0,
+            onSavePage = { page -> answerPages = answerPages + (pick.number to page) }
+        )
+        null -> Unit
     }
 
     if (showDelete) {

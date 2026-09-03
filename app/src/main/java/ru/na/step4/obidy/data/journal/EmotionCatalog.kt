@@ -136,19 +136,53 @@ object EmotionCatalog {
     fun selectedWords(text: String, kind: JournalFieldKind = JournalFieldKind.FEELINGS): List<String> =
         columns(kind).flatMap { it.words }.filter { containsWord(text, it, kind) }
 
-    fun toggleWord(text: String, word: String, kind: JournalFieldKind = JournalFieldKind.FEELINGS): String {
+    /**
+     * Appends "Word - " on a new line (capitalized) for dictation after the dash.
+     * If the word is already present, removes its line / occurrence instead.
+     * @return Pair(newText, startDictation)
+     */
+    fun pickWordForDictate(
+        text: String,
+        word: String,
+        kind: JournalFieldKind = JournalFieldKind.FEELINGS
+    ): Pair<String, Boolean> {
         val trimmedWord = word.trim()
-        if (trimmedWord.isBlank()) return text
+        if (trimmedWord.isBlank()) return text to false
         if (containsWord(text, trimmedWord, kind)) {
-            return text.replace(wordBoundary(trimmedWord), "")
+            return removeWordOccurrence(text, trimmedWord, kind) to false
+        }
+        return appendWordLine(text, trimmedWord) to true
+    }
+
+    fun appendWordLine(text: String, word: String): String {
+        val label = word.trim().replaceFirstChar { ch ->
+            if (ch.isLowerCase()) ch.titlecase(java.util.Locale.getDefault()) else ch.toString()
+        }
+        if (label.isEmpty()) return text
+        val line = "$label - "
+        val trimmed = text.trimEnd()
+        return if (trimmed.isEmpty()) line else "$trimmed\n$line"
+    }
+
+    fun toggleWord(text: String, word: String, kind: JournalFieldKind = JournalFieldKind.FEELINGS): String =
+        pickWordForDictate(text, word, kind).first
+
+    private fun removeWordOccurrence(
+        text: String,
+        word: String,
+        kind: JournalFieldKind
+    ): String {
+        val lineRegex = Regex(
+            """(?im)^[ \t]*${Regex.escape(word)}[ \t]*-[ \t]*.*(?:\r?\n)?"""
+        )
+        var next = lineRegex.replace(text, "")
+        if (containsWord(next, word, kind)) {
+            next = next.replace(wordBoundary(word), "")
                 .replace(Regex("""\s*,\s*,"""), ",")
                 .replace(Regex("""^\s*,\s*"""), "")
-                .replace(Regex(""",\s*${'$'}"""), "")
-                .replace(Regex("""\n{3,}"""), "\n\n")
-                .trim()
+                .replace(Regex(""",\s*$"""), "")
         }
-        val trimmed = text.trim()
-        return if (trimmed.isEmpty()) trimmedWord else "$trimmed, $trimmedWord"
+        return next.replace(Regex("""\n{3,}"""), "\n\n").trim()
     }
 
     private fun wordBoundary(word: String) =

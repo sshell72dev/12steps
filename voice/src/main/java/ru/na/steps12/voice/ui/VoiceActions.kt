@@ -64,6 +64,46 @@ fun VoiceFieldActions(
 }
 
 @Composable
+fun rememberDictationStarter(
+    onResult: (spoken: String) -> Unit
+): () -> Unit {
+    val context = LocalContext.current
+    val speechLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val spoken = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+            .orEmpty()
+        if (spoken.isNotBlank()) onResult(spoken)
+        else onResult("")
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            runCatching { speechLauncher.launch(speechIntent()) }
+                .onFailure { onResult("") }
+        } else {
+            onResult("")
+        }
+    }
+    return {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            runCatching { speechLauncher.launch(speechIntent()) }
+                .onFailure { onResult("") }
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+}
+
+@Composable
 fun DictationIconButton(
     value: String,
     onValueChange: (String) -> Unit,
