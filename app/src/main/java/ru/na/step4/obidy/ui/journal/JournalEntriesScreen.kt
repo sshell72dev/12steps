@@ -174,8 +174,7 @@ fun JournalEntryScreen(
     entryId: String,
     onBack: () -> Unit,
     onEdit: () -> Unit,
-    onAiAnalyze: (String) -> Unit,
-    onAiHelp: (String) -> Unit
+    onAiAnalyze: (String) -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val entry = state.entries.find { it.id == entryId }
@@ -209,7 +208,6 @@ fun JournalEntryScreen(
                     JournalEntryBody(entry.text)
                     JournalButton(JournalRu.edit, onEdit, filled = true)
                     JournalButton(JournalRu.aiAnalyze, { onAiAnalyze(entry.id) })
-                    JournalButton(JournalRu.aiHelpEntry, { onAiHelp(entry.id) })
                     JournalButton(Ru.delete, onClick = { pendingDelete = true })
                 }
             }

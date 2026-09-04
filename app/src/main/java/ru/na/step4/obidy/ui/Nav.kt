@@ -481,7 +481,8 @@ fun Step4Nav() {
                     app.psychSettings,
                     app.spiritualRating,
                     app.journalPrefs,
-                    app.activityLog
+                    app.activityLog,
+                    app.psychStreak
                 )
             )
             DisposableEffect(vm) {
@@ -595,8 +596,7 @@ fun Step4Nav() {
                     vm.state.value.entries.find { it.id == id }?.let(vm::startEdit)
                     navController.popBackStack(Routes.JOURNAL, inclusive = false)
                 },
-                onAiAnalyze = { navController.navigate(Routes.journalAnalyzeEntry(it)) },
-                onAiHelp = { navController.navigate(Routes.journalHelpEntry(it)) }
+                onAiAnalyze = { navController.navigate(Routes.journalAnalyzeEntry(it)) }
             )
         }
         composable(Routes.JOURNAL_PERSONALITY) {
