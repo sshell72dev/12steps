@@ -22,6 +22,8 @@ import ru.na.step4.obidy.data.journal.JournalStreakStore
 import ru.na.step4.obidy.data.life.LifeBoardStore
 import ru.na.step4.obidy.data.profile.ProfileStore
 import ru.na.step4.obidy.data.psych.PsychReminderWorker
+import ru.na.step4.obidy.data.psych.PsychStreakStore
+import ru.na.step4.obidy.data.alerts.StreakWarningWorker
 import ru.na.step4.obidy.data.psych.PsychRepository
 import ru.na.step4.obidy.data.psych.PsychSettings
 import ru.na.step4.obidy.data.spiritual.SpiritualRatingStore
@@ -56,6 +58,9 @@ class Step4App : Application() {
         private set
 
     lateinit var journalStreak: JournalStreakStore
+        private set
+
+    lateinit var psychStreak: PsychStreakStore
         private set
 
     lateinit var journalStore: JournalStore
@@ -125,6 +130,7 @@ class Step4App : Application() {
         inventoryAiCache = InventoryAiCache(this)
         analysisStreak = AnalysisStreakStore(this)
         journalStreak = JournalStreakStore(this)
+        psychStreak = PsychStreakStore(this)
         journalStore = JournalStore(this)
         journalAnalyzeCache = JournalAnalyzeCache(this)
         profileStore = ProfileStore(this)
@@ -180,6 +186,7 @@ class Step4App : Application() {
             )
         }
         PsychReminderWorker.schedule(this)
+        StreakWarningWorker.schedule(this)
         appScope.launch {
             repository.ensureDefaultCategories()
             notesRepository.sync()
@@ -188,6 +195,7 @@ class Step4App : Application() {
                 journalPrefs
             )
             voicePlugin.sync(BuildConfig.ANALYSIS_API_URL, BuildConfig.ANALYSIS_API_TOKEN)
+            messengerRepository.ensureAlertsChat()
             messengerRepository.refreshEnabled()
         }
     }

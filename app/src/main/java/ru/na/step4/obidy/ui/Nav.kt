@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.Step4App
 import ru.na.step4.obidy.MainActivity
+import ru.na.step4.obidy.data.alerts.AppAlerts
 import ru.na.step4.obidy.data.psych.PsychReminderWorker
 import ru.na.step4.obidy.data.InventoryProgressStore
 import ru.na.step4.obidy.data.ResentmentRepository
@@ -230,6 +231,23 @@ fun Step4Nav() {
             navController.currentDestination?.route != Routes.MESSENGER
         ) {
             navController.navigate(Routes.MESSENGER)
+        }
+    }
+    val alertsOpenTick = (context as? MainActivity)?.alertsOpenTick ?: 0
+    LaunchedEffect(alertsOpenTick, messengerOn) {
+        if (alertsOpenTick == 0) return@LaunchedEffect
+        val activity = context as? MainActivity ?: return@LaunchedEffect
+        if (!activity.pendingAlertsOpen) return@LaunchedEffect
+        val intent = activity.intent
+        if (intent.getBooleanExtra(AppAlerts.EXTRA_OPEN, false)) {
+            intent.removeExtra(AppAlerts.EXTRA_OPEN)
+        }
+        if (messengerOn) {
+            if (navController.currentDestination?.route != Routes.MESSENGER) {
+                navController.openMain(Routes.MESSENGER)
+            }
+        } else {
+            activity.consumePendingAlertsOpen()
         }
     }
     val psychOpenTick = (context as? MainActivity)?.psychOpenTick ?: 0

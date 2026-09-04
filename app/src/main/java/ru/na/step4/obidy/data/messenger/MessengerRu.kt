@@ -43,6 +43,11 @@ object MessengerRu {
     val joined: String get() = I18n.t("messenger.joined", "Подключение выполнено.")
     val send: String get() = I18n.t("messenger.send", "Отправить")
     val owner: String get() = I18n.t("messenger.owner", "создатель")
+    val alertsTitle: String get() = I18n.t("messenger.alertsTitle", "Оповещение")
+    val alertsHow: String get() = I18n.t(
+        "messenger.alertsHow",
+        "Системные события приходят в этот чат и дублируются уведомлением на заставке и в шторке телефона."
+    )
     val challenges: String get() = I18n.t("messenger.challenges", "Челленджи")
     val challengeSteps: String get() = I18n.t("messenger.challengeSteps", "Челлендж шагов")
     val challengeAnalysis: String get() = I18n.t("messenger.challengeAnalysis", "Челлендж самоанализов")

@@ -210,6 +210,17 @@ object SourceBootstrap {
         SourceCatalog.put("ui.analysisNo", "\u041d\u0435\u0442")
         SourceCatalog.put("ui.analysisDoneThanks", "\u0421\u043f\u0430\u0441\u0438\u0431\u043e \u0437\u0430 \u0447\u0435\u0441\u0442\u043d\u043e\u0441\u0442\u044c. \u0412\u044b \u043f\u0440\u043e\u0448\u043b\u0438 \u044d\u0442\u043e\u0442 \u0441\u0430\u043c\u043e\u0430\u043d\u0430\u043b\u0438\u0437 \u0434\u043e \u043a\u043e\u043d\u0446\u0430.")
         SourceCatalog.put("ui.analysisStreak", "\u0423\u0434\u0430\u0440\u043d\u044b\u0439 \u0440\u0435\u0436\u0438\u043c")
+        SourceCatalog.put("ui.streakPartAnalysis", "самоанализа")
+        SourceCatalog.put("ui.streakPartSteps", "работы по шагам")
+        SourceCatalog.put("ui.streakPartPsych", "электронного психолога")
+        SourceCatalog.put(
+            "ui.streakWarnOne",
+            "Через час сбросится ударный режим %1\$s. Сделайте запись сегодня, чтобы сохранить серию."
+        )
+        SourceCatalog.put(
+            "ui.streakWarnMany",
+            "Через час сбросится ударный режим: %1\$s. Сделайте запись сегодня, чтобы сохранить серии."
+        )
         SourceCatalog.put("ui.analysisSave", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0442\u0435\u043a\u0441\u0442")
         SourceCatalog.put("ui.analysisSaved", "\u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e \u043d\u0430 \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u0435")
         SourceCatalog.put("ui.analysisAiReview", "\u0418\u0418-\u0440\u0430\u0437\u0431\u043e\u0440")
@@ -632,8 +643,8 @@ object SourceBootstrap {
         SourceCatalog.put("psych.skipName", "друг")
         SourceCatalog.put("psych.reminderFallback", "Я готов. Просто отправь мне то, что тебя сейчас волнует.")
         SourceCatalog.put("psych.psychologistName", "Психолог")
-        SourceCatalog.put("psych.reminderHow", "Напоминания приходят в чат Электронного психолога от имени «Психолог» и дублируются уведомлением в шторке телефона.")
-        SourceCatalog.put("psych.reminderWhere", "Включить, выбрать интервал и тихие часы можно на этом экране. Кнопка «Показать уведомление сейчас» сразу отправит сообщение в чат и в шторку.")
+        SourceCatalog.put("psych.reminderHow", "Напоминания приходят в чат «Оповещение» в мессенджере и дублируются уведомлением на заставке и в шторке телефона.")
+        SourceCatalog.put("psych.reminderWhere", "Включить, выбрать интервал и тихие часы можно на этом экране. Кнопка «Показать уведомление сейчас» сразу отправит сообщение в чат «Оповещение» и в шторку — на этом экране ничего не всплывает.")
         SourceCatalog.put("psych.reminderNext", "Следующее напоминание: %1\$s")
         SourceCatalog.put("psych.reminderNextOff", "Напоминания выключены — уведомления не приходят.")
         SourceCatalog.put("psych.reminderTest", "Показать уведомление сейчас")
@@ -807,6 +818,11 @@ object SourceBootstrap {
         SourceCatalog.put("voice.previewText", "Это проверка выбранного голоса и скорости. Текст можно вводить голосом в любом поле.")
         SourceCatalog.put("messenger.title", "Мессенджер")
         SourceCatalog.put("messenger.homeBody", "Чаты с участниками по QR-коду: текст и голосовые, личные и группы.")
+        SourceCatalog.put("messenger.alertsTitle", "Оповещение")
+        SourceCatalog.put(
+            "messenger.alertsHow",
+            "Системные события приходят в этот чат и дублируются уведомлением на заставке и в шторке телефона."
+        )
         SourceCatalog.put("messenger.disabledTitle", "Мессенджер временно отключён")
         SourceCatalog.put("messenger.disabledBody", "Раздел выключен в админке. Дневник, самоанализ и психолог работают как раньше.")
         SourceCatalog.put("messenger.nicknameTitle", "Как вас называть?")

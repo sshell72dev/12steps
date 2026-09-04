@@ -1,6 +1,5 @@
 package ru.na.step4.obidy.ui.psych
 
-import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -17,6 +16,7 @@ import kotlinx.coroutines.withContext
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.psych.PsychAiClient
 import ru.na.step4.obidy.data.psych.PsychInboxMessage
+import ru.na.step4.obidy.data.psych.PsychStreakStore
 import ru.na.step4.obidy.data.psych.PsychLocks
 import ru.na.step4.obidy.data.psych.PsychLogic
 import ru.na.step4.obidy.data.psych.PsychQa
@@ -131,7 +131,8 @@ class PsychViewModel(
     val settings: PsychSettings,
     private val spiritual: SpiritualRatingStore? = null,
     private val journalPrefs: ru.na.step4.obidy.data.journal.JournalPrefs? = null,
-    private val activityLog: ru.na.step4.obidy.data.activity.ActivityLog? = null
+    private val activityLog: ru.na.step4.obidy.data.activity.ActivityLog? = null,
+    private val streak: PsychStreakStore? = null
 ) : ViewModel() {
     private val client = PsychAiClient()
     private val _ui = MutableStateFlow(PsychUi())
@@ -143,6 +144,7 @@ class PsychViewModel(
     val isAdmin: Boolean
         get() = journalPrefs?.isAdmin == true
 
+    val streakDays: StateFlow<Int> = streak?.days ?: MutableStateFlow(0)
     val topics = repository.observeTopics()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val postponed = repository.observePostponed()
@@ -154,7 +156,6 @@ class PsychViewModel(
     private var premiumPollJob: Job? = null
     private var lastFullText: String = ""
     private var lastSpeakable: String = ""
-    private var inboxWatch: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     init {
         settings.expireProIfNeeded()
@@ -165,18 +166,12 @@ class PsychViewModel(
                 _ui.value = PsychUi(page = PsychPage.Onboarding())
             }
         }
-        reloadInbox()
-        inboxWatch = settings.watchInbox {
-            viewModelScope.launch { reloadInbox() }
-        }
         viewModelScope.launch { maybeIdle() }
         viewModelScope.launch { refreshPremiumFromServer(silent = true) }
         viewModelScope.launch { applyServerQuestionLimits() }
     }
 
     override fun onCleared() {
-        inboxWatch?.let { settings.unwatchInbox(it) }
-        inboxWatch = null
         super.onCleared()
     }
 
@@ -188,9 +183,7 @@ class PsychViewModel(
         bump()
     }
 
-    private fun reloadInbox() {
-        _ui.value = _ui.value.copy(inbox = settings.inboxMessages())
-    }
+    fun streakLabel(): String? = streak?.label()
 
     fun goHub() = setPage(PsychPage.Hub)
 
@@ -222,11 +215,7 @@ class PsychViewModel(
 
     fun skipOnboarding() {
         settings.onboardingDone = true
-        settings.appendInbox(PsychRu.meetNice.format(PsychRu.skipName))
-        _ui.value = PsychUi(
-            page = PsychPage.Record,
-            inbox = settings.inboxMessages()
-        )
+        _ui.value = PsychUi(page = PsychPage.Record)
     }
 
     fun submitOnboardingName(raw: String) {
@@ -241,11 +230,7 @@ class PsychViewModel(
         }
         settings.name = text.take(40)
         settings.onboardingDone = true
-        settings.appendInbox(PsychRu.meetNice.format(settings.name))
-        _ui.value = PsychUi(
-            page = PsychPage.Record,
-            inbox = settings.inboxMessages()
-        )
+        _ui.value = PsychUi(page = PsychPage.Record)
     }
 
     fun submitSituation(text: String, viaVoice: Boolean = false) {
@@ -253,12 +238,12 @@ class PsychViewModel(
         if (body.isEmpty()) return
         if (settings.reminderOutreachPending && PsychLogic.looksLikeReadiness(body)) {
             settings.reminderOutreachPending = false
-            settings.appendInbox(PsychRu.describe)
-            _ui.value = _ui.value.copy(page = PsychPage.Record, inbox = settings.inboxMessages())
+            _ui.value = _ui.value.copy(page = PsychPage.Record)
             return
         }
         settings.reminderOutreachPending = false
         viewModelScope.launch {
+            streak?.recordCompletion()
             val id = repository.saveSituation(body, viaVoice, noHistory = false, topicId = null)
             if (settings.topicsEnabled) {
                 val snippets = topicSnippets()
@@ -1145,9 +1130,6 @@ class PsychViewModel(
         val text = (result as? PsychAiClient.Result.Ok)?.text?.ifBlank { null }
             ?: PsychRu.reminderFallback
         settings.lastReminderText = text
-        if (settings.inboxMessages().lastOrNull()?.text != text) {
-            settings.appendInbox(text)
-        }
     }
 
     private suspend fun callAi(
@@ -1357,12 +1339,20 @@ class PsychViewModel(
             settings: PsychSettings,
             spiritual: SpiritualRatingStore? = null,
             journalPrefs: ru.na.step4.obidy.data.journal.JournalPrefs? = null,
-            activityLog: ru.na.step4.obidy.data.activity.ActivityLog? = null
+            activityLog: ru.na.step4.obidy.data.activity.ActivityLog? = null,
+            streak: PsychStreakStore? = null
         ) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return PsychViewModel(repository, settings, spiritual, journalPrefs, activityLog) as T
+                    return PsychViewModel(
+                        repository,
+                        settings,
+                        spiritual,
+                        journalPrefs,
+                        activityLog,
+                        streak
+                    ) as T
                 }
             }
     }

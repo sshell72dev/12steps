@@ -1,11 +1,11 @@
-package ru.na.step4.obidy.data.analysis
+package ru.na.step4.obidy.data.psych
 
 import android.content.Context
 import kotlinx.coroutines.flow.StateFlow
 import ru.na.step4.obidy.data.streak.DailyStreakStore
 
-/** Daily self-analysis streak: one bump per calendar day when a session is finished. */
-class AnalysisStreakStore(context: Context) {
+/** Daily psychologist streak: one bump per calendar day when a situation is submitted. */
+class PsychStreakStore(context: Context) {
     private val inner = DailyStreakStore(context, PREFS)
     val days: StateFlow<Int> get() = inner.days
 
@@ -20,6 +20,6 @@ class AnalysisStreakStore(context: Context) {
     fun markWarnedNow() = inner.markWarnedNow()
 
     companion object {
-        private const val PREFS = "analysis_streak"
+        private const val PREFS = "psych_streak"
     }
 }

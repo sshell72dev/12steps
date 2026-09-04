@@ -211,6 +211,17 @@ object Ru {
     val analysisNo: String get() = I18n.t("ui.analysisNo", "\u041d\u0435\u0442")
     val analysisDoneThanks: String get() = I18n.t("ui.analysisDoneThanks", "\u0421\u043f\u0430\u0441\u0438\u0431\u043e \u0437\u0430 \u0447\u0435\u0441\u0442\u043d\u043e\u0441\u0442\u044c. \u0412\u044b \u043f\u0440\u043e\u0448\u043b\u0438 \u044d\u0442\u043e\u0442 \u0441\u0430\u043c\u043e\u0430\u043d\u0430\u043b\u0438\u0437 \u0434\u043e \u043a\u043e\u043d\u0446\u0430.")
     val analysisStreak: String get() = I18n.t("ui.analysisStreak", "\u0423\u0434\u0430\u0440\u043d\u044b\u0439 \u0440\u0435\u0436\u0438\u043c")
+    val streakPartAnalysis: String get() = I18n.t("ui.streakPartAnalysis", "самоанализа")
+    val streakPartSteps: String get() = I18n.t("ui.streakPartSteps", "работы по шагам")
+    val streakPartPsych: String get() = I18n.t("ui.streakPartPsych", "электронного психолога")
+    val streakWarnOne: String get() = I18n.t(
+        "ui.streakWarnOne",
+        "Через час сбросится ударный режим %1\$s. Сделайте запись сегодня, чтобы сохранить серию."
+    )
+    val streakWarnMany: String get() = I18n.t(
+        "ui.streakWarnMany",
+        "Через час сбросится ударный режим: %1\$s. Сделайте запись сегодня, чтобы сохранить серии."
+    )
     val analysisSave: String get() = I18n.t("ui.analysisSave", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0442\u0435\u043a\u0441\u0442")
     val analysisSaved: String get() = I18n.t("ui.analysisSaved", "\u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e \u043d\u0430 \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u0435")
     val analysisAiReview: String get() = I18n.t("ui.analysisAiReview", "\u0418\u0418-\u0440\u0430\u0437\u0431\u043e\u0440")

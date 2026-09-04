@@ -2,7 +2,11 @@ package ru.na.step4.obidy.data.messenger
 
 import android.content.Context
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import ru.na.step4.obidy.data.alerts.AppAlerts
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +23,7 @@ class MessengerRepository(
     private val prefs = MessengerPrefs(appContext)
     private val dao = MessengerDatabase.get(appContext).dao()
     private val client = MessengerClient { prefs.messengerId }
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val voicePlayer = MessengerVoicePlayer()
     val voiceRecorder = MessengerVoiceRecorder(appContext)
 
@@ -38,7 +43,11 @@ class MessengerRepository(
     val error: StateFlow<String?> = _error.asStateFlow()
 
     val chats: Flow<List<MessengerChat>> = dao.observeChats().map { rows ->
-        rows.map { it.toChat() }
+        val mapped = rows.map { it.toChat() }
+        mapped.sortedWith(
+            compareByDescending<MessengerChat> { it.id == AppAlerts.CHAT_ID }
+                .thenByDescending { it.lastAt }
+        )
     }
 
     val contacts: Flow<List<MessengerContact>> = dao.observeContacts().map { rows ->
@@ -110,6 +119,7 @@ class MessengerRepository(
             is MessengerResult.Disabled -> applyEnabled(false)
             is MessengerResult.Err -> _error.value = result.message.ifBlank { MessengerRu.error }
         }
+        ensureAlertsChat()
     }
 
     suspend fun refreshContacts() = withContext(Dispatchers.IO) {
@@ -166,6 +176,10 @@ class MessengerRepository(
     }
 
     suspend fun refreshMessages(chatId: String) = withContext(Dispatchers.IO) {
+        if (chatId == AppAlerts.CHAT_ID) {
+            markAlertsRead()
+            return@withContext
+        }
         val after = dao.lastMessageId(chatId)
         when (val result = client.messages(chatId, after)) {
             is MessengerResult.Ok -> {
@@ -180,6 +194,7 @@ class MessengerRepository(
     }
 
     suspend fun sendText(chatId: String, body: String): Boolean = withContext(Dispatchers.IO) {
+        if (chatId == AppAlerts.CHAT_ID) return@withContext false
         when (val result = client.sendText(chatId, body)) {
             is MessengerResult.Ok -> {
                 dao.upsertMessages(listOf(result.value.toRow()))
@@ -316,8 +331,80 @@ class MessengerRepository(
         }
     }
 
-    fun clearError() {
-        _error.value = null
+    fun postAlert(body: String) {
+        val text = body.trim()
+        if (text.isBlank()) return
+        ioScope.launch { appendAlert(text) }
+    }
+
+    suspend fun postAlertNow(body: String) {
+        val text = body.trim()
+        if (text.isBlank()) return
+        appendAlert(text)
+    }
+
+    suspend fun ensureAlertsChat() = withContext(Dispatchers.IO) {
+        val existing = dao.chatById(AppAlerts.CHAT_ID)
+        val title = MessengerRu.alertsTitle
+        if (existing == null) {
+            dao.upsertChats(
+                listOf(
+                    MessengerChatRow(
+                        id = AppAlerts.CHAT_ID,
+                        kind = AppAlerts.KIND,
+                        title = title,
+                        peerId = "",
+                        groupId = "",
+                        isOwner = false,
+                        lastBody = "",
+                        lastKind = "text",
+                        lastAt = 0L,
+                        unread = 0
+                    )
+                )
+            )
+        } else if (existing.title != title) {
+            dao.upsertChats(listOf(existing.copy(title = title)))
+        }
+    }
+
+    suspend fun markAlertsRead() = withContext(Dispatchers.IO) {
+        val existing = dao.chatById(AppAlerts.CHAT_ID) ?: return@withContext
+        if (existing.unread != 0) {
+            dao.upsertChats(listOf(existing.copy(unread = 0)))
+        }
+    }
+
+    private suspend fun appendAlert(text: String) = withContext(Dispatchers.IO) {
+        ensureAlertsChat()
+        val now = System.currentTimeMillis()
+        val existing = dao.chatById(AppAlerts.CHAT_ID) ?: return@withContext
+        dao.upsertMessages(
+            listOf(
+                MessengerMessageRow(
+                    id = -now,
+                    chatId = AppAlerts.CHAT_ID,
+                    senderId = "system",
+                    senderName = MessengerRu.alertsTitle,
+                    kind = "text",
+                    body = text,
+                    voiceDurationMs = 0,
+                    createdAt = now,
+                    mine = false
+                )
+            )
+        )
+        dao.upsertChats(
+            listOf(
+                existing.copy(
+                    title = MessengerRu.alertsTitle,
+                    lastBody = text,
+                    lastKind = "text",
+                    lastAt = now,
+                    unread = existing.unread + 1
+                )
+            )
+        )
     }
 
     fun release() {

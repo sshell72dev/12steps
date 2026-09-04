@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -84,7 +83,6 @@ import kotlinx.coroutines.withContext
 import ru.na.step4.obidy.BuildConfig
 import ru.na.step4.obidy.MainActivity
 import ru.na.step4.obidy.Ru
-import ru.na.step4.obidy.data.psych.PsychInboxMessage
 import ru.na.step4.obidy.data.psych.PsychLogic
 import ru.na.step4.obidy.data.psych.PsychQa
 import ru.na.step4.obidy.data.psych.PsychReminderWorker
@@ -201,8 +199,8 @@ fun PsychHostScreen(
             AtmosphereBackground(Modifier.fillMaxSize())
             when (val page = ui.page) {
                 is PsychPage.Onboarding -> OnboardingBody(page, viewModel)
-                PsychPage.Hub -> HubBody(viewModel, ui)
-                PsychPage.Record -> RecordBody(viewModel, ui)
+                PsychPage.Hub -> HubBody(viewModel)
+                PsychPage.Record -> RecordBody(viewModel)
                 is PsychPage.TopicPick -> TopicPickBody(page, topics, viewModel)
                 is PsychPage.Dialogue -> DialogueBody(page, ui, viewModel, onOpenProfile)
                 is PsychPage.Result -> ResultBody(page, ui, viewModel)
@@ -239,17 +237,6 @@ fun PsychHostScreen(
             title = { Text(Ru.sectionPsych) },
             text = { Text(msg) }
         )
-    }
-    ui.outreach?.let { msg ->
-        if (ui.page is PsychPage.Hub || ui.page is PsychPage.Record || ui.page is PsychPage.Reminders) {
-            AlertDialog(
-                onDismissRequest = viewModel::clearError,
-                confirmButton = {
-                    TextButton(onClick = viewModel::clearError) { Text(Ru.confirm) }
-                },
-                text = { Text(msg) }
-            )
-        }
     }
 }
 
@@ -353,7 +340,7 @@ private fun WaitOverlay(ui: PsychUi) {
 }
 
 @Composable
-private fun HubBody(vm: PsychViewModel, ui: PsychUi) {
+private fun HubBody(vm: PsychViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -361,14 +348,14 @@ private fun HubBody(vm: PsychViewModel, ui: PsychUi) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (ui.inbox.isNotEmpty()) {
-            ui.inbox.takeLast(5).forEach { msg ->
-                PsychologistBubble(
-                    msg,
-                    offsetMinutes = vm.settings.utcOffsetMinutes,
-                    onClick = vm::goRecord
-                )
-            }
+        val streakDays by vm.streakDays.collectAsStateWithLifecycle()
+        val streakLabel = remember(streakDays) { vm.streakLabel() }
+        if (streakLabel != null) {
+            Text(
+                streakLabel,
+                style = MaterialTheme.typography.titleMedium,
+                color = Amber
+            )
         }
         NoteView(NoteIds.PSYCH_INTRO, PsychRu.intro, Ru.sectionPsych)
         NoteView(NoteIds.PSYCH_DISCLAIMER, PsychRu.disclaimer, PsychRu.disclaimer)
@@ -406,7 +393,7 @@ private fun OnboardingBody(page: PsychPage.Onboarding, vm: PsychViewModel) {
 }
 
 @Composable
-private fun RecordBody(vm: PsychViewModel, ui: PsychUi) {
+private fun RecordBody(vm: PsychViewModel) {
     var text by remember { mutableStateOf("") }
     val typing = isImeVisible()
     val composing = typing || text.isNotBlank()
@@ -417,11 +404,7 @@ private fun RecordBody(vm: PsychViewModel, ui: PsychUi) {
         composing = composing,
         showField = true,
         header = {
-            if (ui.inbox.isNotEmpty()) {
-                ui.inbox.forEach { msg ->
-                    PsychologistBubble(msg, offsetMinutes = vm.settings.utcOffsetMinutes)
-                }
-            } else if (!typing) {
+            if (!typing) {
                 Text(PsychRu.describe, style = MaterialTheme.typography.titleLarge, color = Forest)
             }
         },
@@ -1247,7 +1230,6 @@ private fun RemindersBody(vm: PsychViewModel) {
                 if (Build.VERSION.SDK_INT < 33) openSystemNotifySettings()
             } else {
                 PsychReminderWorker.notify(context, PsychRu.reminderFallback)
-                vm.goRecord()
             }
         }
     }
@@ -1633,49 +1615,6 @@ private fun ReadableText(text: String) {
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PsychologistBubble(
-    message: PsychInboxMessage,
-    offsetMinutes: Int,
-    onClick: (() -> Unit)? = null
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start
-    ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 320.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(SandDeep)
-                .then(
-                    if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-                )
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        ) {
-            Text(
-                PsychRu.psychologistName,
-                style = MaterialTheme.typography.labelLarge,
-                color = Forest
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                message.text,
-                color = Forest,
-                style = MaterialTheme.typography.bodyLarge
-            )
-            if (message.createdAt > 0L) {
-                Text(
-                    PsychLogic.formatLocal(message.createdAt, offsetMinutes),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.End)
-                )
             }
         }
     }

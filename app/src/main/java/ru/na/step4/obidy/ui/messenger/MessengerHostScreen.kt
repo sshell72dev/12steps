@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -32,6 +33,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import ru.na.step4.obidy.MainActivity
+import ru.na.step4.obidy.data.alerts.AppAlerts
 import ru.na.step4.obidy.data.messenger.MessengerInvite
 import ru.na.step4.obidy.data.messenger.MessengerResult
 import ru.na.step4.obidy.data.messenger.MessengerRu
@@ -65,6 +68,8 @@ fun MessengerHostScreen(
     val pending by viewModel.repository.pendingInvite.collectAsStateWithLifecycle()
     val snack = remember { SnackbarHostState() }
     val nav = rememberNavController()
+    val context = LocalContext.current
+    val alertsTick = (context as? MainActivity)?.alertsOpenTick ?: 0
 
     LaunchedEffect(error) {
         val text = error ?: return@LaunchedEffect
@@ -81,6 +86,17 @@ fun MessengerHostScreen(
             nav.navigate(MRoutes.chat(result.value.chatId))
             snack.showSnackbar(MessengerRu.joined)
         }
+    }
+
+    LaunchedEffect(gate.ready, alertsTick) {
+        if (!gate.ready || alertsTick == 0) return@LaunchedEffect
+        val activity = context as? MainActivity ?: return@LaunchedEffect
+        if (!activity.consumePendingAlertsOpen()) return@LaunchedEffect
+        if (nav.currentDestination?.route == MRoutes.GATE) {
+            nav.navigate(MRoutes.HUB) { popUpTo(MRoutes.GATE) { inclusive = true } }
+        }
+        viewModel.openChat(AppAlerts.CHAT_ID, MessengerRu.alertsTitle, "")
+        nav.navigate(MRoutes.chat(AppAlerts.CHAT_ID)) { launchSingleTop = true }
     }
 
     Box(Modifier.fillMaxSize()) {

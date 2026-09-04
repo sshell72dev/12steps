@@ -55,6 +55,9 @@ interface MessengerDao {
     @Query("SELECT * FROM contacts ORDER BY displayName ASC")
     fun observeContacts(): Flow<List<MessengerContactRow>>
 
+    @Query("SELECT * FROM chats WHERE id = :id LIMIT 1")
+    suspend fun chatById(id: String): MessengerChatRow?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertChats(rows: List<MessengerChatRow>)
 

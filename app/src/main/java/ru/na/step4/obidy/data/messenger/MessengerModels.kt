@@ -1,5 +1,7 @@
 package ru.na.step4.obidy.data.messenger
 
+import ru.na.step4.obidy.data.alerts.AppAlerts
+
 data class MessengerUser(
     val id: String = "",
     val displayName: String = ""
@@ -18,6 +20,7 @@ data class MessengerChat(
     val unread: Int = 0
 ) {
     val isGroup: Boolean get() = kind == "group"
+    val isAlerts: Boolean get() = kind == AppAlerts.KIND || id == AppAlerts.CHAT_ID
 }
 
 data class MessengerMessage(

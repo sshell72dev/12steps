@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import ru.na.step4.obidy.data.alerts.AppAlerts
 import ru.na.step4.obidy.data.messenger.MessengerMessage
 import ru.na.step4.obidy.data.messenger.MessengerRu
 import ru.na.step4.obidy.data.messenger.formatVoiceDuration
@@ -88,6 +89,7 @@ fun MessengerChatScreen(
     val context = LocalContext.current
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val listState = rememberLazyListState()
+    val alertsChat = chatId == AppAlerts.CHAT_ID
 
     DisposableEffect(chatId) {
         viewModel.startChatPolling(chatId)
@@ -126,7 +128,7 @@ fun MessengerChatScreen(
                 title = { Text(title.ifBlank { MessengerRu.title }, color = Forest) },
                 navigationIcon = { AppNavIcon(onBack = onBack) },
                 actions = {
-                    if (groupId.isNotBlank()) {
+                    if (groupId.isNotBlank() && !alertsChat) {
                         IconButton(onClick = { onGroupInfo(groupId) }) {
                             Icon(Icons.Outlined.Info, MessengerRu.members, tint = Forest)
                         }
@@ -153,11 +155,22 @@ fun MessengerChatScreen(
                         MessageBubble(
                             message = message,
                             playing = playingId == message.id,
-                            showName = groupId.isNotBlank() && !message.mine,
+                            showName = (groupId.isNotBlank() || alertsChat) && !message.mine,
                             onPlay = { viewModel.playVoice(message) }
                         )
                     }
+                    if (alertsChat && messages.isEmpty()) {
+                        item {
+                            Text(
+                                MessengerRu.alertsHow,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp)
+                            )
+                        }
+                    }
                 }
+                if (!alertsChat) {
                 if (recording) {
                     Row(
                         Modifier
@@ -229,6 +242,7 @@ fun MessengerChatScreen(
                             Icon(Icons.AutoMirrored.Outlined.Send, MessengerRu.send, tint = Forest)
                         }
                     }
+                }
                 }
             }
         }
