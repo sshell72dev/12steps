@@ -225,6 +225,10 @@ fun Step4Nav() {
     }
     val revision by app.i18nController.revision.collectAsStateWithLifecycle()
     val messengerOn by app.messengerRepository.enabled.collectAsStateWithLifecycle()
+    val messengerChats by app.messengerRepository.chats.collectAsStateWithLifecycle(emptyList())
+    val messengerUnread = remember(messengerChats) {
+        messengerChats.sumOf { it.unread.coerceAtLeast(0) }
+    }
     val messengerInvite by app.messengerRepository.pendingInvite.collectAsStateWithLifecycle()
     LaunchedEffect(messengerInvite, messengerOn) {
         if (!messengerInvite.isNullOrBlank() && messengerOn &&
@@ -274,12 +278,19 @@ fun Step4Nav() {
         app.activityLog.screenChanged(currentRoute?.filledRoute())
     }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val menuItems = remember(revision, messengerOn) {
+    val menuItems = remember(revision, messengerOn, messengerUnread) {
         buildList {
             add(AppMenuItem(Routes.HOME, Ru.menuHome, Icons.Outlined.Home))
             add(AppMenuItem(Routes.PROFILE, ProfileRu.title, Icons.Outlined.Person))
             if (messengerOn) {
-                add(AppMenuItem(Routes.MESSENGER, MessengerRu.title, Icons.Outlined.Forum))
+                add(
+                    AppMenuItem(
+                        Routes.MESSENGER,
+                        MessengerRu.title,
+                        Icons.Outlined.Forum,
+                        badge = messengerUnread
+                    )
+                )
             }
             add(AppMenuItem(Routes.life(LifeKind.GOAL), LifeBoardRu.goals, Icons.Outlined.Flag))
             add(AppMenuItem(Routes.life(LifeKind.IDEA), LifeBoardRu.ideas, Icons.Outlined.Lightbulb))

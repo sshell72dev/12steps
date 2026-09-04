@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material3.Badge
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.Ru
+import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.step4.obidy.ui.theme.SandDeep
@@ -37,7 +39,8 @@ val LocalOpenDrawer = staticCompositionLocalOf<() -> Unit> { {} }
 data class AppMenuItem(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val badge: Int = 0
 )
 
 @Composable
@@ -103,6 +106,15 @@ fun AppMenuDrawer(
                         NavigationDrawerItem(
                             icon = { Icon(item.icon, contentDescription = null) },
                             label = { Text(item.label) },
+                            badge = if (item.badge > 0) {
+                                {
+                                    Badge(containerColor = Amber, contentColor = Forest) {
+                                        Text(if (item.badge > 99) "99+" else item.badge.toString())
+                                    }
+                                }
+                            } else {
+                                null
+                            },
                             selected = selectedRoute == item.route,
                             onClick = {
                                 scope.launch { drawerState.close() }
