@@ -1158,7 +1158,11 @@ class PsychViewModel(
             _ui.value = _ui.value.copy(error = PsychRu.busy)
             return
         }
-        val waitKind = if (kind.contains("question")) "question" else "answer"
+        val waitKind = when {
+            kind.contains("question") -> "question"
+            kind == "analyze" -> "analyze"
+            else -> "answer"
+        }
         startSpinner(waitKind)
         try {
             val cached = if (kind in SKIP_CACHE) null else repository.cached(key)

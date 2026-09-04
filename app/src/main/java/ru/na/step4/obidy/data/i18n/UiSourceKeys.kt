@@ -543,6 +543,7 @@ object UiSourceKeys {
         "psych.topicSaved",
         "psych.waitingQuestion",
         "psych.waitingAnswer",
+        "psych.waitingAnalyze",
         "psych.waitingVoice",
         "psych.voiceHint",
         "psych.quotaLeft",

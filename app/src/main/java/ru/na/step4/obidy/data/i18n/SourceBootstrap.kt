@@ -558,6 +558,7 @@ object SourceBootstrap {
         SourceCatalog.put("psych.topicSaved", "Ситуация сохранена. Выбери одну или несколько тем.")
         SourceCatalog.put("psych.waitingQuestion", "Ожидаю следующий вопрос")
         SourceCatalog.put("psych.waitingAnswer", "Формирую ответ")
+        SourceCatalog.put("psych.waitingAnalyze", "Ожидаю разбор")
         SourceCatalog.put("psych.waitingVoice", "Формируется голосовое…")
         SourceCatalog.put("psych.voiceHint", "Обычно до минуты. Можно пользоваться другими функциями.")
         SourceCatalog.put("psych.quotaLeft", "Сегодня осталось обращений к ИИ: %1\$d из %2\$d.")

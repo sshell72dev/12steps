@@ -293,11 +293,7 @@ private fun PsychBottomBar(
 
 @Composable
 private fun WaitOverlay(ui: PsychUi) {
-    val title = when (ui.waitKind) {
-        "question" -> PsychRu.waitingQuestion
-        "voice" -> PsychRu.waitingVoice
-        else -> PsychRu.waitingAnswer
-    }
+    val title = PsychRu.waitingTitle(ui.waitKind)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -517,7 +513,8 @@ private fun DialogueBody(
             }
             QuestionBlock(
                 question = page.question,
-                waiting = waitingNext
+                waiting = waitingNext,
+                waitingTitle = PsychRu.waitingTitle(ui.waitKind)
             )
             if (!composing) {
                 ui.quotaLine?.let {
@@ -615,7 +612,8 @@ private fun WorkBody(page: PsychPage.Work, ui: PsychUi, vm: PsychViewModel) {
             }
             QuestionBlock(
                 question = question,
-                waiting = waitingNext
+                waiting = waitingNext,
+                waitingTitle = PsychRu.waitingTitle(ui.waitKind)
             )
         },
         footer = {
@@ -1534,7 +1532,11 @@ private fun CollapsedRecordBlock(text: String, forceCollapsed: Boolean = false) 
 }
 
 @Composable
-private fun QuestionBlock(question: String, waiting: Boolean) {
+private fun QuestionBlock(
+    question: String,
+    waiting: Boolean,
+    waitingTitle: String = PsychRu.waitingQuestion
+) {
     if (waiting) {
         Column(
             modifier = Modifier
@@ -1551,7 +1553,7 @@ private fun QuestionBlock(question: String, waiting: Boolean) {
                 strokeWidth = 3.dp
             )
             Text(
-                PsychRu.waitingQuestion,
+                waitingTitle,
                 style = MaterialTheme.typography.titleMedium,
                 color = Forest,
                 textAlign = TextAlign.Center

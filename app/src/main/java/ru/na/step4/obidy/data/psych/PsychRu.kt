@@ -56,7 +56,15 @@ object PsychRu {
     val topicSaved: String get() = I18n.t("psych.topicSaved", "Ситуация сохранена. Выбери одну или несколько тем.")
     val waitingQuestion: String get() = I18n.t("psych.waitingQuestion", "Ожидаю следующий вопрос")
     val waitingAnswer: String get() = I18n.t("psych.waitingAnswer", "Формирую ответ")
+    val waitingAnalyze: String get() = I18n.t("psych.waitingAnalyze", "Ожидаю разбор")
     val waitingVoice: String get() = I18n.t("psych.waitingVoice", "Формируется голосовое…")
+
+    fun waitingTitle(kind: String): String = when (kind) {
+        "question" -> waitingQuestion
+        "voice" -> waitingVoice
+        "analyze" -> waitingAnalyze
+        else -> waitingAnswer
+    }
     val voiceHint: String get() = I18n.t("psych.voiceHint", "Обычно до минуты. Можно пользоваться другими функциями.")
     val quotaLeft: String get() = I18n.t("psych.quotaLeft", "Сегодня осталось обращений к ИИ: %1\$d из %2\$d.")
     val quotaGone: String get() = I18n.t("psych.quotaGone", "Лимит запросов к ИИ на сегодня исчерпан (%1\$d/%2\$d).")
