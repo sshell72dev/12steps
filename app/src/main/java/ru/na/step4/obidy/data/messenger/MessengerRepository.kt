@@ -77,6 +77,10 @@ class MessengerRepository(
         return token
     }
 
+    fun clearError() {
+        _error.value = null
+    }
+
     suspend fun refreshEnabled(): Boolean = withContext(Dispatchers.IO) {
         when (val result = client.statusEnabled()) {
             is MessengerResult.Ok -> applyEnabled(result.value)
