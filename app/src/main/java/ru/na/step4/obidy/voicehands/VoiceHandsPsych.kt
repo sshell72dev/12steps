@@ -73,6 +73,9 @@ internal val PsychUi.resultKey: String?
         return "${page.kind}:${page.session.id}:${page.text.hashCode()}"
     }
 
+internal val PsychUi.resultKind: String?
+    get() = (page as? PsychPage.Result)?.kind
+
 internal val PsychUi.isOnboarding: Boolean
     get() = page is PsychPage.Onboarding
 

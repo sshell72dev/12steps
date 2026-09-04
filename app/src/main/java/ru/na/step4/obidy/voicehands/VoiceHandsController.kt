@@ -55,6 +55,8 @@ class VoiceHandsController(
     private var pendingRead = ""
     private var spokenQuestion: String? = null
     private var handledResultKey: String? = null
+    /** When waiting for analyze/recommend, ignore a stale Result of another kind. */
+    private var expectedResultKind: String? = null
     private var skippedTopicPick = false
     private var psychJob: Job? = null
     private var thinkJob: Job? = null
@@ -168,6 +170,7 @@ class VoiceHandsController(
         pendingRead = ""
         spokenQuestion = null
         handledResultKey = null
+        expectedResultKind = null
         skippedTopicPick = false
         thinkJob?.cancel()
         listJob?.cancel()
@@ -184,6 +187,7 @@ class VoiceHandsController(
         pendingRead = ""
         spokenQuestion = null
         handledResultKey = null
+        expectedResultKind = null
         skippedTopicPick = false
         thinkJob?.cancel()
         listJob?.cancel()
@@ -240,6 +244,7 @@ class VoiceHandsController(
         draft = ""
         spokenQuestion = null
         handledResultKey = null
+        expectedResultKind = null
         skippedTopicPick = false
         say(VoiceHandsRu.SAY_DICTATE)
         setPhase(VoiceHandsPhase.Dictating)
@@ -274,9 +279,9 @@ class VoiceHandsController(
 
     private suspend fun handleReply(spoken: String) {
         when (VoiceHandsPhrases.matchCommand(spoken)) {
-            VoiceHandsCommand.Analyze -> runAiCommand { it.analyze() }
-            VoiceHandsCommand.Recommend -> runAiCommand { it.recommend() }
-            VoiceHandsCommand.Work -> runAiCommand { it.startWork() }
+            VoiceHandsCommand.Analyze -> runAiCommand("analyze") { it.analyze() }
+            VoiceHandsCommand.Recommend -> runAiCommand("recommend") { it.recommend() }
+            VoiceHandsCommand.Work -> runAiCommand(null) { it.startWork() }
             VoiceHandsCommand.Standby -> {
                 VoiceHandsPsychGate.bound.value?.goHub()
                 enterStandby()
@@ -303,9 +308,9 @@ class VoiceHandsController(
     private suspend fun handleAskRead(spoken: String) {
         when (VoiceHandsPhrases.matchCommand(spoken)) {
             VoiceHandsCommand.Read -> readPending()
-            VoiceHandsCommand.Analyze -> runAiCommand { it.analyze() }
-            VoiceHandsCommand.Recommend -> runAiCommand { it.recommend() }
-            VoiceHandsCommand.Work -> runAiCommand { it.startWork() }
+            VoiceHandsCommand.Analyze -> runAiCommand("analyze") { it.analyze() }
+            VoiceHandsCommand.Recommend -> runAiCommand("recommend") { it.recommend() }
+            VoiceHandsCommand.Work -> runAiCommand(null) { it.startWork() }
             VoiceHandsCommand.Standby -> {
                 VoiceHandsPsychGate.bound.value?.goHub()
                 enterStandby()
@@ -320,17 +325,21 @@ class VoiceHandsController(
                 VoiceHandsPsychGate.bound.value?.goHub()
                 enterStandby()
             }
-            VoiceHandsCommand.Analyze -> runAiCommand { it.analyze() }
-            VoiceHandsCommand.Recommend -> runAiCommand { it.recommend() }
-            VoiceHandsCommand.Work -> runAiCommand { it.startWork() }
+            VoiceHandsCommand.Analyze -> runAiCommand("analyze") { it.analyze() }
+            VoiceHandsCommand.Recommend -> runAiCommand("recommend") { it.recommend() }
+            VoiceHandsCommand.Work -> runAiCommand(null) { it.startWork() }
             VoiceHandsCommand.Start -> beginRecord()
             else -> Unit
         }
     }
 
-    private suspend fun runAiCommand(block: (VoiceHandsPsych) -> Unit) {
+    private suspend fun runAiCommand(kind: String?, block: (VoiceHandsPsych) -> Unit) {
         val psych = VoiceHandsPsychGate.bound.value ?: return
-        handledResultKey = null
+        // Keep the current Result marked handled so we don't re-offer reading
+        // the old analyze text while recommend (or another kind) is still loading.
+        handledResultKey = psych.ui.value.resultKey
+        pendingRead = ""
+        expectedResultKind = kind
         say(VoiceHandsRu.SAY_THINKING)
         beginThinking(VoiceHandsPhase.ThinkingResult)
         block(psych)
@@ -442,9 +451,9 @@ class VoiceHandsController(
                     return
                 }
                 when (cmd) {
-                    VoiceHandsCommand.Analyze -> runAiCommand { it.analyze() }
-                    VoiceHandsCommand.Recommend -> runAiCommand { it.recommend() }
-                    else -> runAiCommand { it.startWork() }
+                    VoiceHandsCommand.Analyze -> runAiCommand("analyze") { it.analyze() }
+                    VoiceHandsCommand.Recommend -> runAiCommand("recommend") { it.recommend() }
+                    else -> runAiCommand(null) { it.startWork() }
                 }
             }
             VoiceHandsCommand.Standby -> {
@@ -535,10 +544,15 @@ class VoiceHandsController(
                 if (!ui.error.isNullOrBlank() && !ui.waiting) {
                     return FollowUp(FollowKind.Error, ui.error)
                 }
+                // Page still shows the previous Result while AI runs — wait for the new one.
+                if (ui.waiting) return null
+                val expected = expectedResultKind
+                if (expected != null && ui.resultKind != expected) return null
                 val key = ui.resultKey
                 val speakable = ui.resultSpeakable
                 if (key != null && speakable != null && handledResultKey != key) {
                     handledResultKey = key
+                    expectedResultKind = null
                     FollowUp(FollowKind.ReadyRead, VoiceHandsRu.SAY_READY_READ, speakable)
                 } else {
                     null
