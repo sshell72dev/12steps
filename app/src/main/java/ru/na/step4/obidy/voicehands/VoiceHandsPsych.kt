@@ -31,6 +31,13 @@ class VoiceHandsPsych(private val vm: PsychViewModel) {
     fun analyze() = vm.analyze()
 
     fun recommend() = vm.recommend()
+
+    fun startWork() = vm.startWork()
+
+    fun willCompleteDialogueOnNextAnswer(): Boolean {
+        val page = vm.ui.value.page as? PsychPage.Dialogue ?: return false
+        return page.answers.size + 1 >= vm.settings.dialogueExtraLimit
+    }
 }
 
 object VoiceHandsPsychGate {
@@ -74,3 +81,6 @@ internal val PsychUi.isRecord: Boolean
 
 internal val PsychUi.isPaywall: Boolean
     get() = page is PsychPage.Paywall
+
+internal val PsychUi.isReview: Boolean
+    get() = page is PsychPage.Review

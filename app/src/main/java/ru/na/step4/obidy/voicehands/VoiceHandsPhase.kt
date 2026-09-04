@@ -10,7 +10,8 @@ enum class VoiceHandsPhase {
     ThinkingResult,
     AskRead,
     Reading,
-    AfterRead
+    AfterRead,
+    OfferActions
 }
 
 data class VoiceHandsUi(

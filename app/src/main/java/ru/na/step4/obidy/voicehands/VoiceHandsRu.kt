@@ -20,6 +20,7 @@ object VoiceHandsRu {
     val askRead: String get() = I18n.t("voicehands.askRead", "Готово. Читать?")
     val reading: String get() = I18n.t("voicehands.reading", "Читаю")
     val afterRead: String get() = I18n.t("voicehands.afterRead", "Что дальше")
+    val offerActions: String get() = I18n.t("voicehands.offerActions", "Что сделать")
     val opening: String get() = I18n.t("voicehands.opening", "Открываю психолога")
     val off: String get() = I18n.t("voicehands.off", "Выключен")
     val disable: String get() = I18n.t("voicehands.disable", "Выключить")
@@ -48,6 +49,10 @@ object VoiceHandsRu {
         "voicehands.hintAfterRead",
         "«Вернись в режим ожидания» · «разобрать ситуацию» · «рекомендации по ситуации» · «Давай запишем»"
     )
+    val hintOffer: String get() = I18n.t(
+        "voicehands.hintOffer",
+        "«разобрать ситуацию» · «рекомендации по ситуации» · «проработка ситуации» · «Вернись в режим ожидания»"
+    )
     val hintThinking: String get() = I18n.t(
         "voicehands.hintThinking",
         "Жду ответ ИИ. Если зависло — «В ожидание» или «Выключить»."
@@ -71,6 +76,12 @@ object VoiceHandsRu {
     const val SAY_READY_READ = "готово. читать?"
     const val SAY_READ_DONE = "прочитал, что дальше"
     const val SAY_TIMEOUT = "не дождался ответа"
+    const val SAY_SITUATION_CLEAR =
+        "Ситуация понятна. Теперь выберите, что с ней сделать."
+    const val SAY_CMD_ANALYZE = "разобрать ситуацию"
+    const val SAY_CMD_RECOMMEND = "рекомендации по ситуации"
+    const val SAY_CMD_WORK = "проработка ситуации"
+    const val SAY_CMD_STANDBY = "вернись в режим ожидания"
 
     fun hintsFor(phase: VoiceHandsPhase): String = when (phase) {
         VoiceHandsPhase.Standby -> hintStandby
@@ -78,6 +89,7 @@ object VoiceHandsRu {
         VoiceHandsPhase.AwaitingReply -> hintAwaiting
         VoiceHandsPhase.AskRead -> hintAskRead
         VoiceHandsPhase.AfterRead -> hintAfterRead
+        VoiceHandsPhase.OfferActions -> hintOffer
         VoiceHandsPhase.ThinkingQuestion,
         VoiceHandsPhase.ThinkingResult -> hintThinking
         VoiceHandsPhase.Opening -> hintOpening
@@ -90,7 +102,8 @@ object VoiceHandsRu {
         VoiceHandsPhase.Dictating,
         VoiceHandsPhase.AwaitingReply,
         VoiceHandsPhase.AskRead,
-        VoiceHandsPhase.AfterRead -> true
+        VoiceHandsPhase.AfterRead,
+        VoiceHandsPhase.OfferActions -> true
         else -> false
     }
 }
@@ -100,6 +113,7 @@ internal enum class VoiceHandsCommand {
     Done,
     Analyze,
     Recommend,
+    Work,
     Read,
     Standby
 }
@@ -120,6 +134,7 @@ internal object VoiceHandsPhrases {
             matches(n, STANDBY) -> VoiceHandsCommand.Standby
             matches(n, ANALYZE) -> VoiceHandsCommand.Analyze
             matches(n, RECOMMEND) -> VoiceHandsCommand.Recommend
+            matches(n, WORK) -> VoiceHandsCommand.Work
             matches(n, READ) -> VoiceHandsCommand.Read
             matches(n, DONE) -> VoiceHandsCommand.Done
             else -> null
@@ -174,6 +189,12 @@ internal object VoiceHandsPhrases {
         "дай рекомендации",
         "рекомендации",
         "рекомендация"
+    )
+    private val WORK = listOf(
+        "проработка ситуации",
+        "проработать ситуацию",
+        "проработку ситуации",
+        "проработка"
     )
     private val READ = listOf("читай", "прочитай", "читай дальше")
     private val STANDBY = listOf(

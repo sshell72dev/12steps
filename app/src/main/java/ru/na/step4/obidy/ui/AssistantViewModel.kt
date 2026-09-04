@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.Ru
+import ru.na.step4.obidy.Step4App
+import ru.na.step4.obidy.data.profile.ProfileQuestionnaire
 import ru.na.step4.obidy.assistant.AssistantBrief
 import ru.na.step4.obidy.assistant.ChatTurn
 import ru.na.step4.obidy.assistant.DialogSession
@@ -58,7 +60,7 @@ class AssistantViewModel(
 
     private val voice = VapiVoiceController(
         scope = viewModelScope,
-        plugin = (app as? ru.na.step4.obidy.Step4App)?.voicePlugin
+        plugin = (getApplication<Application>() as? Step4App)?.voicePlugin
     )
 
     private val session = MutableStateFlow(DialogSession())
@@ -157,6 +159,7 @@ class AssistantViewModel(
     fun startVoice() {
         val state = uiState.value
         val qa = state.questionAssist
+        val profile = profileExtras()
         if (qa.active) {
             val extras = mapOf(
                 "category_names" to state.categoryNames.ifBlank { "(none)" },
@@ -168,7 +171,7 @@ class AssistantViewModel(
                 "situation_answers" to qa.situationAnswers,
                 "inventory_total" to state.inventoryTotal.toString(),
                 "inventory_done" to state.inventoryDone.toString()
-            )
+            ) + profile
             voice.start(session.value, extras, questionFocus = true)
         } else {
             val extras = mapOf(
@@ -176,7 +179,7 @@ class AssistantViewModel(
                 "resentment_context" to session.value.funnelSummary(),
                 "inventory_total" to state.inventoryTotal.toString(),
                 "inventory_done" to state.inventoryDone.toString()
-            )
+            ) + profile
             voice.start(session.value, extras, questionFocus = false)
         }
     }
@@ -184,6 +187,26 @@ class AssistantViewModel(
     fun stopVoice() = voice.stop()
 
     fun toggleMute() = voice.toggleMute()
+
+    private fun profileExtras(): Map<String, String> {
+        val snap = (getApplication<Application>() as? Step4App)?.profileStore?.current
+        val questionnaire = snap?.let { ProfileQuestionnaire.formatAnswers(it) }
+            ?.ifBlank { null }
+            ?: "(не заполнено)"
+        val program = snap?.program?.takeIf { it.isNotBlank() }
+            ?: snap?.answers?.get(ProfileQuestionnaire.ID_PROGRAM)?.takeIf { it.isNotBlank() }
+            ?: "(не указана)"
+        val personality = when {
+            snap == null -> "(пока не заполнено)"
+            !snap.personalityEnabled -> "(не использовать)"
+            else -> snap.personality.trim().ifBlank { "(пока не заполнено)" }
+        }
+        return mapOf(
+            "questionnaire" to questionnaire,
+            "program" to program,
+            "personality" to personality
+        )
+    }
 
     fun onMicPermissionDenied() {
         voice.setError(Ru.micPermissionNeeded)

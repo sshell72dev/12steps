@@ -34,7 +34,10 @@ class VoiceHandsController(
     private val listener = VoiceHandsListener(
         context = context,
         onFinal = { text -> scope.launch { mutex.withLock { onHeard(text) } } },
-        onPartial = { text -> publish { copy(lastHeard = text) } },
+        onPartial = { text ->
+            publish { copy(lastHeard = text) }
+            if (listing) maybeBargeIn(text)
+        },
         onState = { listening ->
             publish {
                 copy(
@@ -55,7 +58,12 @@ class VoiceHandsController(
     private var skippedTopicPick = false
     private var psychJob: Job? = null
     private var thinkJob: Job? = null
+    private var listJob: Job? = null
     private var foreground = true
+    @Volatile private var listing = false
+    @Volatile private var listingEcho = ""
+    @Volatile private var bargeCommand: VoiceHandsCommand? = null
+    @Volatile private var offerArmed = false
 
     init {
         scope.launch {
@@ -93,6 +101,10 @@ class VoiceHandsController(
         speaker.stop()
         listener.stop()
         thinkJob?.cancel()
+        listJob?.cancel()
+        listing = false
+        bargeCommand = null
+        offerArmed = false
         scope.launch {
             mutex.withLock {
                 if (!settings.enabled.value) return@withLock
@@ -117,11 +129,17 @@ class VoiceHandsController(
         speaker.stop()
         listener.stop()
         thinkJob?.cancel()
+        listJob?.cancel()
+        listing = false
+        bargeCommand = null
+        offerArmed = false
         settings.setEnabled(false)
     }
 
     fun release() {
         thinkJob?.cancel()
+        listJob?.cancel()
+        listing = false
         psychJob?.cancel()
         listener.stop()
         speaker.stop()
@@ -152,6 +170,10 @@ class VoiceHandsController(
         handledResultKey = null
         skippedTopicPick = false
         thinkJob?.cancel()
+        listJob?.cancel()
+        listing = false
+        bargeCommand = null
+        offerArmed = false
         publish {
             VoiceHandsUi(enabled = false, phase = VoiceHandsPhase.Off, status = VoiceHandsRu.off)
         }
@@ -164,6 +186,10 @@ class VoiceHandsController(
         handledResultKey = null
         skippedTopicPick = false
         thinkJob?.cancel()
+        listJob?.cancel()
+        listing = false
+        bargeCommand = null
+        offerArmed = false
         if (_ui.value.speaking) speaker.stop()
         listener.stop()
         setPhase(VoiceHandsPhase.Standby)
@@ -188,6 +214,7 @@ class VoiceHandsController(
             VoiceHandsPhase.AwaitingReply -> handleReply(spoken)
             VoiceHandsPhase.AskRead -> handleAskRead(spoken)
             VoiceHandsPhase.AfterRead -> handleAfterRead(spoken)
+            VoiceHandsPhase.OfferActions -> handleOffer(spoken)
             else -> Unit
         }
     }
@@ -249,6 +276,7 @@ class VoiceHandsController(
         when (VoiceHandsPhrases.matchCommand(spoken)) {
             VoiceHandsCommand.Analyze -> runAiCommand { it.analyze() }
             VoiceHandsCommand.Recommend -> runAiCommand { it.recommend() }
+            VoiceHandsCommand.Work -> runAiCommand { it.startWork() }
             VoiceHandsCommand.Standby -> {
                 VoiceHandsPsychGate.bound.value?.goHub()
                 enterStandby()
@@ -258,6 +286,12 @@ class VoiceHandsController(
             VoiceHandsCommand.Read,
             null -> {
                 val psych = VoiceHandsPsychGate.bound.value ?: return
+                if (psych.willCompleteDialogueOnNextAnswer()) {
+                    spokenQuestion = null
+                    psych.answerDialogue(spoken)
+                    startOfferActions()
+                    return
+                }
                 spokenQuestion = null
                 say(VoiceHandsRu.SAY_THINKING)
                 beginThinking(VoiceHandsPhase.ThinkingQuestion)
@@ -271,6 +305,7 @@ class VoiceHandsController(
             VoiceHandsCommand.Read -> readPending()
             VoiceHandsCommand.Analyze -> runAiCommand { it.analyze() }
             VoiceHandsCommand.Recommend -> runAiCommand { it.recommend() }
+            VoiceHandsCommand.Work -> runAiCommand { it.startWork() }
             VoiceHandsCommand.Standby -> {
                 VoiceHandsPsychGate.bound.value?.goHub()
                 enterStandby()
@@ -287,6 +322,7 @@ class VoiceHandsController(
             }
             VoiceHandsCommand.Analyze -> runAiCommand { it.analyze() }
             VoiceHandsCommand.Recommend -> runAiCommand { it.recommend() }
+            VoiceHandsCommand.Work -> runAiCommand { it.startWork() }
             VoiceHandsCommand.Start -> beginRecord()
             else -> Unit
         }
@@ -314,9 +350,136 @@ class VoiceHandsController(
         listenForPhase(VoiceHandsPhase.AfterRead)
     }
 
+    private fun startOfferActions() {
+        if (_ui.value.phase == VoiceHandsPhase.OfferActions) return
+        thinkJob?.cancel()
+        listJob?.cancel()
+        bargeCommand = null
+        offerArmed = true
+        setPhase(VoiceHandsPhase.OfferActions)
+        listJob = scope.launch { runOfferListing() }
+    }
+
+    private suspend fun runOfferListing() {
+        listing = true
+        bargeCommand = null
+        listener.listenLoop(longSilence = false)
+        val chunks = listOf(
+            VoiceHandsRu.SAY_SITUATION_CLEAR,
+            VoiceHandsRu.SAY_CMD_ANALYZE,
+            VoiceHandsRu.SAY_CMD_RECOMMEND,
+            VoiceHandsRu.SAY_CMD_WORK,
+            VoiceHandsRu.SAY_CMD_STANDBY
+        )
+        for (line in chunks) {
+            if (bargeCommand != null) break
+            listingEcho = VoiceHandsPhrases.normalize(line)
+            sayKeepListening(line)
+            listingEcho = ""
+            if (bargeCommand != null) break
+            waitForBarge(1_200)
+        }
+        listingEcho = ""
+        val chosen = bargeCommand
+        bargeCommand = null
+        listing = false
+        if (chosen != null) {
+            activateAction(chosen)
+        } else if (settings.enabled.value && _ui.value.phase == VoiceHandsPhase.OfferActions) {
+            listenForPhase(VoiceHandsPhase.OfferActions)
+        }
+    }
+
+    private suspend fun waitForBarge(ms: Long) {
+        var left = ms
+        while (left > 0 && bargeCommand == null) {
+            val step = 100L.coerceAtMost(left)
+            delay(step)
+            left -= step
+        }
+    }
+
+    private suspend fun handleOffer(spoken: String) {
+        if (listing) {
+            maybeBargeIn(spoken)
+            return
+        }
+        when (val cmd = VoiceHandsPhrases.matchCommand(spoken)) {
+            VoiceHandsCommand.Analyze,
+            VoiceHandsCommand.Recommend,
+            VoiceHandsCommand.Work,
+            VoiceHandsCommand.Standby -> activateAction(cmd)
+            else -> Unit
+        }
+    }
+
+    private fun maybeBargeIn(text: String) {
+        if (!listing || !offerArmed) return
+        val cmd = VoiceHandsPhrases.matchCommand(text) ?: return
+        if (cmd !in ACTION_COMMANDS) return
+        if (speaker.speaking.value) {
+            val echo = listingEcho
+            val heard = VoiceHandsPhrases.normalize(text)
+            if (echo.isNotBlank() && (heard.contains(echo) || echo.contains(heard))) return
+        }
+        bargeCommand = cmd
+        speaker.stop()
+    }
+
+    private suspend fun activateAction(cmd: VoiceHandsCommand) {
+        if (!offerArmed) return
+        offerArmed = false
+        listing = false
+        listener.stop()
+        speaker.stop()
+        when (cmd) {
+            VoiceHandsCommand.Analyze,
+            VoiceHandsCommand.Recommend,
+            VoiceHandsCommand.Work -> {
+                if (VoiceHandsPsychGate.bound.value == null) {
+                    offerArmed = true
+                    listenForPhase(VoiceHandsPhase.OfferActions)
+                    return
+                }
+                when (cmd) {
+                    VoiceHandsCommand.Analyze -> runAiCommand { it.analyze() }
+                    VoiceHandsCommand.Recommend -> runAiCommand { it.recommend() }
+                    else -> runAiCommand { it.startWork() }
+                }
+            }
+            VoiceHandsCommand.Standby -> {
+                VoiceHandsPsychGate.bound.value?.goHub()
+                enterStandby()
+            }
+            else -> {
+                offerArmed = true
+                listenForPhase(VoiceHandsPhase.OfferActions)
+            }
+        }
+    }
+
+    private suspend fun sayKeepListening(text: String) {
+        val clean = text.trim()
+        if (clean.isBlank() || bargeCommand != null) return
+        speaker.stop()
+        publish { copy(speaking = true) }
+        speaker.speak(clean)
+        delay(100)
+        val began = withTimeoutOrNull(1_000) { speaker.speaking.first { it } }
+        if (began == true) {
+            withTimeoutOrNull(20_000) { speaker.speaking.first { !it } }
+        }
+        if (speaker.speaking.value) speaker.stop()
+        publish { copy(speaking = false) }
+    }
+
     private suspend fun onPsychUi(psych: VoiceHandsPsych, ui: PsychUi) {
         val follow = mutex.withLock { inspectPsych(psych, ui) } ?: return
         thinkJob?.cancel()
+        if (follow.kind == FollowKind.OfferActions) {
+            startOfferActions()
+            return
+        }
         say(follow.text)
         mutex.withLock {
             when (follow.kind) {
@@ -334,6 +497,7 @@ class VoiceHandsController(
                     listenForPhase(VoiceHandsPhase.AfterRead)
                     publish { copy(error = follow.text) }
                 }
+                FollowKind.OfferActions -> Unit
             }
         }
     }
@@ -341,6 +505,9 @@ class VoiceHandsController(
     private fun inspectPsych(psych: VoiceHandsPsych, ui: PsychUi): FollowUp? {
         return when (_ui.value.phase) {
             VoiceHandsPhase.ThinkingQuestion -> {
+                if (ui.isReview) {
+                    return FollowUp(FollowKind.OfferActions, "")
+                }
                 if (ui.isPaywall) {
                     return FollowUp(FollowKind.Error, VoiceHandsRu.psychMissing)
                 }
@@ -390,16 +557,22 @@ class VoiceHandsController(
         thinkJob?.cancel()
         thinkJob = scope.launch {
             delay(THINK_TIMEOUT_MS)
-            val stuck = mutex.withLock {
-                val phase = _ui.value.phase
-                phase == VoiceHandsPhase.ThinkingQuestion || phase == VoiceHandsPhase.ThinkingResult
+            val phase = mutex.withLock { _ui.value.phase }
+            if (phase != VoiceHandsPhase.ThinkingQuestion && phase != VoiceHandsPhase.ThinkingResult) {
+                return@launch
             }
-            if (!stuck) return@launch
             speaker.stop()
+            if (phase == VoiceHandsPhase.ThinkingQuestion) {
+                val review = VoiceHandsPsychGate.bound.value?.ui?.value?.isReview == true
+                if (review) {
+                    startOfferActions()
+                    return@launch
+                }
+            }
             say(VoiceHandsRu.SAY_TIMEOUT)
             mutex.withLock {
-                val phase = _ui.value.phase
-                if (phase == VoiceHandsPhase.ThinkingQuestion || phase == VoiceHandsPhase.ThinkingResult) {
+                val now = _ui.value.phase
+                if (now == VoiceHandsPhase.ThinkingQuestion || now == VoiceHandsPhase.ThinkingResult) {
                     setPhase(VoiceHandsPhase.AfterRead)
                     listenForPhase(VoiceHandsPhase.AfterRead)
                     publish { copy(error = VoiceHandsRu.thinkTimeout) }
@@ -417,7 +590,8 @@ class VoiceHandsController(
             VoiceHandsPhase.Dictating,
             VoiceHandsPhase.AwaitingReply,
             VoiceHandsPhase.AskRead,
-            VoiceHandsPhase.AfterRead -> startListen(phase)
+            VoiceHandsPhase.AfterRead,
+            VoiceHandsPhase.OfferActions -> startListen(phase)
             else -> listener.stop()
         }
     }
@@ -428,6 +602,7 @@ class VoiceHandsController(
             VoiceHandsPhase.Standby,
             VoiceHandsPhase.AskRead,
             VoiceHandsPhase.AfterRead -> listener.listenOnce(longSilence = false)
+            VoiceHandsPhase.OfferActions -> listener.listenLoop(longSilence = false)
             VoiceHandsPhase.Dictating,
             VoiceHandsPhase.AwaitingReply -> listener.listenLoop(longSilence = long)
             else -> listener.stop()
@@ -481,6 +656,7 @@ class VoiceHandsController(
         VoiceHandsPhase.AskRead -> VoiceHandsRu.askRead
         VoiceHandsPhase.Reading -> VoiceHandsRu.reading
         VoiceHandsPhase.AfterRead -> VoiceHandsRu.afterRead
+        VoiceHandsPhase.OfferActions -> VoiceHandsRu.offerActions
     }
 
     private fun publish(block: VoiceHandsUi.() -> VoiceHandsUi) {
@@ -495,7 +671,7 @@ class VoiceHandsController(
         return "$current $piece".replace(Regex("\\s+"), " ").trim()
     }
 
-    private enum class FollowKind { Question, ReadyRead, Error }
+    private enum class FollowKind { Question, ReadyRead, Error, OfferActions }
 
     private data class FollowUp(
         val kind: FollowKind,
@@ -505,5 +681,11 @@ class VoiceHandsController(
 
     companion object {
         private const val THINK_TIMEOUT_MS = 60_000L
+        private val ACTION_COMMANDS = setOf(
+            VoiceHandsCommand.Analyze,
+            VoiceHandsCommand.Recommend,
+            VoiceHandsCommand.Work,
+            VoiceHandsCommand.Standby
+        )
     }
 }

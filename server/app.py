@@ -1556,6 +1556,11 @@ def _build_self_analysis_prompt(
         prompt += personality
         prompt += "\n"
     prompt += "\n"
+    prompt += (
+        "Учитывай анкету, программу выздоровления и портрет «Моя личность» "
+        "при оценке, вопросах и рекомендациях. Не выдумывай недостающие данные.\n"
+    )
+    prompt += "\n"
     prompt += f"{h['answers']}:\n"
     prompt += "\n\n".join(answer_blocks)
     prompt += "\n\n"

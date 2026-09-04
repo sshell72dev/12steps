@@ -245,7 +245,10 @@ class PsychSettings(
             "name" to snap.name,
             "birth_year" to snap.birthYear,
             "location" to snap.location,
-            "recovery_program" to snap.program,
+            "recovery_program" to snap.program.ifBlank {
+                snap.answers[ProfileQuestionnaire.ID_PROGRAM].orEmpty()
+            },
+            "questionnaire_text" to (ProfileQuestionnaire.formatAnswers(snap) ?: ""),
             "about_me" to snap.aboutMe,
             "gender" to snap.answers[ProfileQuestionnaire.ID_GENDER].orEmpty(),
             "addiction_type" to snap.answers[ProfileQuestionnaire.ID_ADDICTION].orEmpty(),

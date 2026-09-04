@@ -877,6 +877,7 @@ object SourceBootstrap {
         SourceCatalog.put("voicehands.askRead", "Готово. Читать?")
         SourceCatalog.put("voicehands.reading", "Читаю")
         SourceCatalog.put("voicehands.afterRead", "Что дальше")
+        SourceCatalog.put("voicehands.offerActions", "Что сделать")
         SourceCatalog.put("voicehands.opening", "Открываю психолога")
         SourceCatalog.put("voicehands.off", "Выключен")
         SourceCatalog.put("voicehands.disable", "Выключить")
@@ -904,6 +905,10 @@ object SourceBootstrap {
         SourceCatalog.put(
             "voicehands.hintAfterRead",
             "«Вернись в режим ожидания» · «разобрать ситуацию» · «рекомендации по ситуации» · «Давай запишем»"
+        )
+        SourceCatalog.put(
+            "voicehands.hintOffer",
+            "«разобрать ситуацию» · «рекомендации по ситуации» · «проработка ситуации» · «Вернись в режим ожидания»"
         )
         SourceCatalog.put(
             "voicehands.hintThinking",

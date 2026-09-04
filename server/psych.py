@@ -189,14 +189,20 @@ def render_datetime(profile: dict[str, Any]) -> str:
 
 
 def render_profile(profile: dict[str, Any]) -> str:
+    program = _str(profile.get("recovery_program")) or _str(profile.get("program"))
+    questionnaire = _str(profile.get("questionnaire_text"))
+    if questionnaire:
+        lines = [questionnaire]
+        if program and program not in questionnaire:
+            lines.append(f"Программа: {program}")
+        lines.append(render_datetime(profile))
+        return "\n".join(lines)
     lines = [
         f"Имя: {_str(profile.get('name')) or 'не указано'}",
         f"Год рождения: {_str(profile.get('birth_year')) or 'не указан'}",
         f"Место нахождения: {_str(profile.get('location')) or 'не указано'}",
+        f"Программа: {program or 'не указана'}",
     ]
-    program = _str(profile.get("recovery_program"))
-    if program:
-        lines.append(f"Программа: {program}")
     gender = _str(profile.get("gender"))
     if gender:
         lines.append(f"Пол: {gender}")
@@ -328,17 +334,11 @@ def render_topics(payload: dict[str, Any]) -> str:
     return header + "\n".join(blocks)
 
 
-def _context_blocks(
-    payload: dict[str, Any],
-    *,
-    include_profile: bool,
-) -> tuple[str, str, str]:
+def _context_blocks(payload: dict[str, Any]) -> tuple[str, str, str]:
     profile = _as_dict(payload.get("profile"))
-    if not include_profile:
-        return "", "", ""
     anketa = f"АНКЕТА:\n{render_profile(profile)}\n"
     personality = render_personality(profile)
-    topic = render_topics(payload)
+    topic = "" if _no_history(payload) else render_topics(payload)
     return anketa, personality, topic
 
 
@@ -352,9 +352,12 @@ def build_prompt(kind: str, payload: dict[str, Any]) -> str:
         _str(payload.get("language")) or _str(profile.get("language_code")) or "ru",
         f"{situation}\n{dialogue}",
     )
-    include_profile = not _no_history(payload)
-    anketa, personality, topic = _context_blocks(payload, include_profile=include_profile)
+    anketa, personality, topic = _context_blocks(payload)
     lang_ctx = render_language(lang)
+    profile_note = (
+        "\nОпирайся на АНКЕТУ, программу выздоровления и блок «МОЯ ЛИЧНОСТЬ», "
+        "если они заполнены. Не выдумывай недостающие данные.\n"
+    )
     dialogue_note = (
         "\nУчитывай весь диалог с начала (ситуация + все вопросы и ответы) как единый контекст.\n"
         if answers
@@ -364,12 +367,12 @@ def build_prompt(kind: str, payload: dict[str, Any]) -> str:
 
     if kind == "analyze":
         return (
-            f"{lang_ctx}{render_variant(profile)}{render_style(profile)}{dialogue_note}\n"
+            f"{lang_ctx}{render_variant(profile)}{render_style(profile)}{profile_note}{dialogue_note}\n"
             f"{anketa}СИТУАЦИЯ:\n{situation}\n{topic}{dialogue}{personality}"
         )
     if kind == "recommend":
         return (
-            f"{lang_ctx}{render_variant(profile)}{render_style(profile)}{dialogue_note}\n"
+            f"{lang_ctx}{render_variant(profile)}{render_style(profile)}{profile_note}{dialogue_note}\n"
             f"{anketa}СИТУАЦИЯ:\n{situation}\n{topic}{dialogue}{personality}"
         )
     if kind in {"questions", "questions_retry"}:
@@ -385,21 +388,21 @@ def build_prompt(kind: str, payload: dict[str, Any]) -> str:
         )
         n = question_count(payload)
         return (
-            f"{retry}{lang_ctx}{render_difficulty(profile)}{render_length(profile)}{work_note}\n"
+            f"{retry}{lang_ctx}{render_difficulty(profile)}{render_length(profile)}{profile_note}{work_note}\n"
             f"Сгенерируй ровно {n} вопросов.\n"
             f"{anketa}СИТУАЦИЯ:\n{situation}\n{topic}"
             f"{render_qa(answers, empty='Диалога ещё не было.')}{personality}"
         )
     if kind == "questions_next":
         return (
-            f"{lang_ctx}{render_difficulty(profile)}{render_length(profile)}\n\n"
+            f"{lang_ctx}{render_difficulty(profile)}{render_length(profile)}{profile_note}\n"
             f"{anketa}СИТУАЦИЯ:\n{situation}\n{topic}{personality}"
             f"{render_qa(answers, empty='Предыдущих вопросов ещё не было.')}"
             f"\nНомер следующего вопроса по счёту: {qn}.\n"
         )
     if kind == "dialogue_question":
         return (
-            f"{lang_ctx}{render_length(profile)}\n\n"
+            f"{lang_ctx}{render_length(profile)}{profile_note}\n"
             f"{anketa}СИТУАЦИЯ:\n{situation}\n{topic}{personality}"
             f"{render_qa(answers, empty='Предыдущих вопросов ещё не было.')}"
             f"\nНомер следующего вопроса по счёту: {qn}.\n"
@@ -413,20 +416,18 @@ def build_prompt(kind: str, payload: dict[str, Any]) -> str:
             header="ВОПРОСЫ И ОТВЕТЫ:",
         )
         return (
-            f"{lang_ctx}{render_variant(profile)}{render_style(profile)}\n\n"
+            f"{lang_ctx}{render_variant(profile)}{render_style(profile)}{profile_note}\n"
             f"СИТУАЦИЯ:\n{situation}\n\n{anketa}\n{qa}{topic}{personality}"
         )
     if kind == "tts_understanding":
-        return f"СИТУАЦИЯ:\n{situation}"
+        return f"{profile_note}{anketa}{personality}СИТУАЦИЯ:\n{situation}"
     if kind == "reminder_outreach":
         name = _str(profile.get("name"))
         name_hint = f"Имя пользователя: {name}." if name else "Имя не указано — можно без обращения по имени."
-        portrait = _str(profile.get("my_personality"))
-        portrait_block = f"\nПОРТРЕТ ЛИЧНОСТИ (учти тон, без прямых цитат):\n{portrait}\n" if portrait else ""
+        portrait = render_personality(profile)
         return (
-            f"{lang_ctx}\n{name_hint}\n"
-            f"АНКЕТА:\n{render_profile(profile)}\n"
-            f"{portrait_block}"
+            f"{lang_ctx}{profile_note}\n{name_hint}\n"
+            f"{anketa}{portrait}"
         )
     raise ValueError(f"unknown kind: {kind}")
 

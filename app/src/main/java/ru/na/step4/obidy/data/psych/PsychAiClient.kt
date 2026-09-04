@@ -36,7 +36,7 @@ class PsychAiClient {
             .put("kind", kind)
             .put("situation", situation)
             .put("language", settings.languageCode)
-            .put("no_history", noHistory)
+            .put("no_history", false)
             .put("question_number", questionNumber)
             .put("question_count", questionCount)
             .put("premium", settings.isPro)
