@@ -303,6 +303,44 @@ class PsychViewModel(
         }
     }
 
+    /**
+     * Voice hands: attach topic (or create one), open a live session on Review
+     * without dialogue questions so analyze/recommend can run next.
+     */
+    fun confirmTopicForVoice(situationId: Long, topicId: Long?, createName: String?) {
+        viewModelScope.launch {
+            val resolvedId = when {
+                !createName.isNullOrBlank() -> {
+                    val id = repository.addTopic(createName.trim())
+                    id.takeIf { it != 0L }
+                }
+                topicId != null && topicId != 0L -> topicId
+                else -> null
+            }
+            if (resolvedId != null) {
+                repository.attachTopic(situationId, resolvedId)
+            } else {
+                repository.attachTopic(situationId, null)
+            }
+            val sit = repository.getSituation(situationId) ?: return@launch
+            val uid = settings.newSessionUid()
+            val session = repository.createSession(sit.id, uid, PsychSession.SEQ_LIVE)
+            settings.activeSessionUid = uid
+            activityLog?.start(
+                ru.na.step4.obidy.data.activity.ActivityCat.PSYCH,
+                ru.na.step4.obidy.data.activity.ActivityType.START,
+                sit.text.take(80).ifBlank { "Психолог" },
+                sessionKey = "psych-$uid"
+            )
+            setPage(PsychPage.Review(sit, session, emptyList()))
+        }
+    }
+
+    suspend fun situationText(situationId: Long): String =
+        repository.getSituation(situationId)?.text.orEmpty()
+
+    suspend fun topicCatalog(): List<PsychTopic> = repository.allTopics()
+
     fun answerDialogue(text: String, viaVoice: Boolean = false) {
         val page = _ui.value.page as? PsychPage.Dialogue ?: return
         val body = text.trim()

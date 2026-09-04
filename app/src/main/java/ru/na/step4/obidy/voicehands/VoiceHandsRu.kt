@@ -11,7 +11,7 @@ object VoiceHandsRu {
     )
     val commands: String get() = I18n.t(
         "voicehands.commands",
-        "Фразы: «Давай запишем» → диктуйте → «готово». Дальше ответ на вопрос или «разобрать ситуацию» / «рекомендации по ситуации». После «готово. читать?» — «читай». Затем «вернись в режим ожидания» или следующая команда."
+        "Фразы: «Давай запишем» → диктуйте → «готово». Затем тема: «подтверждаю» / «перечисли темы» / «назову свою тему». После подтверждения — «разобрать ситуацию» / «рекомендации по ситуации». После «готово. читать?» — «читай». Затем «вернись в режим ожидания»."
     )
     val standby: String get() = I18n.t("voicehands.standby", "Ожидание")
     val dictating: String get() = I18n.t("voicehands.dictating", "Диктуйте")
@@ -53,6 +53,22 @@ object VoiceHandsRu {
         "voicehands.hintOffer",
         "«разобрать ситуацию» · «рекомендации по ситуации» · «проработка ситуации» · «Вернись в режим ожидания»"
     )
+    val hintSuggestTopic: String get() = I18n.t(
+        "voicehands.hintSuggestTopic",
+        "«подтверждаю» · «перечисли темы» · «назову свою тему» · «без темы» · «Вернись в режим ожидания»"
+    )
+    val hintListTopics: String get() = I18n.t(
+        "voicehands.hintListTopics",
+        "Назовите тему во время или после перечисления · «назову свою тему» · «Вернись в режим ожидания»"
+    )
+    val hintConfirmTopic: String get() = I18n.t(
+        "voicehands.hintConfirmTopic",
+        "«подтверждаю» · «перечисли темы» · «назову свою тему» · «Вернись в режим ожидания»"
+    )
+    val hintNameTopic: String get() = I18n.t(
+        "voicehands.hintNameTopic",
+        "Назовите тему своими словами · «Вернись в режим ожидания»"
+    )
     val hintThinking: String get() = I18n.t(
         "voicehands.hintThinking",
         "Жду ответ ИИ. Если зависло — «В ожидание» или «Выключить»."
@@ -82,6 +98,10 @@ object VoiceHandsRu {
     const val SAY_CMD_RECOMMEND = "рекомендации по ситуации"
     const val SAY_CMD_WORK = "проработка ситуации"
     const val SAY_CMD_STANDBY = "вернись в режим ожидания"
+    const val SAY_LIST_TOPICS_EMPTY = "Пока нет сохранённых тем. Назовите свою тему или скажите «без темы»."
+    const val SAY_NAME_TOPIC = "Назовите тему"
+    const val SAY_TOPIC_HINT =
+        "Скажите «подтверждаю», «перечисли темы» или «назову свою тему»."
 
     fun hintsFor(phase: VoiceHandsPhase): String = when (phase) {
         VoiceHandsPhase.Standby -> hintStandby
@@ -90,6 +110,10 @@ object VoiceHandsRu {
         VoiceHandsPhase.AskRead -> hintAskRead
         VoiceHandsPhase.AfterRead -> hintAfterRead
         VoiceHandsPhase.OfferActions -> hintOffer
+        VoiceHandsPhase.SuggestTopic -> hintSuggestTopic
+        VoiceHandsPhase.ListTopics -> hintListTopics
+        VoiceHandsPhase.ConfirmTopic -> hintConfirmTopic
+        VoiceHandsPhase.NameTopic -> hintNameTopic
         VoiceHandsPhase.ThinkingQuestion,
         VoiceHandsPhase.ThinkingResult -> hintThinking
         VoiceHandsPhase.Opening -> hintOpening
@@ -103,7 +127,11 @@ object VoiceHandsRu {
         VoiceHandsPhase.AwaitingReply,
         VoiceHandsPhase.AskRead,
         VoiceHandsPhase.AfterRead,
-        VoiceHandsPhase.OfferActions -> true
+        VoiceHandsPhase.OfferActions,
+        VoiceHandsPhase.SuggestTopic,
+        VoiceHandsPhase.ListTopics,
+        VoiceHandsPhase.ConfirmTopic,
+        VoiceHandsPhase.NameTopic -> true
         else -> false
     }
 }
@@ -115,7 +143,11 @@ internal enum class VoiceHandsCommand {
     Recommend,
     Work,
     Read,
-    Standby
+    Standby,
+    Confirm,
+    ListTopics,
+    NameTopic,
+    NoTopic
 }
 
 internal object VoiceHandsPhrases {
@@ -132,6 +164,10 @@ internal object VoiceHandsPhrases {
         return when {
             matches(n, START) -> VoiceHandsCommand.Start
             matches(n, STANDBY) -> VoiceHandsCommand.Standby
+            matches(n, LIST_TOPICS) -> VoiceHandsCommand.ListTopics
+            matches(n, NAME_TOPIC) -> VoiceHandsCommand.NameTopic
+            matches(n, CONFIRM) -> VoiceHandsCommand.Confirm
+            matches(n, NO_TOPIC) -> VoiceHandsCommand.NoTopic
             matches(n, ANALYZE) -> VoiceHandsCommand.Analyze
             matches(n, RECOMMEND) -> VoiceHandsCommand.Recommend
             matches(n, WORK) -> VoiceHandsCommand.Work
@@ -203,5 +239,34 @@ internal object VoiceHandsPhrases {
         "режим ожидания",
         "вернись в ожидание",
         "в ожидание"
+    )
+    private val CONFIRM = listOf(
+        "подтверждаю",
+        "подтвердить",
+        "подтверждаю тему",
+        "да подтверждаю"
+    )
+    private val LIST_TOPICS = listOf(
+        "перечисли все темы",
+        "перечислить все темы",
+        "перечисли темы",
+        "перечислить темы",
+        "все темы",
+        "список тем"
+    )
+    private val NAME_TOPIC = listOf(
+        "назову свою тему",
+        "назови свою тему",
+        "свою тему",
+        "назову тему",
+        "назови тему",
+        "новая тема",
+        "создать тему"
+    )
+    private val NO_TOPIC = listOf(
+        "без темы",
+        "без истории",
+        "пропусти тему",
+        "пропустить тему"
     )
 }

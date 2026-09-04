@@ -3,6 +3,7 @@ package ru.na.step4.obidy.voicehands
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import ru.na.step4.obidy.data.psych.PsychTopic
 import ru.na.step4.obidy.ui.psych.PsychPage
 import ru.na.step4.obidy.ui.psych.PsychUi
 import ru.na.step4.obidy.ui.psych.PsychViewModel
@@ -25,6 +26,19 @@ class VoiceHandsPsych(private val vm: PsychViewModel) {
     fun submitSituation(text: String) = vm.submitSituation(text, viaVoice = true)
 
     fun pickTopicNoHistory(situationId: Long) = vm.pickTopic(situationId, null, noHistory = true)
+
+    fun confirmTopicForVoice(situationId: Long, topicId: Long?, createName: String?) =
+        vm.confirmTopicForVoice(situationId, topicId, createName)
+
+    suspend fun situationText(situationId: Long): String = vm.situationText(situationId)
+
+    suspend fun topicCatalog(): List<PsychTopic> = vm.topicCatalog()
+
+    suspend fun suggestTopic(situationId: Long): VoiceTopicChoice {
+        val text = situationText(situationId)
+        val topics = topicCatalog()
+        return VoiceHandsTopicSuggest.suggest(text, topics)
+    }
 
     fun answerDialogue(text: String) = vm.answerDialogue(text, viaVoice = true)
 
@@ -87,3 +101,6 @@ internal val PsychUi.isPaywall: Boolean
 
 internal val PsychUi.isReview: Boolean
     get() = page is PsychPage.Review
+
+internal val PsychUi.isIdle: Boolean
+    get() = page is PsychPage.Idle

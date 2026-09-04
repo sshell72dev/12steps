@@ -34,9 +34,10 @@ class VoiceHandsController(
     private val listener = VoiceHandsListener(
         context = context,
         onFinal = { text -> scope.launch { mutex.withLock { onHeard(text) } } },
-        onPartial = { text ->
+            onPartial = { text ->
             publish { copy(lastHeard = text) }
             if (listing) maybeBargeIn(text)
+            if (listingTopics) maybeTopicBargeIn(text)
         },
         onState = { listening ->
             publish {
@@ -58,14 +59,20 @@ class VoiceHandsController(
     /** When waiting for analyze/recommend, ignore a stale Result of another kind. */
     private var expectedResultKind: String? = null
     private var skippedTopicPick = false
+    private var topicSituationId: Long? = null
+    private var pendingTopicChoice: VoiceTopicChoice? = null
+    private var topicCatalogCache: List<ru.na.step4.obidy.data.psych.PsychTopic> = emptyList()
     private var psychJob: Job? = null
     private var thinkJob: Job? = null
     private var listJob: Job? = null
     private var foreground = true
     @Volatile private var listing = false
+    @Volatile private var listingTopics = false
     @Volatile private var listingEcho = ""
     @Volatile private var bargeCommand: VoiceHandsCommand? = null
+    @Volatile private var bargeTopicChoice: VoiceTopicChoice? = null
     @Volatile private var offerArmed = false
+    @Volatile private var suppressReviewOffer = false
 
     init {
         scope.launch {
@@ -105,7 +112,9 @@ class VoiceHandsController(
         thinkJob?.cancel()
         listJob?.cancel()
         listing = false
+        listingTopics = false
         bargeCommand = null
+        bargeTopicChoice = null
         offerArmed = false
         scope.launch {
             mutex.withLock {
@@ -172,10 +181,15 @@ class VoiceHandsController(
         handledResultKey = null
         expectedResultKind = null
         skippedTopicPick = false
+        topicSituationId = null
+        pendingTopicChoice = null
+        topicCatalogCache = emptyList()
         thinkJob?.cancel()
         listJob?.cancel()
         listing = false
+        listingTopics = false
         bargeCommand = null
+        bargeTopicChoice = null
         offerArmed = false
         publish {
             VoiceHandsUi(enabled = false, phase = VoiceHandsPhase.Off, status = VoiceHandsRu.off)
@@ -189,10 +203,15 @@ class VoiceHandsController(
         handledResultKey = null
         expectedResultKind = null
         skippedTopicPick = false
+        topicSituationId = null
+        pendingTopicChoice = null
+        topicCatalogCache = emptyList()
         thinkJob?.cancel()
         listJob?.cancel()
         listing = false
+        listingTopics = false
         bargeCommand = null
+        bargeTopicChoice = null
         offerArmed = false
         if (_ui.value.speaking) speaker.stop()
         listener.stop()
@@ -216,6 +235,10 @@ class VoiceHandsController(
                 }
             }
             VoiceHandsPhase.AwaitingReply -> handleReply(spoken)
+            VoiceHandsPhase.SuggestTopic -> handleSuggestTopic(spoken)
+            VoiceHandsPhase.ListTopics -> handleListTopics(spoken)
+            VoiceHandsPhase.ConfirmTopic -> handleConfirmTopic(spoken)
+            VoiceHandsPhase.NameTopic -> handleNameTopic(spoken)
             VoiceHandsPhase.AskRead -> handleAskRead(spoken)
             VoiceHandsPhase.AfterRead -> handleAfterRead(spoken)
             VoiceHandsPhase.OfferActions -> handleOffer(spoken)
@@ -246,6 +269,9 @@ class VoiceHandsController(
         handledResultKey = null
         expectedResultKind = null
         skippedTopicPick = false
+        topicSituationId = null
+        pendingTopicChoice = null
+        topicCatalogCache = emptyList()
         say(VoiceHandsRu.SAY_DICTATE)
         setPhase(VoiceHandsPhase.Dictating)
         listenForPhase(VoiceHandsPhase.Dictating)
@@ -289,6 +315,10 @@ class VoiceHandsController(
             VoiceHandsCommand.Start,
             VoiceHandsCommand.Done,
             VoiceHandsCommand.Read,
+            VoiceHandsCommand.Confirm,
+            VoiceHandsCommand.ListTopics,
+            VoiceHandsCommand.NameTopic,
+            VoiceHandsCommand.NoTopic,
             null -> {
                 val psych = VoiceHandsPsychGate.bound.value ?: return
                 if (psych.willCompleteDialogueOnNextAnswer()) {
@@ -333,6 +363,274 @@ class VoiceHandsController(
         }
     }
 
+    private suspend fun beginSuggestTopic(situationId: Long) {
+        val psych = VoiceHandsPsychGate.bound.value ?: return
+        topicSituationId = situationId
+        thinkJob?.cancel()
+        topicCatalogCache = psych.topicCatalog()
+        val suggestion = psych.suggestTopic(situationId)
+        pendingTopicChoice = suggestion.takeUnless { it.isEmpty }
+        val speech = when {
+            suggestion.topicId != null ->
+                "По ситуации предлагаю тему «${suggestion.displayName}». ${VoiceHandsRu.SAY_TOPIC_HINT}"
+            !suggestion.createName.isNullOrBlank() ->
+                "Подходящей темы среди имеющихся нет. Предлагаю создать тему «${suggestion.displayName}». ${VoiceHandsRu.SAY_TOPIC_HINT}"
+            else ->
+                "Выберите тему. ${VoiceHandsRu.SAY_TOPIC_HINT}"
+        }
+        say(speech)
+        setPhase(VoiceHandsPhase.SuggestTopic)
+        listenForPhase(VoiceHandsPhase.SuggestTopic)
+    }
+
+    private suspend fun handleSuggestTopic(spoken: String) {
+        when (VoiceHandsPhrases.matchCommand(spoken)) {
+            VoiceHandsCommand.Confirm -> applyPendingTopic()
+            VoiceHandsCommand.ListTopics -> startTopicListing()
+            VoiceHandsCommand.NameTopic -> askNameTopic()
+            VoiceHandsCommand.NoTopic -> applyTopicChoice(VoiceTopicChoice(displayName = "без темы"))
+            VoiceHandsCommand.Standby -> {
+                VoiceHandsPsychGate.bound.value?.goHub()
+                enterStandby()
+            }
+            else -> {
+                val matched = matchSpokenTopic(spoken)
+                if (matched != null) askConfirmTopic(matched) else Unit
+            }
+        }
+    }
+
+    private suspend fun handleListTopics(spoken: String) {
+        if (listingTopics) {
+            maybeTopicBargeIn(spoken)
+            return
+        }
+        when (VoiceHandsPhrases.matchCommand(spoken)) {
+            VoiceHandsCommand.ListTopics -> startTopicListing()
+            VoiceHandsCommand.NameTopic -> askNameTopic()
+            VoiceHandsCommand.NoTopic -> applyTopicChoice(VoiceTopicChoice(displayName = "без темы"))
+            VoiceHandsCommand.Standby -> {
+                VoiceHandsPsychGate.bound.value?.goHub()
+                enterStandby()
+            }
+            else -> {
+                val matched = matchSpokenTopic(spoken)
+                if (matched != null) askConfirmTopic(matched) else Unit
+            }
+        }
+    }
+
+    private suspend fun handleConfirmTopic(spoken: String) {
+        when (VoiceHandsPhrases.matchCommand(spoken)) {
+            VoiceHandsCommand.Confirm -> applyPendingTopic()
+            VoiceHandsCommand.ListTopics -> startTopicListing()
+            VoiceHandsCommand.NameTopic -> askNameTopic()
+            VoiceHandsCommand.NoTopic -> applyTopicChoice(VoiceTopicChoice(displayName = "без темы"))
+            VoiceHandsCommand.Standby -> {
+                VoiceHandsPsychGate.bound.value?.goHub()
+                enterStandby()
+            }
+            else -> {
+                val matched = matchSpokenTopic(spoken)
+                if (matched != null) askConfirmTopic(matched) else Unit
+            }
+        }
+    }
+
+    private suspend fun handleNameTopic(spoken: String) {
+        when (VoiceHandsPhrases.matchCommand(spoken)) {
+            VoiceHandsCommand.Standby -> {
+                VoiceHandsPsychGate.bound.value?.goHub()
+                enterStandby()
+            }
+            VoiceHandsCommand.ListTopics -> startTopicListing()
+            VoiceHandsCommand.NoTopic -> applyTopicChoice(VoiceTopicChoice(displayName = "без темы"))
+            VoiceHandsCommand.Confirm,
+            VoiceHandsCommand.NameTopic,
+            VoiceHandsCommand.Start,
+            VoiceHandsCommand.Done,
+            VoiceHandsCommand.Analyze,
+            VoiceHandsCommand.Recommend,
+            VoiceHandsCommand.Work,
+            VoiceHandsCommand.Read -> Unit
+            null -> {
+                val cleaned = VoiceHandsTopicSuggest.stripTopicPrefix(spoken)
+                    .ifBlank { VoiceHandsPhrases.normalize(spoken) }
+                if (cleaned.isBlank()) {
+                    say(VoiceHandsRu.SAY_NAME_TOPIC)
+                    return
+                }
+                val existing = VoiceHandsTopicSuggest.matchTopic(cleaned, topicCatalogCache)
+                val choice = if (existing != null) {
+                    VoiceTopicChoice(topicId = existing.id, displayName = existing.name)
+                } else {
+                    val named = cleaned.replaceFirstChar { it.uppercaseChar() }.take(40).trim()
+                    VoiceTopicChoice(createName = named, displayName = named)
+                }
+                askConfirmTopic(choice)
+            }
+        }
+    }
+
+    private suspend fun askNameTopic() {
+        listingTopics = false
+        listJob?.cancel()
+        say(VoiceHandsRu.SAY_NAME_TOPIC)
+        setPhase(VoiceHandsPhase.NameTopic)
+        listenForPhase(VoiceHandsPhase.NameTopic)
+    }
+
+    private suspend fun askConfirmTopic(choice: VoiceTopicChoice) {
+        listingTopics = false
+        listJob?.cancel()
+        bargeTopicChoice = null
+        pendingTopicChoice = choice
+        say("Вы выбрали тему «${choice.displayName}». Подтверждаете?")
+        setPhase(VoiceHandsPhase.ConfirmTopic)
+        listenForPhase(VoiceHandsPhase.ConfirmTopic)
+    }
+
+    private fun matchSpokenTopic(spoken: String): VoiceTopicChoice? {
+        val cleaned = VoiceHandsTopicSuggest.stripTopicPrefix(spoken)
+            .ifBlank { VoiceHandsPhrases.normalize(spoken) }
+        if (cleaned.isBlank()) return null
+        val existing = VoiceHandsTopicSuggest.matchTopic(cleaned, topicCatalogCache)
+            ?: VoiceHandsTopicSuggest.matchTopic(spoken, topicCatalogCache)
+        return existing?.let { VoiceTopicChoice(topicId = it.id, displayName = it.name) }
+    }
+
+    private fun startTopicListing() {
+        if (_ui.value.phase == VoiceHandsPhase.ListTopics && listingTopics) return
+        thinkJob?.cancel()
+        listJob?.cancel()
+        bargeTopicChoice = null
+        bargeCommand = null
+        setPhase(VoiceHandsPhase.ListTopics)
+        listJob = scope.launch { runTopicListing() }
+    }
+
+    private suspend fun runTopicListing() {
+        listingTopics = true
+        bargeTopicChoice = null
+        listener.listenLoop(longSilence = false)
+        val topics = topicCatalogCache.ifEmpty {
+            VoiceHandsPsychGate.bound.value?.topicCatalog().orEmpty().also { topicCatalogCache = it }
+        }
+        if (topics.isEmpty()) {
+            listingTopics = false
+            say(VoiceHandsRu.SAY_LIST_TOPICS_EMPTY)
+            setPhase(VoiceHandsPhase.SuggestTopic)
+            listenForPhase(VoiceHandsPhase.SuggestTopic)
+            return
+        }
+        sayKeepListening("Перечисляю темы.")
+        for (topic in topics) {
+            if (bargeTopicChoice != null || bargeCommand != null) break
+            listingEcho = VoiceHandsPhrases.normalize(topic.name)
+            sayKeepListening(topic.name)
+            listingEcho = ""
+            if (bargeTopicChoice != null || bargeCommand != null) break
+            waitForTopicBarge(1_200)
+        }
+        listingEcho = ""
+        val chosen = bargeTopicChoice
+        val cmd = bargeCommand
+        bargeTopicChoice = null
+        bargeCommand = null
+        listingTopics = false
+        when {
+            chosen != null -> askConfirmTopic(chosen)
+            cmd == VoiceHandsCommand.NameTopic -> askNameTopic()
+            cmd == VoiceHandsCommand.NoTopic -> applyTopicChoice(VoiceTopicChoice(displayName = "без темы"))
+            cmd == VoiceHandsCommand.Standby -> {
+                VoiceHandsPsychGate.bound.value?.goHub()
+                enterStandby()
+            }
+            settings.enabled.value && _ui.value.phase == VoiceHandsPhase.ListTopics -> {
+                say("Назовите тему или скажите «назову свою тему».")
+                listenForPhase(VoiceHandsPhase.ListTopics)
+            }
+        }
+    }
+
+    private suspend fun waitForTopicBarge(ms: Long) {
+        var left = ms
+        while (left > 0 && bargeTopicChoice == null && bargeCommand == null) {
+            val step = 100L.coerceAtMost(left)
+            delay(step)
+            left -= step
+        }
+    }
+
+    private fun maybeTopicBargeIn(text: String) {
+        if (!listingTopics) return
+        when (val cmd = VoiceHandsPhrases.matchCommand(text)) {
+            VoiceHandsCommand.NameTopic,
+            VoiceHandsCommand.NoTopic,
+            VoiceHandsCommand.Standby -> {
+                bargeCommand = cmd
+                speaker.stop()
+                return
+            }
+            else -> Unit
+        }
+        val matched = matchSpokenTopic(text) ?: return
+        bargeTopicChoice = matched
+        speaker.stop()
+    }
+
+    private suspend fun applyPendingTopic() {
+        val choice = pendingTopicChoice
+        if (choice == null || choice.isEmpty) {
+            say("Сначала выберите тему. ${VoiceHandsRu.SAY_TOPIC_HINT}")
+            setPhase(VoiceHandsPhase.SuggestTopic)
+            listenForPhase(VoiceHandsPhase.SuggestTopic)
+            return
+        }
+        applyTopicChoice(choice)
+    }
+
+    private suspend fun applyTopicChoice(choice: VoiceTopicChoice) {
+        val situationId = topicSituationId ?: return
+        val psych = VoiceHandsPsychGate.bound.value ?: return
+        listener.stop()
+        speaker.stop()
+        listingTopics = false
+        listJob?.cancel()
+        pendingTopicChoice = choice
+        suppressReviewOffer = true
+        say(VoiceHandsRu.SAY_THINKING)
+        beginThinking(VoiceHandsPhase.ThinkingQuestion)
+        if (choice.displayName == "без темы") {
+            psych.confirmTopicForVoice(situationId, null, null)
+        } else {
+            val create = choice.createName?.takeIf { choice.topicId == null }
+            psych.confirmTopicForVoice(situationId, choice.topicId, create)
+        }
+        val ready = withTimeoutOrNull(8_000) {
+            psych.ui.first { it.isReview || it.isIdle || it.isPaywall || !it.error.isNullOrBlank() }
+        }
+        thinkJob?.cancel()
+        suppressReviewOffer = false
+        when {
+            ready == null -> {
+                say(VoiceHandsRu.SAY_TIMEOUT)
+                setPhase(VoiceHandsPhase.SuggestTopic)
+                listenForPhase(VoiceHandsPhase.SuggestTopic)
+            }
+            ready.isPaywall -> {
+                say(VoiceHandsRu.psychMissing)
+                enterStandby()
+            }
+            !ready.error.isNullOrBlank() -> {
+                say(ready.error)
+                setPhase(VoiceHandsPhase.SuggestTopic)
+                listenForPhase(VoiceHandsPhase.SuggestTopic)
+            }
+            else -> startOfferActions()
+        }
+    }
+
     private suspend fun runAiCommand(kind: String?, block: (VoiceHandsPsych) -> Unit) {
         val psych = VoiceHandsPsychGate.bound.value ?: return
         // Keep the current Result marked handled so we don't re-offer reading
@@ -364,6 +662,8 @@ class VoiceHandsController(
         thinkJob?.cancel()
         listJob?.cancel()
         bargeCommand = null
+        bargeTopicChoice = null
+        listingTopics = false
         offerArmed = true
         setPhase(VoiceHandsPhase.OfferActions)
         listJob = scope.launch { runOfferListing() }
@@ -469,7 +769,7 @@ class VoiceHandsController(
 
     private suspend fun sayKeepListening(text: String) {
         val clean = text.trim()
-        if (clean.isBlank() || bargeCommand != null) return
+        if (clean.isBlank() || bargeCommand != null || bargeTopicChoice != null) return
         speaker.stop()
         publish { copy(speaking = true) }
         speaker.speak(clean)
@@ -487,6 +787,11 @@ class VoiceHandsController(
         thinkJob?.cancel()
         if (follow.kind == FollowKind.OfferActions) {
             startOfferActions()
+            return
+        }
+        if (follow.kind == FollowKind.SuggestTopic) {
+            val situationId = follow.text.toLongOrNull() ?: return
+            scope.launch { mutex.withLock { beginSuggestTopic(situationId) } }
             return
         }
         say(follow.text)
@@ -507,6 +812,7 @@ class VoiceHandsController(
                     publish { copy(error = follow.text) }
                 }
                 FollowKind.OfferActions -> Unit
+                FollowKind.SuggestTopic -> Unit
             }
         }
     }
@@ -515,6 +821,7 @@ class VoiceHandsController(
         return when (_ui.value.phase) {
             VoiceHandsPhase.ThinkingQuestion -> {
                 if (ui.isReview) {
+                    if (suppressReviewOffer) return null
                     return FollowUp(FollowKind.OfferActions, "")
                 }
                 if (ui.isPaywall) {
@@ -523,11 +830,10 @@ class VoiceHandsController(
                 if (!ui.error.isNullOrBlank() && !ui.waiting) {
                     return FollowUp(FollowKind.Error, ui.error)
                 }
-                val topicId = ui.topicPickId
-                if (topicId != null && !skippedTopicPick) {
+                val situationId = ui.topicPickId
+                if (situationId != null && !skippedTopicPick) {
                     skippedTopicPick = true
-                    psych.pickTopicNoHistory(topicId)
-                    return null
+                    return FollowUp(FollowKind.SuggestTopic, situationId.toString())
                 }
                 val question = ui.dialogueQuestion
                 if (question != null && spokenQuestion != question) {
@@ -605,7 +911,11 @@ class VoiceHandsController(
             VoiceHandsPhase.AwaitingReply,
             VoiceHandsPhase.AskRead,
             VoiceHandsPhase.AfterRead,
-            VoiceHandsPhase.OfferActions -> startListen(phase)
+            VoiceHandsPhase.OfferActions,
+            VoiceHandsPhase.SuggestTopic,
+            VoiceHandsPhase.ListTopics,
+            VoiceHandsPhase.ConfirmTopic,
+            VoiceHandsPhase.NameTopic -> startListen(phase)
             else -> listener.stop()
         }
     }
@@ -615,8 +925,12 @@ class VoiceHandsController(
         when (phase) {
             VoiceHandsPhase.Standby,
             VoiceHandsPhase.AskRead,
-            VoiceHandsPhase.AfterRead -> listener.listenOnce(longSilence = false)
-            VoiceHandsPhase.OfferActions -> listener.listenLoop(longSilence = false)
+            VoiceHandsPhase.AfterRead,
+            VoiceHandsPhase.ConfirmTopic -> listener.listenOnce(longSilence = false)
+            VoiceHandsPhase.OfferActions,
+            VoiceHandsPhase.SuggestTopic,
+            VoiceHandsPhase.ListTopics,
+            VoiceHandsPhase.NameTopic -> listener.listenLoop(longSilence = false)
             VoiceHandsPhase.Dictating,
             VoiceHandsPhase.AwaitingReply -> listener.listenLoop(longSilence = long)
             else -> listener.stop()
@@ -666,6 +980,10 @@ class VoiceHandsController(
         VoiceHandsPhase.Dictating -> VoiceHandsRu.dictating
         VoiceHandsPhase.ThinkingQuestion,
         VoiceHandsPhase.ThinkingResult -> VoiceHandsRu.thinking
+        VoiceHandsPhase.SuggestTopic,
+        VoiceHandsPhase.ListTopics,
+        VoiceHandsPhase.ConfirmTopic,
+        VoiceHandsPhase.NameTopic -> VoiceHandsRu.offerActions
         VoiceHandsPhase.AwaitingReply -> VoiceHandsRu.awaiting
         VoiceHandsPhase.AskRead -> VoiceHandsRu.askRead
         VoiceHandsPhase.Reading -> VoiceHandsRu.reading
@@ -685,7 +1003,7 @@ class VoiceHandsController(
         return "$current $piece".replace(Regex("\\s+"), " ").trim()
     }
 
-    private enum class FollowKind { Question, ReadyRead, Error, OfferActions }
+    private enum class FollowKind { Question, ReadyRead, Error, OfferActions, SuggestTopic }
 
     private data class FollowUp(
         val kind: FollowKind,
