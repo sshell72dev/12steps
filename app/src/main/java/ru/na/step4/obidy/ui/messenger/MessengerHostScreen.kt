@@ -61,7 +61,8 @@ private object MRoutes {
 @Composable
 fun MessengerHostScreen(
     viewModel: MessengerViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenAlertTarget: (String) -> Unit = {}
 ) {
     val gate by viewModel.gate.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -91,6 +92,8 @@ fun MessengerHostScreen(
     LaunchedEffect(gate.ready, alertsTick) {
         if (!gate.ready || alertsTick == 0) return@LaunchedEffect
         val activity = context as? MainActivity ?: return@LaunchedEffect
+        if (!activity.pendingAlertsOpen) return@LaunchedEffect
+        if (AppAlerts.isKnownTarget(activity.pendingAlertTarget)) return@LaunchedEffect
         if (!activity.consumePendingAlertsOpen()) return@LaunchedEffect
         if (nav.currentDestination?.route == MRoutes.GATE) {
             nav.navigate(MRoutes.HUB) { popUpTo(MRoutes.GATE) { inclusive = true } }
@@ -154,7 +157,15 @@ fun MessengerHostScreen(
                     groupId = viewModel.chatGroupId,
                     viewModel = viewModel,
                     onBack = { nav.popBackStack() },
-                    onGroupInfo = { groupId -> nav.navigate(MRoutes.group(groupId)) }
+                    onGroupInfo = { groupId -> nav.navigate(MRoutes.group(groupId)) },
+                    onOpenAlert = { message ->
+                        val target = AppAlerts.resolveTarget(
+                            message.senderId,
+                            message.body,
+                            message.senderName
+                        )
+                        if (target.isNotBlank()) onOpenAlertTarget(target)
+                    }
                 )
             }
             composable(MRoutes.QR) {

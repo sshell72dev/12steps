@@ -50,9 +50,13 @@ class MainActivity : FragmentActivity() {
     var pendingAlertsOpen by mutableStateOf(false)
         private set
 
+    var pendingAlertTarget by mutableStateOf("")
+        private set
+
     fun consumePendingAlertsOpen(): Boolean {
         if (!pendingAlertsOpen) return false
         pendingAlertsOpen = false
+        pendingAlertTarget = ""
         return true
     }
 
@@ -135,6 +139,9 @@ class MainActivity : FragmentActivity() {
         ) {
             alertsOpenTick += 1
             pendingAlertsOpen = true
+            pendingAlertTarget = intent.getStringExtra(
+                ru.na.step4.obidy.data.alerts.AppAlerts.EXTRA_TARGET
+            ).orEmpty()
             suppressLockUntil = SystemClock.elapsedRealtime() + 5_000
         }
     }

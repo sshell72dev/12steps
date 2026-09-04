@@ -335,16 +335,16 @@ class MessengerRepository(
         }
     }
 
-    fun postAlert(body: String) {
+    fun postAlert(body: String, target: String = "") {
         val text = body.trim()
         if (text.isBlank()) return
-        ioScope.launch { appendAlert(text) }
+        ioScope.launch { appendAlert(text, target) }
     }
 
-    suspend fun postAlertNow(body: String) {
+    suspend fun postAlertNow(body: String, target: String = "") {
         val text = body.trim()
         if (text.isBlank()) return
-        appendAlert(text)
+        appendAlert(text, target)
     }
 
     suspend fun ensureAlertsChat() = withContext(Dispatchers.IO) {
@@ -379,7 +379,7 @@ class MessengerRepository(
         }
     }
 
-    private suspend fun appendAlert(text: String) = withContext(Dispatchers.IO) {
+    private suspend fun appendAlert(text: String, target: String) = withContext(Dispatchers.IO) {
         ensureAlertsChat()
         val now = System.currentTimeMillis()
         val existing = dao.chatById(AppAlerts.CHAT_ID) ?: return@withContext
@@ -388,8 +388,8 @@ class MessengerRepository(
                 MessengerMessageRow(
                     id = -now,
                     chatId = AppAlerts.CHAT_ID,
-                    senderId = "system",
-                    senderName = MessengerRu.alertsTitle,
+                    senderId = AppAlerts.senderIdFor(target),
+                    senderName = AppAlerts.senderNameFor(target),
                     kind = "text",
                     body = text,
                     voiceDurationMs = 0,

@@ -73,7 +73,13 @@ class PsychReminderWorker(
 
         fun notify(context: Context, text: String) {
             val body = text.ifBlank { PsychRu.reminderFallback }
-            AppAlerts.post(context, PsychRu.psychologistName, body, NOTIFY_ID)
+            AppAlerts.post(
+                context,
+                PsychRu.psychologistName,
+                body,
+                NOTIFY_ID,
+                AppAlerts.TARGET_PSYCH
+            )
         }
     }
 }

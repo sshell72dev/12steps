@@ -246,6 +246,14 @@ fun Step4Nav() {
         if (intent.getBooleanExtra(AppAlerts.EXTRA_OPEN, false)) {
             intent.removeExtra(AppAlerts.EXTRA_OPEN)
         }
+        val target = activity.pendingAlertTarget
+        if (AppAlerts.isKnownTarget(target)) {
+            activity.consumePendingAlertsOpen()
+            if (navController.currentDestination?.route != target) {
+                navController.openMain(target)
+            }
+            return@LaunchedEffect
+        }
         if (messengerOn) {
             if (navController.currentDestination?.route != Routes.MESSENGER) {
                 navController.openMain(Routes.MESSENGER)
@@ -340,7 +348,8 @@ fun Step4Nav() {
             EnsureTranslations(ScreenBundle.MESSENGER) {
                 MessengerHostScreen(
                     viewModel = vm,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onOpenAlertTarget = { target -> navController.openMain(target) }
                 )
             }
         }

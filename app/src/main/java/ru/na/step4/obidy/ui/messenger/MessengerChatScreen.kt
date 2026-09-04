@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,7 +79,8 @@ fun MessengerChatScreen(
     groupId: String,
     viewModel: MessengerViewModel,
     onBack: () -> Unit,
-    onGroupInfo: (String) -> Unit
+    onGroupInfo: (String) -> Unit,
+    onOpenAlert: (MessengerMessage) -> Unit = {}
 ) {
     val messages by viewModel.repository.messages(chatId).collectAsStateWithLifecycle(emptyList())
     val playingId by viewModel.playingId.collectAsStateWithLifecycle()
@@ -156,7 +158,18 @@ fun MessengerChatScreen(
                             message = message,
                             playing = playingId == message.id,
                             showName = (groupId.isNotBlank() || alertsChat) && !message.mine,
-                            onPlay = { viewModel.playVoice(message) }
+                            onPlay = { viewModel.playVoice(message) },
+                            onOpen = if (alertsChat &&
+                                AppAlerts.resolveTarget(
+                                    message.senderId,
+                                    message.body,
+                                    message.senderName
+                                ).isNotBlank()
+                            ) {
+                                { onOpenAlert(message) }
+                            } else {
+                                null
+                            }
                         )
                     }
                     if (alertsChat && messages.isEmpty()) {
@@ -267,7 +280,8 @@ private fun MessageBubble(
     message: MessengerMessage,
     playing: Boolean,
     showName: Boolean,
-    onPlay: () -> Unit
+    onPlay: () -> Unit,
+    onOpen: (() -> Unit)? = null
 ) {
     val mine = message.mine
     Row(
@@ -279,6 +293,9 @@ private fun MessageBubble(
                 .widthIn(max = 320.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(if (mine) Forest else SandDeep)
+                .then(
+                    if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier
+                )
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             if (showName && message.senderName.isNotBlank()) {

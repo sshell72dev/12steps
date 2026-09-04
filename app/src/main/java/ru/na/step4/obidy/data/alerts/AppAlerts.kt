@@ -13,29 +13,109 @@ import ru.na.step4.obidy.MainActivity
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.Step4App
 import ru.na.step4.obidy.data.messenger.MessengerRu
+import ru.na.step4.obidy.data.psych.PsychRu
 
 object AppAlerts {
     const val CHAT_ID = "local-alerts"
     const val EXTRA_OPEN = "open_alerts"
+    const val EXTRA_TARGET = "alert_target"
     const val KIND = "alerts"
+    const val TARGET_ANALYSIS = "analysis"
+    const val TARGET_PSYCH = "psych"
+    const val TARGET_JOURNAL = "journal"
 
     private const val CHANNEL = "app_alerts_high"
     private const val DEFAULT_NOTIFY_ID = 13013
+    private const val SENDER_PREFIX = "alert:"
 
     fun canPost(context: Context): Boolean =
         NotificationManagerCompat.from(context).areNotificationsEnabled()
 
-    fun post(context: Context, title: String, body: String, notifyId: Int = DEFAULT_NOTIFY_ID) {
+    fun isKnownTarget(target: String): Boolean =
+        target == TARGET_ANALYSIS || target == TARGET_PSYCH || target == TARGET_JOURNAL
+
+    fun senderIdFor(target: String): String =
+        if (isKnownTarget(target)) "$SENDER_PREFIX$target" else "system"
+
+    fun senderNameFor(target: String): String = when (target) {
+        TARGET_ANALYSIS -> Ru.sectionAnalysis
+        TARGET_PSYCH -> PsychRu.psychologistName
+        TARGET_JOURNAL -> Ru.sectionSteps
+        else -> MessengerRu.alertsTitle
+    }
+
+    fun resolveTarget(senderId: String, body: String, senderName: String = ""): String {
+        if (senderId.startsWith(SENDER_PREFIX)) {
+            val key = senderId.removePrefix(SENDER_PREFIX)
+            if (isKnownTarget(key)) return key
+        }
+        when (senderName) {
+            Ru.sectionAnalysis -> return TARGET_ANALYSIS
+            PsychRu.psychologistName, Ru.sectionPsych -> return TARGET_PSYCH
+            Ru.sectionSteps -> return TARGET_JOURNAL
+        }
+        return inferTarget(body)
+    }
+
+    fun post(
+        context: Context,
+        title: String,
+        body: String,
+        notifyId: Int = DEFAULT_NOTIFY_ID,
+        target: String = ""
+    ) {
         val text = body.trim()
         if (text.isBlank()) return
         val app = context.applicationContext as? Step4App
         runCatching {
-            runBlocking { app?.messengerRepository?.postAlertNow(text) }
+            runBlocking { app?.messengerRepository?.postAlertNow(text, target) }
         }
-        notifyPhone(context.applicationContext, title.ifBlank { MessengerRu.alertsTitle }, text, notifyId)
+        notifyPhone(
+            context.applicationContext,
+            title.ifBlank { senderNameFor(target) },
+            text,
+            notifyId,
+            target
+        )
     }
 
-    private fun notifyPhone(context: Context, title: String, body: String, notifyId: Int) {
+    private fun inferTarget(body: String): String {
+        data class Hit(val index: Int, val target: String)
+        val hits = mutableListOf<Hit>()
+        fun add(needles: List<String>, target: String) {
+            val index = needles
+                .map { body.indexOf(it, ignoreCase = true) }
+                .filter { it >= 0 }
+                .minOrNull() ?: return
+            hits += Hit(index, target)
+        }
+        add(
+            listOf(Ru.streakPartAnalysis, Ru.sectionAnalysis, "самоанализ"),
+            TARGET_ANALYSIS
+        )
+        add(
+            listOf(Ru.streakPartSteps, Ru.sectionSteps, "работы по шагам"),
+            TARGET_JOURNAL
+        )
+        add(
+            listOf(
+                Ru.streakPartPsych,
+                PsychRu.psychologistName,
+                Ru.sectionPsych,
+                "электронного психолога"
+            ),
+            TARGET_PSYCH
+        )
+        return hits.minByOrNull { it.index }?.target.orEmpty()
+    }
+
+    private fun notifyPhone(
+        context: Context,
+        title: String,
+        body: String,
+        notifyId: Int,
+        target: String
+    ) {
         if (!canPost(context)) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
@@ -57,6 +137,7 @@ object AppAlerts {
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_OPEN, true)
+                if (isKnownTarget(target)) putExtra(EXTRA_TARGET, target)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
