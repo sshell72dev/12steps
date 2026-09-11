@@ -7,11 +7,11 @@ object VoiceHandsRu {
     val experiment: String get() = I18n.t("voicehands.experiment", "Эксперимент")
     val hint: String get() = I18n.t(
         "voicehands.hint",
-        "Пока приложение открыто. В ожидании микрофон выключен — нажмите «Слушать» и скажите «Давай запишем». Существующие экраны не меняются. Выключите, если что-то пойдёт не так."
+        "Пока приложение открыто. В ожидании микрофон выключен — нажмите «Слушать», и запись начнётся сразу. Существующие экраны не меняются. Выключите, если что-то пойдёт не так."
     )
     val commands: String get() = I18n.t(
         "voicehands.commands",
-        "Фразы: «Давай запишем» → диктуйте → «готово». Затем тема: «подтверждаю» / «перечисли темы» / «назову свою тему». После подтверждения — «разобрать ситуацию» / «рекомендации по ситуации». После «готово. читать?» — «читай». Затем «вернись в режим ожидания»."
+        "Фразы: запись → диктуйте → «готово». Затем тема: «подтверждаю» / «перечисли темы» / «назову свою тему». После подтверждения — «разобрать ситуацию» / «рекомендации по ситуации». После «готово. читать?» — «читай». Затем «вернись в режим ожидания»."
     )
     val standby: String get() = I18n.t("voicehands.standby", "Ожидание")
     val dictating: String get() = I18n.t("voicehands.dictating", "Диктуйте")
@@ -31,7 +31,7 @@ object VoiceHandsRu {
     val quiet: String get() = I18n.t("voicehands.quiet", "Микрофон выключен")
     val hintStandby: String get() = I18n.t(
         "voicehands.hintStandby",
-        "Нажмите «Слушать», затем скажите: «Давай запишем»"
+        "Нажмите «Слушать» — запись начнётся сразу"
     )
     val hintDictating: String get() = I18n.t(
         "voicehands.hintDictating",
@@ -47,7 +47,7 @@ object VoiceHandsRu {
     )
     val hintAfterRead: String get() = I18n.t(
         "voicehands.hintAfterRead",
-        "«Вернись в режим ожидания» · «разобрать ситуацию» · «рекомендации по ситуации» · «Давай запишем»"
+        "«Вернись в режим ожидания» · «разобрать ситуацию» · «рекомендации по ситуации» · «запись»"
     )
     val hintOffer: String get() = I18n.t(
         "voicehands.hintOffer",
@@ -85,7 +85,7 @@ object VoiceHandsRu {
         "На телефоне нет распознавания речи. Эксперимент не запустится."
     )
     val emptyDictation: String get() = I18n.t("voicehands.emptyDictation", "Пока ничего не услышал. Диктуйте и скажите «готово».")
-    val psychMissing: String get() = I18n.t("voicehands.psychMissing", "Не удалось открыть психолога. Скажите «Давай запишем» ещё раз.")
+    val psychMissing: String get() = I18n.t("voicehands.psychMissing", "Не удалось открыть психолога. Попробуйте ещё раз.")
 
     const val SAY_DICTATE = "диктуй"
     const val SAY_THINKING = "думаю"
