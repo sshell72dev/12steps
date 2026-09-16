@@ -82,7 +82,7 @@ python server/deploy_ftp.py
 | `changelog.json` | История релизов в JSON (источник для приложения) |
 | `CHANGELOG.md` | Тот же changelog в Markdown (для людей и git) |
 | `app/src/main/assets/changelog.json` | Копия для экрана «Версия» в приложении |
-| `tools/bump_version.py` | Повышение версии и синхронизация changelog |
+| `tools/bump_version.py` | Повышение версии и синхронизация changelog; `--name 1.1.0` — явный скачок версии |
 | `tools/agent_release.py` | Bump + changelog + commit + push + сборка APK на Google Drive и ссылка в Google Doc |
 | `tools/publish_apk.py` | Сборка debug APK → Google Drive → ссылка в [Google Doc](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing) |
 | `.cursor/hooks.json` | Хук: напоминание о релизе в начале сессии |
@@ -125,9 +125,11 @@ python tools/publish_apk.py
 - **`VERSION_CODE`** — +1 при каждом релизе (нужен Android для обновления APK).
 - **`VERSION_NAME`** — semver `MAJOR.MINOR.PATCH`, при bump автоматически +1 к **patch** (напр. `1.0.3` → `1.0.4`).
 
-Major/minor вручную правятся в `version.properties`, если нужен скачок версии.
+Для скачка версии (minor/major) задайте её явно — `python tools/bump_version.py --name 1.1.0 --notes "..."`. `VERSION_CODE` вырастет на 1, как обычно.
 
 ### Типичный релиз
+
+Всё описанное ниже выполняется только по явной просьбе пользователя.
 
 1. Описать изменения и задеплоить сервер (версия поднимется сама):
 
@@ -143,9 +145,9 @@ python server/deploy_ftp.py
 
 ### Команды
 
-**Автоматически после работы агента** — `tools/agent_release.py` (хук + правило Cursor): bump, GitHub, сборка APK, Google Drive, Google Doc.
+**Релиз — только по просьбе пользователя** — `tools/agent_release.py`: bump, GitHub, сборка APK, Google Drive, Google Doc. Агент сам его не запускает.
 
-**Автоматически при деплое** — `deploy_ftp.py` вызывает `bump_version.py`. Если версию уже поднял агент и нужен только FTP, задайте `$env:DEPLOY_SKIP_BUMP = "1"`.
+**Деплой сервера — только по просьбе пользователя** — `deploy_ftp.py` вызывает `bump_version.py`. Если нужен только FTP без повышения версии, задайте `$env:DEPLOY_SKIP_BUMP = "1"`.
 
 **Вручную поднять версию** (без деплоя):
 
@@ -198,7 +200,7 @@ python server/deploy_ftp.py
 
 ## Обновление на телефоне
 
-**Не ставить APK на телефон без явного запроса пользователя.** Сборка для Google Drive идёт сама в `agent_release.py`.
+**Не ставить APK на телефон без явного запроса пользователя.** Сборка и публикация на Google Drive тоже запускаются только по просьбе: `python tools/publish_apk.py` (или вместе с релизом через `agent_release.py`).
 
 На Xiaomi USB-установка из Android Studio часто блокируется. Рабочий путь — собрать debug APK и поставить через `adb push` + `pm install`.
 
