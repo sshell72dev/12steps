@@ -82,10 +82,10 @@ def render_markdown(data: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def bump(notes: str | None) -> tuple[int, str]:
+def bump(notes: str | None, name: str | None = None) -> tuple[int, str]:
     old_code, old_name = load_version()
     new_code = old_code + 1
-    new_name = bump_name(old_name)
+    new_name = name or bump_name(old_name)
     save_version(new_code, new_name)
 
     data = load_changelog()
@@ -116,6 +116,10 @@ def main() -> None:
         help="Change items separated by newline or semicolon",
     )
     parser.add_argument(
+        "--name",
+        help="Explicit version name for minor/major jump (e.g. 1.1.0)",
+    )
+    parser.add_argument(
         "--sync-only",
         action="store_true",
         help="Copy changelog.json to app assets without bumping",
@@ -128,7 +132,7 @@ def main() -> None:
         print(f"synced changelog for {name} ({code})")
         return
 
-    code, name = bump(args.notes)
+    code, name = bump(args.notes, args.name)
     print(f"bumped to {name} ({code})")
 
 

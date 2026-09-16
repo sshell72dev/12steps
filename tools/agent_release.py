@@ -157,14 +157,14 @@ def hook_session_start() -> int:
     print_json(
         {
             "additional_context": (
-                "После любых правок в этом репозитории в конце сессии обязательно "
-                "выполни `python tools/agent_release.py --notes \"описание\"`: "
-                "поднимется версия, changelog получит описание, изменения этой "
-                "сессии уйдут коммитом и push на GitHub, затем соберётся debug APK, "
-                "он загрузится на Google Drive, а ссылка появится в Google Doc. "
-                "Не спрашивай разрешение. Дождись окончания публикации APK "
-                "(несколько минут). Деплой сервера и установку на телефон "
-                "не делай без явной просьбы."
+                "В этом репозитории релиз (`python tools/agent_release.py --notes \"...\"`) "
+                "запускается ТОЛЬКО по явной просьбе пользователя — сам его не делай. "
+                "Когда релиз попросили, собери описание из ВСЕХ правок, накопившихся "
+                "с прошлого релиза (git status, git log от прошлого релиза, git diff --stat), "
+                "а не только из последней сессии. Скрипт поднимет версию, допишет changelog, "
+                "закоммитит накопленные правки, запушит на GitHub, соберёт debug APK "
+                "и обновит Google Doc — дождись окончания публикации. Деплой сервера "
+                "и установку на телефон делай только по явной просьбе."
             )
         }
     )
@@ -215,13 +215,19 @@ def load_version_name() -> tuple[int, str]:
 
 
 def collect_files(extra_paths: list[str]) -> list[str]:
-    pending = load_state().get("files", [])
+    """Все правки, накопившиеся между релизами: незакоммиченные файлы + доп. пути."""
     extras: list[str] = []
     for raw in extra_paths:
         path = Path(raw)
         extras.append(rel_posix(path if path.is_absolute() else ROOT / path))
-    files = unique_keep_order([*pending, *extras])
-    return [path for path in files if path and not is_secret(path)]
+    files = unique_keep_order([*sorted(dirty_files()), *extras])
+    return [
+        path
+        for path in files
+        if path
+        and not is_secret(path)
+        and not path.startswith(".cursor/hooks/state/")
+    ]
 
 
 def publish_apk() -> int:

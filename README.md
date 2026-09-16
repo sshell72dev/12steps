@@ -69,7 +69,7 @@ python server/deploy_ftp.py
 
 Перед загрузкой на FTP автоматически повышается версия релиза (см. раздел **Версии и история изменений** ниже).
 
-**Важно для агента / Cursor:** не запускать деплой сервера и установку на телефон, пока пользователь явно не попросит. Сборка debug APK и выкладка на Google Drive — часть `agent_release.py`, её делать нужно.
+**Важно для агента / Cursor:** деплой сервера, установку на телефон и релиз (`agent_release.py` — bump, changelog, commit, push, сборка APK) не запускать, пока пользователь явно не попросит.
 
 ## Версии и история изменений
 
@@ -85,20 +85,20 @@ python server/deploy_ftp.py
 | `tools/bump_version.py` | Повышение версии и синхронизация changelog |
 | `tools/agent_release.py` | Bump + changelog + commit + push + сборка APK на Google Drive и ссылка в Google Doc |
 | `tools/publish_apk.py` | Сборка debug APK → Google Drive → ссылка в [Google Doc](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing) |
-| `.cursor/hooks.json` | Хук: после правок агента не даёт забыть релиз |
-| `.cursor/rules/agent-release.mdc` | Правило для любого агента Cursor |
+| `.cursor/hooks.json` | Хук: напоминание о релизе в начале сессии |
+| `.cursor/rules/agent-release.mdc` | Правило агента: релиз только по просьбе, описание из всех правок между релизами |
 
 ### После работы агента
 
-После **каждого** изменения агентом (не только при деплое) версия поднимается сама, в changelog пишется описание, коммит уходит на GitHub, собирается debug APK и ссылка появляется в [Google Doc](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing):
+Релиз запускается **только по явной просьбе пользователя** — агент сам его не делает. Когда релиз попросили, описание собирается из **всех правок, накопившихся с прошлого релиза**:
 
 ```powershell
 python tools/agent_release.py --notes "Что сделано;Второй пункт"
 ```
 
-Это правило репозитория: агент делает bump/commit/push **и публикацию APK** в конце сессии, без отдельной просьбы. Деплой сервера и установку на телефон — только по явному запросу.
+Перед запуском агент смотрит, что изменилось между релизами (`git status`, `git log` от прошлого релиза, `git diff --stat`), и описывает всё в `--notes`, а не только последнюю сессию. Скрипт поднимает версию, дописывает changelog, коммитит накопленные правки, пушит на GitHub, собирает debug APK и обновляет [Google Doc](https://docs.google.com/document/d/1dcUoEwGAmScEghfdHBUAiblaz0sXCmmCRrFMzhCPP9E/edit?usp=sharing). Деплой сервера и установку на телефон агент делает только по явному запросу.
 
-Если агент забыл, хук `stop` напомнит ему дописать релиз (не больше двух автоповторов). Временно отключить весь релиз: `$env:AGENT_RELEASE_SKIP = "1"`. Только без APK: `$env:AGENT_SKIP_APK = "1"` или `--skip-apk`.
+Временно отключить весь релиз: `$env:AGENT_RELEASE_SKIP = "1"`. Только без APK: `$env:AGENT_SKIP_APK = "1"` или `--skip-apk`.
 
 ### APK для тестеров (Google Drive + Google Doc)
 

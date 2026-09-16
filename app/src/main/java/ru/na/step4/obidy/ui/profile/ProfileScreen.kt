@@ -15,8 +15,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -27,7 +30,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,10 +42,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.clickable
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
 import ru.na.step4.obidy.Ru
+import ru.na.step4.obidy.data.lock.CleanTimeCalc
 import ru.na.step4.obidy.data.notes.NoteIds
 import ru.na.step4.obidy.data.profile.ProfileProblems
 import ru.na.step4.obidy.data.profile.ProfileQuestionnaire
@@ -87,6 +97,7 @@ fun ProfileScreen(
     var lastUse by remember(snap.answers) {
         mutableStateOf(snap.answers[ProfileQuestionnaire.ID_LAST_USE].orEmpty())
     }
+    var showLastUseDatePicker by remember { mutableStateOf(false) }
     var reason by remember(snap.answers) {
         mutableStateOf(snap.answers[ProfileQuestionnaire.ID_REASON].orEmpty())
     }
@@ -193,11 +204,11 @@ fun ProfileScreen(
                 }
                 QuestionChips(localizedQuestion(ProfileQuestionnaire.ID_GENDER), gender) { gender = it }
                 QuestionChips(localizedQuestion(ProfileQuestionnaire.ID_ADDICTION), addiction) { addiction = it }
-                ProfileField(
-                    lastUse,
-                    { lastUse = it },
-                    localizedQuestion(ProfileQuestionnaire.ID_LAST_USE).text,
-                    localizedQuestion(ProfileQuestionnaire.ID_LAST_USE).hint
+                LastUseDateField(
+                    value = lastUse,
+                    label = localizedQuestion(ProfileQuestionnaire.ID_LAST_USE).text,
+                    hint = localizedQuestion(ProfileQuestionnaire.ID_LAST_USE).hint,
+                    onClick = { showLastUseDatePicker = true }
                 )
                 QuestionChips(localizedQuestion(ProfileQuestionnaire.ID_REASON), reason) { reason = it }
                 QuestionChips(
@@ -273,6 +284,25 @@ fun ProfileScreen(
                     Text(notice.orEmpty(), color = Amber)
                 }
             }
+        }
+    }
+    if (showLastUseDatePicker) {
+        val picker = rememberDatePickerState(
+            initialSelectedDateMillis = lastUse.toUtcDateMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showLastUseDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    picker.selectedDateMillis?.let { lastUse = formatProfileDate(it) }
+                    showLastUseDatePicker = false
+                }) { Text(Ru.save) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLastUseDatePicker = false }) { Text(Ru.cancel) }
+            }
+        ) {
+            DatePicker(state = picker)
         }
     }
 }
@@ -400,6 +430,37 @@ private fun ChipGroup(
 }
 
 @Composable
+private fun LastUseDateField(
+    value: String,
+    label: String,
+    hint: String,
+    onClick: () -> Unit
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = {},
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        readOnly = true,
+        singleLine = true,
+        label = { Text(label) },
+        placeholder = if (hint.isNotBlank()) ({ Text(hint) }) else null,
+        trailingIcon = {
+            IconButton(onClick = onClick) {
+                Icon(Icons.Outlined.CalendarMonth, contentDescription = label, tint = Forest)
+            }
+        },
+        shape = RoundedCornerShape(12.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Forest,
+            unfocusedBorderColor = Forest.copy(alpha = 0.5f),
+            cursorColor = Forest
+        )
+    )
+}
+
+@Composable
 private fun ProfileField(
     value: String,
     onChange: (String) -> Unit,
@@ -435,6 +496,20 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
     containerColor = SandDeep,
     labelColor = Forest
 )
+
+private val profileDateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
+private fun String.toUtcDateMillis(): Long? =
+    CleanTimeCalc.parse(this)
+        ?.atStartOfDay(ZoneOffset.UTC)
+        ?.toInstant()
+        ?.toEpochMilli()
+
+private fun formatProfileDate(millis: Long): String =
+    Instant.ofEpochMilli(millis)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+        .format(profileDateFormatter)
 
 private fun q(id: String): QuestionnaireQuestion =
     ProfileQuestionnaire.questions.first { it.id == id }
