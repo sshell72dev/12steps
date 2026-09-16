@@ -6,7 +6,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 MODELS = (
     ("deepseek-v4-flash", "deepseek-v4-flash (быстрая)"),
-    ("deepseek-v4-pro", "deepseek-v4-pro (аналитическая)"),
 )
 DEFAULT_MODEL = MODELS[0][0]
 

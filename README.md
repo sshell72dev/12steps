@@ -57,7 +57,7 @@ ANALYSIS_API_TOKEN=...
 
 Paywall → `POST /api/v1/premium/create-payment` → браузер ЮKassa (СБП/карта) → webhook выдаёт entitlement по `device_id` → приложение опрашивает `GET|POST /api/v1/premium/status` и синхронизирует локальный Premium.
 
-Повторный webhook по тому же `payment_id` идемпотентен. Без Premium ИИ = `deepseek-v4-flash`, с Premium = `deepseek-v4-pro`.
+Повторный webhook по тому же `payment_id` идемпотентен. Все промты, включая Premium, проходят через `deepseek-v4-flash`.
 
 Чек НПД: вручную в «Мой налог» или авточеки ЮKassa — не блокер MVP.
 
