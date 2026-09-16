@@ -63,6 +63,7 @@ import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.components.navigationBarsPaddingIfImeHidden
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
@@ -104,6 +105,7 @@ fun ProfileScreen(
     var motivation by remember(snap.answers) {
         mutableStateOf(snap.answers[ProfileQuestionnaire.ID_MOTIVATION].orEmpty())
     }
+    val notifySaved = rememberSavedNotice()
 
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -159,7 +161,10 @@ fun ProfileScreen(
                     .navigationBarsPaddingIfImeHidden()
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
-                SaveBtn(ProfileRu.saveAll, onClick = ::saveAll)
+                SaveBtn(ProfileRu.saveAll, onClick = {
+                    notifySaved()
+                    saveAll()
+                })
             }
         }
     ) { padding ->
@@ -176,10 +181,6 @@ fun ProfileScreen(
                     ProfileRu.intro,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                LanguagePicker(
-                    current = snap.languageCode,
-                    onPick = viewModel::setLanguage
                 )
                 Text(
                     ProfileRu.filledCount.format(filled, 10),
@@ -283,6 +284,10 @@ fun ProfileScreen(
                 if (!notice.isNullOrBlank()) {
                     Text(notice.orEmpty(), color = Amber)
                 }
+                LanguagePicker(
+                    current = snap.languageCode,
+                    onPick = viewModel::setLanguage
+                )
             }
         }
     }

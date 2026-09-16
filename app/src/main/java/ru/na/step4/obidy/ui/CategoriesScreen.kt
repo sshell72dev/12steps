@@ -43,6 +43,7 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.Category
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.theme.Danger
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
@@ -56,6 +57,7 @@ fun CategoriesScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val pendingDelete by viewModel.confirmDelete.collectAsStateWithLifecycle()
+    val notifySaved = rememberSavedNotice()
 
     Scaffold(
         containerColor = Sand,
@@ -109,7 +111,10 @@ fun CategoriesScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
-                            onClick = viewModel::addCategory,
+                            onClick = {
+                                notifySaved()
+                                viewModel.addCategory()
+                            },
                             enabled = state.draftName.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Forest,
@@ -140,7 +145,7 @@ fun CategoriesScreen(
                         onEdit = { viewModel.startEdit(item) },
                         onDelete = { viewModel.requestDelete(item) },
                         onNameChange = viewModel::updateEditingName,
-                        onSave = viewModel::saveEdit,
+                        onSave = { notifySaved(); viewModel.saveEdit() },
                         onCancel = viewModel::cancelEdit
                     )
                 }

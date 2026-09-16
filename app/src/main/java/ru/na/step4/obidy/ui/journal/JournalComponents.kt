@@ -53,6 +53,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.journal.JournalFieldKind
 import ru.na.step4.obidy.data.journal.JournalFieldSpec
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
@@ -227,6 +229,7 @@ fun JournalEntryComposer(
 ) {
     val bringIntoView = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
+    val notifySaved = rememberSavedNotice()
     var picking by remember { mutableStateOf<Pair<String, JournalFieldKind>?>(null) }
     var pickPages by remember { mutableStateOf(mapOf<String, Int>()) }
     Box(Modifier.fillMaxWidth()) {
@@ -267,7 +270,10 @@ fun JournalEntryComposer(
             }
             JournalButton(
                 if (state.editingId != null) Ru.save else JournalRu.saveEntry,
-                viewModel::saveDraft,
+                {
+                    notifySaved()
+                    viewModel.saveDraft()
+                },
                 filled = true
             )
             if (!state.notice.isNullOrBlank()) {
@@ -443,6 +449,7 @@ private fun AddFieldDialog(
 ) {
     var title by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf(JournalFieldKind.TEXT) }
+    val notifySaved = rememberSavedNotice()
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(JournalRu.addField) },

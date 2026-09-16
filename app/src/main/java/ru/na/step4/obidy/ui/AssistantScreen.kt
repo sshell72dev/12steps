@@ -53,6 +53,7 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.assistant.ChatTurn
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.data.notes.NoteIds
 import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.theme.Amber
@@ -72,6 +73,7 @@ fun AssistantScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    val notifySaved = rememberSavedNotice()
 
     val micPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -138,6 +140,7 @@ fun AssistantScreen(
                     )
                     if (!state.questionAssist.active && state.session.draftTarget.isNotBlank()) {
                         IconButton(onClick = {
+                            notifySaved()
                             viewModel.createResentmentFromDraft(onOpenResentment)
                         }) {
                             Icon(Icons.Outlined.Save, contentDescription = Ru.saveDraft, tint = Forest)

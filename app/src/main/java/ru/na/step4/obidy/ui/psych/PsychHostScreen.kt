@@ -96,6 +96,7 @@ import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.components.isImeVisible
 import ru.na.step4.obidy.ui.components.navigationBarsPaddingIfImeHidden
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Moss
@@ -367,7 +368,6 @@ private fun HubBody(vm: PsychViewModel) {
 
 @Composable
 private fun OnboardingBody(page: PsychPage.Onboarding, vm: PsychViewModel) {
-    var name by remember { mutableStateOf("") }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -377,14 +377,7 @@ private fun OnboardingBody(page: PsychPage.Onboarding, vm: PsychViewModel) {
     ) {
         Text(PsychRu.welcome, style = MaterialTheme.typography.bodyLarge, color = Forest)
         page.hint?.let { Text(it, color = Amber, style = MaterialTheme.typography.bodyMedium) }
-        Text(PsychRu.askName, style = MaterialTheme.typography.titleMedium, color = Forest)
-        PsychField(name, { name = it }, PsychRu.name)
-        PrimaryBtn(Ru.save) { vm.submitOnboardingName(name) }
-        OutlinedButton(
-            onClick = vm::skipOnboarding,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp)
-        ) { Text(PsychRu.skip, color = Forest) }
+        PrimaryBtn(PsychRu.skip) { vm.skipOnboarding() }
     }
 }
 
@@ -841,7 +834,7 @@ private fun SettingsBody(vm: PsychViewModel, onOpenProfile: () -> Unit) {
 @Composable
 private fun ProfileBody(vm: PsychViewModel) {
     val s = vm.settings
-    var name by remember { mutableStateOf(s.name) }
+    val notifySaved = rememberSavedNotice()
     var birth by remember { mutableStateOf(s.birthYear) }
     var place by remember { mutableStateOf(s.location) }
     var about by remember { mutableStateOf(s.aboutMe) }
@@ -854,7 +847,6 @@ private fun ProfileBody(vm: PsychViewModel) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        PsychField(name, { name = it }, PsychRu.name, 1)
         PsychField(birth, { birth = it }, PsychRu.birth, 1)
         PsychField(place, { place = it }, PsychRu.place, 1)
         Text(PsychRu.program, color = Forest, style = MaterialTheme.typography.titleMedium)
@@ -873,7 +865,7 @@ private fun ProfileBody(vm: PsychViewModel) {
         PsychField(offset, { offset = it }, PsychRu.timezone, 1)
         Text(PsychRu.offsetHint, color = Moss, style = MaterialTheme.typography.bodySmall)
         PrimaryBtn(PsychRu.saveName) {
-            vm.saveProfileField("name", name)
+            notifySaved()
             vm.saveProfileField("birth", birth)
             vm.saveProfileField("location", place)
             vm.saveProfileField("about", about)
@@ -886,6 +878,7 @@ private fun ProfileBody(vm: PsychViewModel) {
 @Composable
 private fun AiSettingsBody(vm: PsychViewModel) {
     val s = vm.settings
+    val notifySaved = rememberSavedNotice()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -900,7 +893,10 @@ private fun AiSettingsBody(vm: PsychViewModel) {
         ) { vm.setPersonalityCollect(it) }
         var portrait by remember(s.myPersonality) { mutableStateOf(s.myPersonality) }
         PsychField(portrait, { portrait = it }, PsychRu.personalityEdit, 5)
-        MenuBtn(Ru.save) { vm.saveProfileField("personality", portrait) }
+        MenuBtn(Ru.save) {
+            notifySaved()
+            vm.saveProfileField("personality", portrait)
+        }
 
         Text(PsychRu.format, style = MaterialTheme.typography.titleMedium, color = Forest)
         FilterChip(
@@ -964,6 +960,7 @@ private fun AiSettingsBody(vm: PsychViewModel) {
         PsychField(dialogueExtra, { dialogueExtra = it }, PsychRu.dialogueExtraQs, 1)
         PsychField(workCount, { workCount = it }, PsychRu.workQuestionCount, 1)
         MenuBtn(Ru.save) {
+            notifySaved()
             vm.setQuestionLimits(
                 dialogueExtra.toIntOrNull(),
                 workCount.toIntOrNull()
@@ -1025,6 +1022,7 @@ private fun TopicDetailBody(page: PsychPage.TopicDetail, vm: PsychViewModel) {
     var name by remember(topic.id) { mutableStateOf(topic.name) }
     var summary by remember(topic.id, topic.summaryText) { mutableStateOf(topic.summaryText) }
     var confirm by remember { mutableStateOf(false) }
+    val notifySaved = rememberSavedNotice()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1033,10 +1031,16 @@ private fun TopicDetailBody(page: PsychPage.TopicDetail, vm: PsychViewModel) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         PsychField(name, { name = it }, PsychRu.topicName, 1)
-        MenuBtn(Ru.save) { vm.renameTopic(topic.id, name) }
+        MenuBtn(Ru.save) {
+            notifySaved()
+            vm.renameTopic(topic.id, name)
+        }
         Text(PsychRu.topicMemory, color = Forest, style = MaterialTheme.typography.titleMedium)
         PsychField(summary, { summary = it }, PsychRu.topicMemory, 6)
-        MenuBtn(Ru.save) { vm.saveTopicSummary(topic.id, summary) }
+        MenuBtn(Ru.save) {
+            notifySaved()
+            vm.saveTopicSummary(topic.id, summary)
+        }
         Text(PsychRu.topicChronology, color = Forest, style = MaterialTheme.typography.titleMedium)
         if (page.stories.isEmpty()) {
             Text(PsychRu.topicEmptyChronology, color = Moss, style = MaterialTheme.typography.bodyMedium)
@@ -1087,6 +1091,7 @@ private fun TopicDetailBody(page: PsychPage.TopicDetail, vm: PsychViewModel) {
 private fun RemindersBody(vm: PsychViewModel) {
     val s = vm.settings
     val context = LocalContext.current
+    val notifySaved = rememberSavedNotice()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var hours by remember { mutableStateOf(s.reminderIntervalHours.toString()) }
     var quietStart by remember { mutableStateOf(s.quietStartHour.toString()) }
@@ -1203,6 +1208,7 @@ private fun RemindersBody(vm: PsychViewModel) {
         }
         PsychField(hours, { hours = it }, PsychRu.intervalHours, 1)
         MenuBtn(Ru.save) {
+            notifySaved()
             vm.setReminderHours(hours.toIntOrNull() ?: s.reminderIntervalHours)
             if (s.reminderEnabled) PsychReminderWorker.schedule(context, replace = true)
         }
@@ -1214,6 +1220,7 @@ private fun RemindersBody(vm: PsychViewModel) {
             style = MaterialTheme.typography.bodySmall
         )
         MenuBtn(Ru.save) {
+            notifySaved()
             vm.setQuietHours(
                 quietStart.toIntOrNull() ?: s.quietStartHour,
                 quietEnd.toIntOrNull() ?: s.quietEndHour
@@ -1221,7 +1228,10 @@ private fun RemindersBody(vm: PsychViewModel) {
         }
         PsychField(offset, { offset = it }, PsychRu.timezone, 1)
         Text(PsychRu.offsetHint, color = Moss, style = MaterialTheme.typography.bodySmall)
-        MenuBtn(Ru.save) { vm.saveProfileField("offset", offset) }
+        MenuBtn(Ru.save) {
+            notifySaved()
+            vm.saveProfileField("offset", offset)
+        }
         PrimaryBtn(PsychRu.reminderTest) {
             if (!canPost) {
                 requestNotifyIfNeeded()

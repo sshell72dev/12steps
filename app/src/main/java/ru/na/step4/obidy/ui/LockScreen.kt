@@ -70,6 +70,7 @@ import ru.na.step4.obidy.data.lock.CleanTimeCalc
 import ru.na.step4.obidy.data.lock.LockMoodStore
 import ru.na.step4.obidy.data.profile.ProfileQuestionnaire
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Danger
 import ru.na.step4.obidy.ui.theme.Forest
@@ -137,6 +138,7 @@ private fun SetupLockScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val mood = rememberLockMood()
     val photo = remember(mood) { mood.pickBackground(null, System.currentTimeMillis()) }
+    val notifySaved = rememberSavedNotice()
 
     fun submit() {
         when {
@@ -148,6 +150,7 @@ private fun SetupLockScreen(
                 store.setPassword(password)
                 store.biometricEnabled = biometricAvailable && useBiometric
                 keyboard?.hide()
+                notifySaved()
                 onReady()
             }
         }

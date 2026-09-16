@@ -53,6 +53,7 @@ import ru.na.step4.obidy.data.life.LifeItem
 import ru.na.step4.obidy.data.life.LifeKind
 import ru.na.step4.obidy.data.life.LifeStatus
 import ru.na.step4.obidy.ui.AppNavIcon
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.journal.JournalButton
@@ -283,6 +284,7 @@ private fun LifeEditor(
     }
     var dueAt by remember(initial?.id) { mutableStateOf(initial?.dueAt) }
     var showDate by remember { mutableStateOf(false) }
+    val notifySaved = rememberSavedNotice()
     val hint = when (kind) {
         LifeKind.GOAL -> LifeBoardRu.titleHintGoal
         LifeKind.IDEA -> LifeBoardRu.titleHintIdea
@@ -343,6 +345,7 @@ private fun LifeEditor(
             )
         }
         JournalButton(Ru.save, onClick = {
+            notifySaved()
             onSave(initial?.id, title, body, status, dueAt)
         }, filled = true)
         JournalButton(Ru.cancel, onClick = onDismiss)

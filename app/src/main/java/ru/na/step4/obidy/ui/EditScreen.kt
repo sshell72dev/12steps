@@ -67,6 +67,7 @@ import ru.na.step4.obidy.ui.components.navigationBarsPaddingIfImeHidden
 import ru.na.step4.obidy.ui.components.FieldBlock
 import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.components.ProgressBar
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Danger
 import ru.na.step4.obidy.ui.theme.Forest
@@ -85,6 +86,7 @@ fun EditScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showDelete by remember { mutableStateOf(false) }
     var situationToDelete by remember { mutableStateOf<Situation?>(null) }
+    val notifySaved = rememberSavedNotice()
 
     Scaffold(
         containerColor = Sand,
@@ -123,7 +125,7 @@ fun EditScreen(
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
                 Button(
-                    onClick = { viewModel.save { onBack() } },
+                    onClick = { notifySaved(); viewModel.save { onBack() } },
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Sand),
                     shape = RoundedCornerShape(14.dp)

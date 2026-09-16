@@ -36,6 +36,7 @@ import ru.na.step4.obidy.data.journal.JournalPrefs
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
@@ -53,6 +54,7 @@ fun JournalAiScreen(
     onBack: () -> Unit,
     onPro: () -> Unit
 ) {
+    val notifySaved = rememberSavedNotice()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ai by viewModel.ai.collectAsStateWithLifecycle()
     LaunchedEffect(mode, entryId) {
@@ -147,6 +149,7 @@ fun JournalAiScreen(
                                 shape = RoundedCornerShape(12.dp)
                             )
                             JournalButton(Ru.save, {
+                                notifySaved()
                                 viewModel.answerQuestion(ui.question.id, custom)
                                 continueAi(viewModel, mode, entryId)
                             }, filled = true)

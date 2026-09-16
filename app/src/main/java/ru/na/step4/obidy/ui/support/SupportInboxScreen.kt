@@ -47,6 +47,7 @@ import ru.na.step4.obidy.data.support.SupportRepository
 import ru.na.step4.obidy.data.support.SupportRu
 import ru.na.step4.obidy.data.support.SupportStatus
 import ru.na.step4.obidy.data.support.SupportTicket
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.journal.JournalButton
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
@@ -58,6 +59,7 @@ import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 fun SupportInboxScreen(repository: SupportRepository) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val notifySaved = rememberSavedNotice()
     var tickets by remember { mutableStateOf<List<SupportTicket>>(emptyList()) }
     var opened by remember { mutableStateOf<SupportTicket?>(null) }
     var reply by remember { mutableStateOf("") }
@@ -304,6 +306,7 @@ fun SupportInboxScreen(repository: SupportRepository) {
                 TextButton(
                     enabled = editDraft.isNotBlank(),
                     onClick = {
+                        notifySaved()
                         val id = msg.id
                         val body = editDraft.trim()
                         editingMessage = null

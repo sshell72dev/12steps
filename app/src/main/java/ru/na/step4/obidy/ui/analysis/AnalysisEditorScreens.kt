@@ -89,6 +89,7 @@ import ru.na.step4.obidy.data.journal.JournalPrefs
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Moss
@@ -197,6 +198,7 @@ fun AnalysisCatalogTab(
             }
         }
     }
+    val notifySaved = rememberSavedNotice()
     if (createOpen) {
         AlertDialog(
             onDismissRequest = { createOpen = false },
@@ -215,6 +217,7 @@ fun AnalysisCatalogTab(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        notifySaved()
                         val created = if (prefs.isAdmin) {
                             val entry = settings.addStandardCustom(
                                 createTitle,

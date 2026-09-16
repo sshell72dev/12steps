@@ -53,6 +53,7 @@ import ru.na.step4.obidy.data.journal.JournalPrefs
 import ru.na.step4.obidy.data.journal.JournalProblems
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.ui.analysis.AnalysisCatalogTab
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
@@ -70,8 +71,6 @@ import ru.na.steps12.voice.ui.VoiceSettingsPanel
 @Composable
 fun JournalOnboardingScreen(viewModel: JournalViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var step by remember { mutableStateOf(if (state.name.isNotBlank()) 1 else 0) }
-    var name by remember { mutableStateOf(state.name) }
     var problems by remember { mutableStateOf(state.problems) }
 
     Box(Modifier.fillMaxSize()) {
@@ -86,49 +85,35 @@ fun JournalOnboardingScreen(viewModel: JournalViewModel) {
         ) {
             AppNavIcon()
             Text(JournalRu.onboardingHello, style = MaterialTheme.typography.headlineLarge, color = Forest)
-            if (step == 0 && state.name.isBlank()) {
-                Text(JournalRu.onboardingName, color = Forest)
-                VoiceOutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(JournalRu.onboardingNameHint) },
-                    shape = RoundedCornerShape(12.dp)
-                )
-                JournalButton(JournalRu.onboardingNext, {
-                    if (name.trim().isNotBlank()) step = 1
-                }, filled = true)
-            } else {
-                Text(JournalRu.onboardingProblems, style = MaterialTheme.typography.titleLarge, color = Forest)
-                Text(JournalRu.onboardingProblemsHint, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                JournalProblems.all.chunked(2).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        row.forEach { option ->
-                            FilterChip(
-                                selected = option.key in problems,
-                                onClick = {
-                                    problems = problems.toMutableSet().also { set ->
-                                        if (!set.add(option.key)) set.remove(option.key)
-                                    }
-                                },
-                                label = { Text(option.label) },
-                                modifier = Modifier.weight(1f),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Forest,
-                                    selectedLabelColor = Sand
-                                )
+            Text(JournalRu.onboardingProblems, style = MaterialTheme.typography.titleLarge, color = Forest)
+            Text(JournalRu.onboardingProblemsHint, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            JournalProblems.all.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    row.forEach { option ->
+                        FilterChip(
+                            selected = option.key in problems,
+                            onClick = {
+                                problems = problems.toMutableSet().also { set ->
+                                    if (!set.add(option.key)) set.remove(option.key)
+                                }
+                            },
+                            label = { Text(option.label) },
+                            modifier = Modifier.weight(1f),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Forest,
+                                selectedLabelColor = Sand
                             )
-                        }
-                        if (row.size == 1) Box(Modifier.weight(1f))
+                        )
                     }
+                    if (row.size == 1) Box(Modifier.weight(1f))
                 }
-                JournalButton(JournalRu.done, {
-                    viewModel.register(name.ifBlank { state.name }, problems)
-                }, filled = true)
-                JournalButton(JournalRu.skip, onClick = {
-                    viewModel.register(name.ifBlank { state.name }, emptySet())
-                })
             }
+            JournalButton(JournalRu.done, {
+                viewModel.register(state.name, problems)
+            }, filled = true)
+            JournalButton(JournalRu.skip, onClick = {
+                viewModel.register(state.name, emptySet())
+            })
         }
     }
 }
@@ -145,7 +130,6 @@ fun JournalSettingsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var name by remember(state.name) { mutableStateOf(state.name) }
     var rightsMenu by remember { mutableStateOf(false) }
     var askAdminCode by remember { mutableStateOf(false) }
     var adminCode by remember { mutableStateOf("") }
@@ -236,14 +220,6 @@ fun JournalSettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (settingsTab == 0) {
-                Text(JournalRu.settingsName, color = Amber, style = MaterialTheme.typography.labelMedium)
-                VoiceOutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                JournalButton(Ru.save, onClick = { viewModel.setName(name) })
                 Text(JournalRu.exportJson, color = Amber, style = MaterialTheme.typography.labelMedium)
                 Text(
                     JournalRu.exportJsonHint,

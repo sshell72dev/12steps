@@ -54,6 +54,7 @@ import ru.na.step4.obidy.ui.components.FieldBlock
 import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.components.ProgressBar
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.components.navigationBarsPaddingIfImeHidden
 import ru.na.step4.obidy.ui.journal.JournalButton
 import ru.na.step4.obidy.ui.journal.JournalCard
@@ -93,6 +94,8 @@ fun SituationEditScreen(
 
     BackHandler(enabled = wordPick != null) { wordPick = null }
 
+    val notifySaved = rememberSavedNotice()
+
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = Sand,
@@ -122,7 +125,7 @@ fun SituationEditScreen(
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
                 Button(
-                    onClick = { viewModel.save(onBack) },
+                    onClick = { notifySaved(); viewModel.save(onBack) },
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Sand),
                     shape = RoundedCornerShape(14.dp)

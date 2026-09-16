@@ -40,6 +40,7 @@ import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Moss
 import ru.na.step4.obidy.ui.theme.Sand
@@ -55,6 +56,7 @@ fun JournalPersonalityScreen(
     var editing by remember { mutableStateOf(false) }
     var draft by remember(state.personality) { mutableStateOf(state.personality) }
     var showing by remember { mutableStateOf(true) }
+    val notifySaved = rememberSavedNotice()
 
     Scaffold(
         containerColor = Sand,
@@ -112,6 +114,7 @@ fun JournalPersonalityScreen(
                         )
                     )
                     JournalButton(Ru.save, {
+                        notifySaved()
                         viewModel.setPersonality(draft)
                         editing = false
                     }, filled = true)

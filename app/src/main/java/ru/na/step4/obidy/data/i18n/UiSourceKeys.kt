@@ -25,6 +25,7 @@ object UiSourceKeys {
         "ui.deleteBody",
         "ui.cancel",
         "ui.save",
+        "ui.saved",
         "ui.filled",
         "ui.addSituation",
         "ui.situationTitle",

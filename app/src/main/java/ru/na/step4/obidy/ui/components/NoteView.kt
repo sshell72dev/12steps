@@ -246,6 +246,7 @@ private fun NoteEditorDialog(
     var textDraft by remember(id) { mutableStateOf(text) }
     var modeDraft by remember(id) { mutableStateOf(mode) }
     var showTitleDraft by remember(id) { mutableStateOf(showTitle) }
+    val notifySaved = rememberSavedNotice()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(JournalRu.editNote) },
@@ -297,7 +298,10 @@ private fun NoteEditorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(titleDraft, textDraft, modeDraft, showTitleDraft) }) { Text(Ru.save) }
+            TextButton(onClick = {
+                notifySaved()
+                onSave(titleDraft, textDraft, modeDraft, showTitleDraft)
+            }) { Text(Ru.save) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(Ru.cancel) }
