@@ -202,6 +202,14 @@ python server/deploy_ftp.py
 
 На Xiaomi USB-установка из Android Studio часто блокируется. Рабочий путь — собрать debug APK и поставить через `adb push` + `pm install`.
 
+`platform-tools` (папка с `adb`) добавлена в пользовательский PATH, поэтому `adb` работает без полного пути:
+
+```powershell
+adb devices
+```
+
+Если `adb` не находится — папка лежит здесь: `%LOCALAPPDATA%\Android\Sdk\platform-tools`. После правки PATH нужно перезапустить терминал (а также WorkAI и Android Studio), иначе новая переменная не подхватится.
+
 В PowerShell из корня проекта:
 
 ```powershell
@@ -209,14 +217,19 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 $env:Path = "$env:JAVA_HOME\bin;" + $env:Path
 .\gradlew.bat assembleDebug
 
-$adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 $apk = "D:\sites\12steps\app\build\outputs\apk\debug\app-debug.apk"
-& $adb push $apk /data/local/tmp/app-debug.apk
-& $adb shell pm install -r -t /data/local/tmp/app-debug.apk
-& $adb shell am start -n ru.na.steps12/ru.na.step4.obidy.MainActivity
+adb push $apk /data/local/tmp/app-debug.apk
+adb shell pm install -r -t /data/local/tmp/app-debug.apk
+adb shell am start -n ru.na.steps12/ru.na.step4.obidy.MainActivity
 ```
 
-Если `adb devices` показывает `offline` — `adb kill-server`, затем `adb start-server` и повторить установку.
+Если APK уже собран, установка сводится к одной команде:
+
+```powershell
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+```
+
+Если `adb devices` показывает `unauthorized` — разблокировать телефон и подтвердить «Разрешить отладку по USB». Если `offline` — `adb kill-server`, затем `adb start-server` и повторить установку.
 
 После bump версии нужна **новая сборка**, иначе на телефоне останется старый номер версии и changelog.
 
