@@ -27,30 +27,39 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import ru.na.step4.obidy.BuildConfig
 import ru.na.step4.obidy.data.app.Changelog
 import ru.na.step4.obidy.data.app.ReleaseNote
 import ru.na.step4.obidy.data.journal.JournalRu
+import ru.na.step4.obidy.data.update.UpdateRu
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.step4.obidy.ui.update.UpdateCentre
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VersionScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val releases = remember { Changelog.load(context) }
     val currentVersion = BuildConfig.APP_VERSION_NAME
     val currentCode = BuildConfig.APP_VERSION_CODE
+    val updateInfo by UpdateCentre.available.collectAsStateWithLifecycle()
+    val checking by UpdateCentre.checking.collectAsStateWithLifecycle()
+    val updateMessage by UpdateCentre.message.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Sand,
@@ -89,6 +98,28 @@ fun VersionScreen(onBack: () -> Unit) {
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                }
+                JournalButton(
+                    if (checking) UpdateRu.checking else UpdateRu.check,
+                    {
+                        if (!checking) {
+                            scope.launch { UpdateCentre.check(context) }
+                        }
+                    }
+                )
+                updateInfo?.let { found ->
+                    Text(
+                        "${UpdateRu.available} ${found.versionName} (${found.versionCode})",
+                        color = Forest,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
+                updateMessage?.let { text ->
+                    Text(
+                        text,
+                        color = Amber,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 Text(
                     JournalRu.versionHistory,

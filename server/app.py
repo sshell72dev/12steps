@@ -17,6 +17,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
@@ -114,6 +115,48 @@ def health():
     except Exception:
         db_ok = False
     return jsonify({"ok": True, "db": db_ok, "domain": config.DOMAIN})
+
+
+APP_VERSION_FILE = Path(__file__).resolve().parent / "data" / "app_version.json"
+APK_DIR = Path(__file__).resolve().parent / "apk"
+
+
+@app.get("/api/v1/app-version")
+def api_app_version():
+    """Публичный манифест последней версии: приложение проверяет его само."""
+    payload = {}
+    try:
+        loaded = json.loads(APP_VERSION_FILE.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            payload = loaded
+    except Exception:
+        payload = {}
+    notes = payload.get("notes")
+    return jsonify(
+        {
+            "ok": True,
+            "version_code": int(payload.get("version_code") or 0),
+            "version_name": str(payload.get("version_name") or ""),
+            "apk_url": str(payload.get("apk_url") or ""),
+            "notes": [str(item) for item in notes] if isinstance(notes, list) else [],
+            "mandatory": bool(payload.get("mandatory")),
+            "size_bytes": int(payload.get("size_bytes") or 0),
+        }
+    )
+
+
+@app.get("/apk/<path:name>")
+def apk_download(name: str):
+    safe = (name or "").strip()
+    if not safe.endswith(".apk") or "/" in safe or "\\" in safe:
+        return jsonify({"error": "bad_name"}), 400
+    if not (APK_DIR / safe).is_file():
+        return jsonify({"error": "not_found"}), 404
+    return send_from_directory(
+        APK_DIR,
+        safe,
+        mimetype="application/vnd.android.package-archive",
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])

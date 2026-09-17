@@ -95,6 +95,7 @@ fun SituationEditScreen(
     BackHandler(enabled = wordPick != null) { wordPick = null }
 
     val notifySaved = rememberSavedNotice()
+    val fullMode = state.emptyKeys().isEmpty()
 
     Box(Modifier.fillMaxSize()) {
     Scaffold(
@@ -159,6 +160,22 @@ fun SituationEditScreen(
                         JournalRu.remainingAi.format(used.coerceAtLeast(0)),
                         color = Amber,
                         style = MaterialTheme.typography.labelMedium
+                    )
+                }
+
+                if (!fullMode) {
+                    JournalButton(
+                        InventoryStructure.workThroughQuestions,
+                        onClick = { viewModel.requestWorkThrough() },
+                        filled = true
+                    )
+                    if (!state.isPro && !state.isAdmin) {
+                        JournalButton(JournalRu.proNeededTitle, onClick = onPro)
+                    }
+                    Text(
+                        InventoryStructure.workThroughHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -255,19 +272,21 @@ fun SituationEditScreen(
                     )
                 }
 
-                JournalButton(
-                    InventoryStructure.workThroughAssistant,
-                    onClick = { viewModel.requestWorkThrough() },
-                    filled = true
-                )
-                if (!state.isPro && !state.isAdmin) {
-                    JournalButton(JournalRu.proNeededTitle, onClick = onPro)
+                if (fullMode) {
+                    JournalButton(
+                        InventoryStructure.workThroughFull,
+                        onClick = { viewModel.requestWorkThrough() },
+                        filled = true
+                    )
+                    if (!state.isPro && !state.isAdmin) {
+                        JournalButton(JournalRu.proNeededTitle, onClick = onPro)
+                    }
+                    Text(
+                        InventoryStructure.workThroughBottomHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Text(
-                    InventoryStructure.workThroughBottomHint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 if (state.aiLoading) {
                     Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {

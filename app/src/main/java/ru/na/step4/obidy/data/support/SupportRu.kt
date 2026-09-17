@@ -9,6 +9,7 @@ object SupportRu {
     val kind: String get() = I18n.t("support.kind", "Тип")
     val kindBug: String get() = I18n.t("support.kindBug", "Сообщения об ошибке")
     val kindIdea: String get() = I18n.t("support.kindIdea", "Идеи")
+    val kindUpdate: String get() = I18n.t("support.kindUpdate", "Обновления")
     val ideaTitle: String get() = I18n.t("support.ideaTitle", "Предложить идею")
     val ideaBody: String get() = I18n.t("support.ideaBody", "Ваша идея")
     val ideaBodyHint: String get() = I18n.t("support.ideaBodyHint", "Кратко опишите предложение")

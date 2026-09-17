@@ -456,6 +456,78 @@ def assemble_debug_apk() -> Path:
     return apk
 
 
+def publish_to_server(
+    apk: Path,
+    code: int,
+    name: str,
+    notes: list[str],
+    mandatory: bool,
+) -> str:
+    """Заливает APK и app_version.json на собственный сервер, чтобы приложение
+    могло само проверять и скачивать обновления."""
+    sys.path.insert(0, str(ROOT / "server"))
+    import deploy_ftp as ftp_tools
+
+    ftp_tools.load_env()
+    user = os.getenv("FTP_USER", "")
+    password = os.getenv("FTP_PASSWORD", "")
+    remote = os.getenv("FTP_REMOTE_DIR", "/domains/12stepsapp.luch-rehab.ru")
+    if not user or not password:
+        raise SystemExit("FTP_USER / FTP_PASSWORD не заданы (server/.env)")
+
+    host = os.getenv("APP_SERVER_HOST", "12stepsapp.luch-rehab.ru")
+    apk_name = f"12steps-{name}.apk"
+    apk_url = f"https://{host}/apk/{apk_name}"
+    local_json = ROOT / "server" / "data" / "app_version.json"
+    local_json.parent.mkdir(parents=True, exist_ok=True)
+    local_json.write_text(
+        json.dumps(
+            {
+                "version_code": code,
+                "version_name": name,
+                "apk_url": apk_url,
+                "notes": notes,
+                "mandatory": mandatory,
+                "size_bytes": apk.stat().st_size,
+                "updated_at": datetime.now(timezone.utc).astimezone().isoformat(
+                    timespec="seconds"
+                ),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    ftp = None
+    last_error = None
+    for candidate in ftp_tools.HOST_CANDIDATES:
+        if not candidate:
+            continue
+        try:
+            ftp, used = ftp_tools.connect(candidate, user, password)
+            print("ftp:", used)
+            break
+        except Exception as exc:
+            last_error = exc
+    if ftp is None:
+        raise SystemExit(f"FTP connect failed: {last_error}")
+
+    try:
+        ftp_tools.ensure_dir(ftp, remote)
+        ftp_tools.upload_file(ftp, local_json, "app_version.json")
+        ftp_tools.ensure_dir(ftp, remote.rstrip("/") + "/apk")
+        print(f"загрузка APK на сервер → {apk_url}")
+        ftp_tools.upload_file(ftp, apk, apk_name)
+    finally:
+        try:
+            ftp.quit()
+        except Exception:
+            pass
+    return apk_url
+
+
 def publish(skip_build: bool, apk_path: Path | None) -> int:
     load_env()
     ensure_remote()
@@ -475,6 +547,24 @@ def publish(skip_build: bool, apk_path: Path | None) -> int:
     save_links(links)
     releases = load_changelog().get("releases") or []
     replace_doc(render_doc(releases, links), render_html(releases, links))
+
+    notes = next(
+        (
+            [str(item) for item in (release.get("items") or []) if str(item).strip()]
+            for release in releases
+            if str(release.get("version")) == name
+        ),
+        [],
+    )
+    mandatory = os.getenv("RELEASE_MANDATORY", "").strip().lower() in ("1", "true", "yes")
+    try:
+        server_url = publish_to_server(apk, code, name, notes, mandatory)
+        print(f"обновление для приложений: {server_url}")
+    except SystemExit as exc:
+        print(f"[WARN] релиз не выложен на свой сервер: {exc}")
+    except Exception as exc:
+        print(f"[WARN] релиз не выложен на свой сервер: {exc}")
+
     print(f"опубликовано {name} ({code})")
     print(f"APK: {url}")
     print(f"Документ: {DOC_URL}")

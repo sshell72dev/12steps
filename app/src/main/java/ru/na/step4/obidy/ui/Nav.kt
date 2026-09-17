@@ -96,6 +96,7 @@ import ru.na.step4.obidy.voicehands.VoiceHandsHost
 import ru.na.step4.obidy.voicehands.VoiceHandsPsychGate
 import ru.na.step4.obidy.ui.spiritual.SpiritualStatsScreen
 import ru.na.step4.obidy.ui.support.FeedbackHost
+import ru.na.step4.obidy.ui.update.UpdateHost
 import androidx.navigation.NavBackStackEntry
 import androidx.compose.runtime.collectAsState
 
@@ -951,6 +952,7 @@ fun Step4Nav() {
         route = currentRoute?.filledRoute(),
         modifier = Modifier.fillMaxSize()
     )
+    UpdateHost()
     VoiceHandsHost(
         onOpenPsych = {
             if (navController.currentDestination?.route != Routes.PSYCH) {

@@ -78,7 +78,9 @@ import ru.na.step4.obidy.data.support.SupportScreens
 import ru.na.step4.obidy.data.support.SupportTicket
 import ru.na.step4.obidy.data.support.SupportTopic
 import ru.na.step4.obidy.data.support.SupportTopicStore
+import ru.na.step4.obidy.data.update.UpdateRu
 import ru.na.step4.obidy.ui.components.isImeVisible
+import ru.na.step4.obidy.ui.update.UpdateCentre
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
@@ -340,7 +342,10 @@ private fun ReportOverlay(
 
     suspend fun reloadMine() {
         val bundle = repository.mineBundle()
-        mine = bundle.tickets.filter { SupportKind.normalize(it.kind) == kind }
+        mine = bundle.tickets.filter {
+            val normalized = SupportKind.normalize(it.kind)
+            normalized == kind || normalized == SupportKind.UPDATE
+        }
         topicOrder = SupportTopic.sorted(
             SupportTopic.merge(topicStore.counts(), bundle.topicCounts, bundle.tickets)
         )
@@ -538,6 +543,20 @@ private fun ReportOverlay(
                                         color = Forest,
                                         maxLines = 2
                                     )
+                                    if (SupportKind.normalize(ticket.kind) == SupportKind.UPDATE) {
+                                        Text(
+                                            UpdateRu.openUpdate,
+                                            color = Sand,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Forest)
+                                                .clickable {
+                                                    scope.launch { UpdateCentre.check(context) }
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

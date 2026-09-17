@@ -156,6 +156,14 @@ object InventoryStructure {
         "inventory.workThroughFullTitle",
         "Полная проработка ситуации"
     )
+    val workThroughQuestions: String get() = I18n.t(
+        "inventory.workThroughQuestions",
+        "Помощь к вопросам"
+    )
+    val workThroughFull: String get() = I18n.t(
+        "inventory.workThroughFull",
+        "Разбор ответов"
+    )
     val insightDraftTitle: String get() = I18n.t("inventory.insightDraftTitle", "Черновик проработки")
     val insightBlindTitle: String get() = I18n.t(
         "inventory.insightBlindTitle",

@@ -66,17 +66,19 @@ object SupportStatus {
 object SupportKind {
     const val BUG = "bug"
     const val IDEA = "idea"
+    const val UPDATE = "update"
 
     val all = listOf(BUG, IDEA)
 
     fun label(kind: String): String = when (kind) {
         IDEA -> SupportRu.kindIdea
+        UPDATE -> SupportRu.kindUpdate
         else -> SupportRu.kindBug
     }
 
     fun normalize(value: String?): String {
         val v = value.orEmpty().trim().lowercase()
-        return if (v in all) v else BUG
+        return if (v in all || v == UPDATE) v else BUG
     }
 }
 

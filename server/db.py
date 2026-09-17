@@ -260,11 +260,12 @@ SUPPORT_BELONGING_LABELS = {
 
 SUPPORT_TOPICS = ("life_idea", "life_note", "life_calendar")
 
-SUPPORT_KINDS = ("bug", "idea")
+SUPPORT_KINDS = ("bug", "idea", "update")
 
 SUPPORT_KIND_LABELS = {
     "bug": "Сообщения об ошибке",
     "idea": "Идеи",
+    "update": "Обновления",
 }
 
 ADMIN_SOURCE_PAGES = {
