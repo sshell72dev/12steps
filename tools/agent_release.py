@@ -50,6 +50,12 @@ def is_secret(rel: str) -> bool:
     return normalized.endswith(".env") or "/.env" in f"/{normalized}"
 
 
+def is_ignored(rel: str) -> bool:
+    # Путь из .gitignore: git add его не примет — например, сгенерированный
+    # файл, удаление которого из индекса уже лежит в staged.
+    return git("check-ignore", "-q", "--", rel).returncode == 0
+
+
 def load_state() -> dict:
     if not STATE_FILE.exists():
         return {"files": []}
@@ -282,10 +288,14 @@ def run_release(notes: str | None, extra_paths: list[str], skip_push: bool, do_p
         clear_state()
         return 0
 
-    added = git("add", "--", *to_add)
-    if added.returncode != 0:
-        sys.stderr.write(added.stderr or added.stdout or "git add failed\n")
-        return added.returncode
+    # Пути из .gitignore git add не примет — их удаление из индекса уже
+    # зафиксировано в staged и уйдёт в коммит без явного добавления.
+    addable = [path for path in to_add if not is_ignored(path)]
+    if addable:
+        added = git("add", "--", *addable)
+        if added.returncode != 0:
+            sys.stderr.write(added.stderr or added.stdout or "git add failed\n")
+            return added.returncode
 
     staged = git("diff", "--cached", "--name-only")
     if not (staged.stdout or "").strip():

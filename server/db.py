@@ -24,6 +24,10 @@ def connect():
         charset="utf8mb4",
         cursorclass=DictCursor,
         autocommit=False,
+        # Время хранится в UTC (см. utc_now), поэтому и сессия должна считать
+        # DATETIME в UTC. Иначе UNIX_TIMESTAMP() подставляет таймзону хостинга
+        # (обычно MSK) и время сообщений в приложении уезжает на её смещение.
+        init_command="SET time_zone = '+00:00'",
     )
 
 

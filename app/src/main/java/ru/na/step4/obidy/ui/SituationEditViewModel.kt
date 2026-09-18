@@ -27,6 +27,7 @@ import ru.na.step4.obidy.data.journal.JournalPrompts
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.life.LifeBoardPrompts
 import ru.na.step4.obidy.data.life.LifeBoardStore
+import ru.na.step4.obidy.data.messenger.MessengerChallengeShare
 import ru.na.step4.obidy.data.activity.ActivityLog
 
 data class SituationEditUiState(
@@ -82,11 +83,13 @@ class SituationEditViewModel(
     private val prefs: JournalPrefs,
     private val lifeBoard: LifeBoardStore? = null,
     private val aiCache: InventoryAiCache,
-    private val activityLog: ActivityLog? = null
+    private val activityLog: ActivityLog? = null,
+    private val challenges: MessengerChallengeShare? = null
 ) : ViewModel() {
     private val form = MutableStateFlow(SituationEditUiState(id = situationId, isPro = prefs.isPro, isAdmin = prefs.isAdmin))
     val uiState: StateFlow<SituationEditUiState> = form.asStateFlow()
     private var autosaveJob: Job? = null
+    private var challengeShared = false
 
     init {
         viewModelScope.launch {
@@ -281,8 +284,20 @@ class SituationEditViewModel(
             val id = repository.saveSituation(form.value.toSituation().trimmed())
             val savedId = if (id > 0) id else form.value.id
             if (savedId != form.value.id) form.update { it.copy(id = savedId) }
+            shareInventoryChallenge()
             onSaved(savedId)
         }
+    }
+
+    /** Работа по IP завершается сохранением — отмечаем её в «Челлендже шагов». */
+    private suspend fun shareInventoryChallenge() {
+        if (challengeShared) return
+        val share = challenges ?: return
+        val snapshot = form.value
+        val name = snapshot.title.trim().ifBlank { snapshot.target.trim() }
+        if (name.isBlank()) return
+        challengeShared = true
+        share.shareInventory(name)
     }
 
     fun save(onSaved: () -> Unit) = saveThen { onSaved() }
@@ -364,11 +379,12 @@ class SituationEditViewModel(
             prefs: JournalPrefs,
             lifeBoard: LifeBoardStore? = null,
             aiCache: InventoryAiCache,
-            activityLog: ActivityLog? = null
+            activityLog: ActivityLog? = null,
+            challenges: MessengerChallengeShare? = null
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                SituationEditViewModel(repository, id, prefs, lifeBoard, aiCache, activityLog) as T
+                SituationEditViewModel(repository, id, prefs, lifeBoard, aiCache, activityLog, challenges) as T
         }
     }
 }

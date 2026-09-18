@@ -130,7 +130,7 @@ fun ProfileScreen(
             answers = mapOf(
                 ProfileQuestionnaire.ID_GENDER to gender,
                 ProfileQuestionnaire.ID_ADDICTION to addiction,
-                ProfileQuestionnaire.ID_LAST_USE to lastUse,
+                ProfileQuestionnaire.ID_LAST_USE to normalizeProfileDate(lastUse),
                 ProfileQuestionnaire.ID_REASON to reason,
                 ProfileQuestionnaire.ID_MOTIVATION to motivation,
                 ProfileQuestionnaire.ID_PROGRAM to program
@@ -209,6 +209,7 @@ fun ProfileScreen(
                     value = lastUse,
                     label = localizedQuestion(ProfileQuestionnaire.ID_LAST_USE).text,
                     hint = localizedQuestion(ProfileQuestionnaire.ID_LAST_USE).hint,
+                    onValueChange = { lastUse = it },
                     onClick = { showLastUseDatePicker = true }
                 )
                 QuestionChips(localizedQuestion(ProfileQuestionnaire.ID_REASON), reason) { reason = it }
@@ -439,18 +440,16 @@ private fun LastUseDateField(
     value: String,
     label: String,
     hint: String,
+    onValueChange: (String) -> Unit,
     onClick: () -> Unit
 ) {
     OutlinedTextField(
         value = value,
-        onValueChange = {},
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        readOnly = true,
+        onValueChange = { raw -> onValueChange(filterProfileDateInput(raw)) },
+        modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         label = { Text(label) },
-        placeholder = if (hint.isNotBlank()) ({ Text(hint) }) else null,
+        placeholder = { Text(hint.ifBlank { profileDateHint }) },
         trailingIcon = {
             IconButton(onClick = onClick) {
                 Icon(Icons.Outlined.CalendarMonth, contentDescription = label, tint = Forest)
@@ -503,6 +502,7 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
 )
 
 private val profileDateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+private const val profileDateHint = "дд.мм.гггг"
 
 private fun String.toUtcDateMillis(): Long? =
     CleanTimeCalc.parse(this)
@@ -515,6 +515,16 @@ private fun formatProfileDate(millis: Long): String =
         .atZone(ZoneOffset.UTC)
         .toLocalDate()
         .format(profileDateFormatter)
+
+/** Пропускает в поле только цифры и точки — максимум 10 знаков («дд.мм.гггг»). */
+private fun filterProfileDateInput(raw: String): String =
+    raw.filter { it.isDigit() || it == '.' }.take(10)
+
+/** Приводит ручной ввод к виду «дд.мм.гггг», если он распознан как дата. */
+private fun normalizeProfileDate(value: String): String {
+    val trimmed = value.trim()
+    return trimmed.toUtcDateMillis()?.let { formatProfileDate(it) } ?: trimmed
+}
 
 private fun q(id: String): QuestionnaireQuestion =
     ProfileQuestionnaire.questions.first { it.id == id }

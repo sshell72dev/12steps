@@ -933,7 +933,8 @@ fun Step4Nav() {
             }
             val vm: SituationEditViewModel = viewModel(
                 factory = SituationEditViewModel.factory(
-                    repository, id, app.journalPrefs, app.lifeBoard, app.inventoryAiCache, app.activityLog
+                    repository, id, app.journalPrefs, app.lifeBoard, app.inventoryAiCache, app.activityLog,
+                    app.messengerChallenges
                 )
             )
             SituationEditScreen(
