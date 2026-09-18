@@ -10,6 +10,9 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** Результат запуска системной установки. */
+enum class ApkInstallResult { STARTED, NEEDS_PERMISSION, FAILED }
+
 /** Скачивание APK и запуск системной установки через FileProvider. */
 object ApkUpdater {
     private const val AUTHORITY_SUFFIX = ".updates"
@@ -80,17 +83,21 @@ object ApkUpdater {
         runCatching { context.startActivity(intent) }
     }
 
-    fun install(context: Context, file: File): Boolean = runCatching {
-        val uri: Uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}$AUTHORITY_SUFFIX",
-            file
-        )
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
-    }.isSuccess
+    fun install(context: Context, file: File): ApkInstallResult {
+        if (!canInstall(context)) return ApkInstallResult.NEEDS_PERMISSION
+        if (!file.isFile || file.length() <= 0L) return ApkInstallResult.FAILED
+        return runCatching {
+            val uri: Uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}$AUTHORITY_SUFFIX",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.fold({ ApkInstallResult.STARTED }, { ApkInstallResult.FAILED })
+    }
 }

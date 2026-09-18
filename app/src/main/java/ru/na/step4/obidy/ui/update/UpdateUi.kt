@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -23,6 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +38,7 @@ import ru.na.step4.obidy.BuildConfig
 import ru.na.step4.obidy.Step4App
 import ru.na.step4.obidy.data.support.SupportBelonging
 import ru.na.step4.obidy.data.support.SupportKind
+import ru.na.step4.obidy.data.update.ApkInstallResult
 import ru.na.step4.obidy.data.update.ApkUpdater
 import ru.na.step4.obidy.data.update.UpdateClient
 import ru.na.step4.obidy.data.update.UpdateInfo
@@ -111,6 +116,7 @@ fun UpdateHost() {
     var downloading by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
+    var awaitingPermission by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val found = UpdateCentre.check(context) ?: return@LaunchedEffect
@@ -137,8 +143,21 @@ fun UpdateHost() {
         }
     }
 
+    fun applyInstall() {
+        when (ApkUpdater.install(context, ApkUpdater.targetFile(context, current))) {
+            ApkInstallResult.STARTED -> Unit
+            ApkInstallResult.NEEDS_PERMISSION -> {
+                awaitingPermission = true
+                ApkUpdater.requestInstallPermission(context)
+                error = UpdateRu.permitNeeded
+            }
+            ApkInstallResult.FAILED -> error = UpdateRu.installFailed
+        }
+    }
+
     fun startDownload() {
         if (!ApkUpdater.canInstall(context)) {
+            awaitingPermission = true
             ApkUpdater.requestInstallPermission(context)
             error = UpdateRu.permitNeeded
             return
@@ -159,9 +178,29 @@ fun UpdateHost() {
             downloading = false
             when {
                 file == null -> error = UpdateRu.downloadFailed
-                !ApkUpdater.install(context, file) -> error = UpdateRu.permitNeeded
+                else -> applyInstall()
             }
         }
+    }
+
+    // Android не сообщает результат из системных настроек, поэтому установку
+    // продолжаем сами, как только пользователь вернулся и разрешение выдано.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, current.versionCode) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && awaitingPermission) {
+                awaitingPermission = false
+                if (ApkUpdater.canInstall(context)) {
+                    if (ApkUpdater.isReady(context, current)) {
+                        applyInstall()
+                    } else {
+                        startDownload()
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     AlertDialog(

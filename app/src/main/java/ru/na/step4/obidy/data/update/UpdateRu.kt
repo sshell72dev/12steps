@@ -15,7 +15,11 @@ object UpdateRu {
     )
     val permitNeeded: String get() = I18n.t(
         "update.permitNeeded",
-        "Разрешите установку из этого источника и нажмите «Обновить» ещё раз."
+        "Включите «Разрешить установку из этого источника» и вернитесь в приложение — установка продолжится."
+    )
+    val installFailed: String get() = I18n.t(
+        "update.installFailed",
+        "Не удалось запустить установку. Откройте обновление ещё раз."
     )
     val upToDate: String get() = I18n.t("update.upToDate", "У вас последняя версия.")
     val checkFailed: String get() = I18n.t(

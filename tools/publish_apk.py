@@ -514,12 +514,20 @@ def publish_to_server(
     if ftp is None:
         raise SystemExit(f"FTP connect failed: {last_error}")
 
+    home = ftp.pwd()
     try:
-        ftp_tools.ensure_dir(ftp, remote)
+        # ensure_dir обходит путь по частям от текущего каталога, а FTP-хостинг
+        # открывает сессию не в корне. Без сброса в "/" второй ensure_dir
+        # создаёт дублирующие вложенные каталоги и файлы уезжают мимо докрута.
+        # Сервер читает app_version.json из <remote>/data/, поэтому и кладём туда же.
+        ftp.cwd("/")
+        ftp_tools.ensure_dir(ftp, remote.rstrip("/") + "/data")
         ftp_tools.upload_file(ftp, local_json, "app_version.json")
+        ftp.cwd("/")
         ftp_tools.ensure_dir(ftp, remote.rstrip("/") + "/apk")
         print(f"загрузка APK на сервер → {apk_url}")
         ftp_tools.upload_file(ftp, apk, apk_name)
+        ftp.cwd(home)
     finally:
         try:
             ftp.quit()
