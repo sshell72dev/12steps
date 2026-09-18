@@ -35,6 +35,9 @@ data class MessengerMessage(
     val mine: Boolean
 ) {
     val isVoice: Boolean get() = kind == "voice"
+
+    /** Системное сообщение о новой версии приложения — в чате рисуется активной кнопкой. */
+    val isUpdate: Boolean get() = kind == "update"
 }
 
 data class MessengerContact(
@@ -63,6 +66,7 @@ data class MessengerJoinResult(
 object MessengerChallengeKeys {
     const val STEPS = "steps"
     const val ANALYSIS = "analysis"
+    const val SUPPORT = "support"
 }
 
 data class MessengerChallenge(

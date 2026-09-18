@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.alerts.AppAlerts
 import ru.na.step4.obidy.data.messenger.MessengerMessage
 import ru.na.step4.obidy.data.messenger.MessengerRu
@@ -69,6 +71,7 @@ import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.step4.obidy.ui.theme.SandDeep
+import ru.na.step4.obidy.ui.update.UpdateCentre
 import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -325,6 +328,24 @@ private fun MessageBubble(
                     message.body,
                     color = if (mine) Sand else Forest,
                     style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            if (message.isUpdate) {
+                val context = LocalContext.current
+                val scope = rememberCoroutineScope()
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    MessengerRu.updateNow,
+                    color = Sand,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Forest)
+                        .clickable {
+                            scope.launch { UpdateCentre.check(context) }
+                        }
+                        .padding(vertical = 10.dp)
                 )
             }
             Text(

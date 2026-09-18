@@ -22,9 +22,13 @@ MAX_VOICE_MS = 60_000
 SETTING_KEY = "messenger_enabled"
 SYSTEM_USER_ID = "steps12_system"
 SYSTEM_USER_NAME = "Челленджи"
+SUPPORT_KEY = "support"
+SUPPORT_GROUP_ID = "challenge_support"
+SUPPORT_GROUP_NAME = "Техподдержка"
 CHALLENGES = (
     ("steps", "challenge_steps", "Челлендж шагов"),
     ("analysis", "challenge_analysis", "Челлендж самоанализов"),
+    (SUPPORT_KEY, SUPPORT_GROUP_ID, SUPPORT_GROUP_NAME),
 )
 CHALLENGE_KEYS = {item[0] for item in CHALLENGES}
 
@@ -219,6 +223,21 @@ def _ensure_challenge_groups(cur) -> None:
                 (group_id, SYSTEM_USER_ID, now),
             )
         _ensure_group_chat(cur, group_id)
+
+
+def _ensure_support_membership(cur, messenger_id: str) -> None:
+    """Чат техподдержки доступен каждому: пользователь попадает в него автоматически."""
+    if not messenger_id or messenger_id == SYSTEM_USER_ID:
+        return
+    cur.execute(
+        """
+        INSERT IGNORE INTO messenger_group_members (group_id, user_id, role, created_at)
+        VALUES (%s, %s, 'member', %s)
+        """,
+        (SUPPORT_GROUP_ID, messenger_id, db.utc_now()),
+    )
+    chat_id = _ensure_group_chat(cur, SUPPORT_GROUP_ID)
+    _add_chat_member(cur, chat_id, messenger_id)
 
 
 def _challenge_json(cur, key: str, group_id: str, name: str, messenger_id: str) -> dict:
@@ -516,12 +535,16 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
 
 def _message_json(row: dict, me: str, names: dict[str, str]) -> dict:
     sender = row.get("sender_id") or ""
+    kind = row["kind"]
+    # Сообщения об обновлении шлёт системный пользователь, но в чате
+    # техподдержки подписывать их «Челленджи» нельзя.
+    sender_name = SUPPORT_GROUP_NAME if kind == "update" else (names.get(sender) or "")
     return {
         "id": int(row["id"]),
         "chat_id": row["chat_id"],
         "sender_id": sender,
-        "sender_name": names.get(sender) or "",
-        "kind": row["kind"],
+        "sender_name": sender_name,
+        "kind": kind,
         "body": row.get("body") or "",
         "voice_duration_ms": int(row.get("voice_duration_ms") or 0),
         "created_at": _ms(row, "created_unix"),
@@ -557,6 +580,29 @@ def _insert_message(cur, chat_id: str, sender_id: str, kind: str, body: str, dur
         (now, chat_id),
     )
     return message_id
+
+
+def broadcast_support_update(version_name: str, version_code: int) -> dict:
+    """Рассылает в чат «Техподдержка» сообщение о новой версии приложения."""
+    name = (version_name or "").strip()
+    if not name:
+        return {"chat_id": "", "message_id": 0, "sent": 0}
+    body = (
+        f"Доступна версия {name} ({int(version_code or 0)}). "
+        "Нажмите «Обновить приложение», чтобы установить."
+    )
+    with db.cursor() as cur:
+        _ensure_challenge_groups(cur)
+        chat_id = _ensure_group_chat(cur, SUPPORT_GROUP_ID)
+        cur.execute(
+            "SELECT user_id FROM messenger_group_members WHERE group_id = %s",
+            (SUPPORT_GROUP_ID,),
+        )
+        members = [row["user_id"] for row in cur.fetchall()]
+        for user_id in members:
+            _add_chat_member(cur, chat_id, user_id)
+        message_id = _insert_message(cur, chat_id, SYSTEM_USER_ID, "update", body)
+    return {"chat_id": chat_id, "message_id": message_id, "sent": len(members)}
 
 
 def register(app, login_required, api_ok) -> None:
@@ -925,6 +971,21 @@ def register(app, login_required, api_ok) -> None:
                 added.append(peer_id)
         return jsonify({"ok": True, "added": added, "chat_id": chat_id})
 
+    @app.post("/api/v1/messenger/support/broadcast")
+    def api_messenger_support_broadcast():
+        if not api_ok():
+            return jsonify({"error": "unauthorized"}), 401
+        payload = request.get_json(silent=True) or {}
+        name = str(payload.get("version_name") or "").strip()
+        code = int(payload.get("version_code") or 0)
+        if not name:
+            return jsonify({"error": "version_required"}), 400
+        try:
+            init_schema()
+        except Exception:
+            return jsonify({"error": "db"}), 503
+        return jsonify({"ok": True, **broadcast_support_update(name, code)})
+
     @app.get("/api/v1/messenger/challenges")
     @guard(need_user=True)
     def api_messenger_challenges(messenger_id: str):
@@ -933,6 +994,7 @@ def register(app, login_required, api_ok) -> None:
             if not user:
                 return jsonify({"error": "not_registered"}), 404
             _ensure_challenge_groups(cur)
+            _ensure_support_membership(cur, messenger_id)
             items = []
             for key, group_id, name in CHALLENGES:
                 items.append(_challenge_json(cur, key, group_id, name, messenger_id))
@@ -981,6 +1043,8 @@ def register(app, login_required, api_ok) -> None:
             user = _require_user(cur, messenger_id)
             if not user:
                 return jsonify({"error": "not_registered"}), 404
+            _ensure_challenge_groups(cur)
+            _ensure_support_membership(cur, messenger_id)
             cur.execute(
                 """
                 SELECT c.id, c.kind, c.group_id, c.pair_key,

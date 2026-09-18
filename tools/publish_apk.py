@@ -536,6 +536,21 @@ def publish_to_server(
     return apk_url
 
 
+def notify_support_chat(name: str, code: int) -> dict:
+    """Рассылает в чат «Техподдержка» приложения сообщение о новой версии."""
+    host = os.getenv("APP_SERVER_HOST", "12stepsapp.luch-rehab.ru")
+    token = (os.getenv("API_TOKEN") or os.getenv("ANALYSIS_API_TOKEN") or "").strip()
+    payload = json.dumps({"version_name": name, "version_code": code}).encode("utf-8")
+    request_obj = urllib.request.Request(
+        f"https://{host}/api/v1/messenger/support/broadcast",
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/json", "X-Api-Token": token},
+    )
+    with urllib.request.urlopen(request_obj, timeout=25) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def publish(skip_build: bool, apk_path: Path | None) -> int:
     load_env()
     ensure_remote()
@@ -572,6 +587,12 @@ def publish(skip_build: bool, apk_path: Path | None) -> int:
         print(f"[WARN] релиз не выложен на свой сервер: {exc}")
     except Exception as exc:
         print(f"[WARN] релиз не выложен на свой сервер: {exc}")
+
+    try:
+        sent = notify_support_chat(name, code)
+        print(f"чат техподдержки: уведомление разослано ({sent.get('sent', 0)} участников)")
+    except Exception as exc:
+        print(f"[WARN] не удалось разослать уведомление в чат техподдержки: {exc}")
 
     print(f"опубликовано {name} ({code})")
     print(f"APK: {url}")

@@ -32,6 +32,7 @@ object MessengerRu {
     val addToGroup: String get() = I18n.t("messenger.addToGroup", "Добавить из друзей")
     val messageHint: String get() = I18n.t("messenger.messageHint", "Сообщение")
     val voiceMessage: String get() = I18n.t("messenger.voiceMessage", "Голосовое сообщение")
+    val updateNow: String get() = I18n.t("messenger.updateNow", "Обновить приложение")
     val recording: String get() = I18n.t("messenger.recording", "Запись… отпустите, чтобы отправить")
     val cancelRecord: String get() = I18n.t("messenger.cancelRecord", "Отмена")
     val micPermission: String get() = I18n.t("messenger.micPermission", "Нужен микрофон для голосовых.")

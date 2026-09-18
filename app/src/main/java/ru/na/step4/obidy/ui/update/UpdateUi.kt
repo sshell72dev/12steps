@@ -35,9 +35,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.na.step4.obidy.BuildConfig
-import ru.na.step4.obidy.Step4App
-import ru.na.step4.obidy.data.support.SupportBelonging
-import ru.na.step4.obidy.data.support.SupportKind
 import ru.na.step4.obidy.data.update.ApkInstallResult
 import ru.na.step4.obidy.data.update.ApkUpdater
 import ru.na.step4.obidy.data.update.UpdateClient
@@ -128,19 +125,9 @@ fun UpdateHost() {
     val current = info ?: return
 
     fun postpone() {
+        // Сообщение о новой версии приходит в чат «Техподдержка» при выпуске релиза,
+        // поэтому здесь достаточно запомнить отложенную версию.
         UpdateCentre.postpone(context, current)
-        if (current.mandatory) return
-        val app = context.applicationContext as? Step4App ?: return
-        scope.launch {
-            app.supportRepository.send(
-                screen = "${UpdateRu.available} ${current.versionName}",
-                route = "update/${current.versionName}",
-                body = "${UpdateRu.available} ${current.versionName} (${current.versionCode}). " +
-                    "Нажмите «${UpdateRu.openUpdate}», чтобы установить.",
-                belonging = SupportBelonging.GENERAL,
-                kind = SupportKind.UPDATE
-            )
-        }
     }
 
     fun applyInstall() {
