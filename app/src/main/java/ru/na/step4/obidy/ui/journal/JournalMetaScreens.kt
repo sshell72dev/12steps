@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -306,6 +307,26 @@ fun JournalSettingsScreen(
                 }
                 if (!state.notice.isNullOrBlank()) {
                     Text(state.notice.orEmpty(), color = Amber)
+                }
+                val appLockStore = remember { (context.applicationContext as Step4App).appLockStore }
+                var lockDisabled by remember { mutableStateOf(!appLockStore.lockEnabled) }
+                Text(Ru.lockSetupTitle, color = Amber, style = MaterialTheme.typography.labelMedium)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(Ru.lockNoPassword, color = Forest, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            Ru.lockNoPasswordHint,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = lockDisabled,
+                        onCheckedChange = { checked ->
+                            lockDisabled = checked
+                            appLockStore.lockEnabled = !checked
+                        }
+                    )
                 }
                 val voicePlugin = LocalVoicePlugin.current
                 if (voicePlugin != null) {

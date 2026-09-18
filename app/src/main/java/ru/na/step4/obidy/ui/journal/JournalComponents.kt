@@ -54,7 +54,6 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.journal.JournalFieldKind
 import ru.na.step4.obidy.data.journal.JournalFieldSpec
 import ru.na.step4.obidy.ui.components.rememberSavedNotice
-import ru.na.step4.obidy.ui.components.rememberSavedNotice
 import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest

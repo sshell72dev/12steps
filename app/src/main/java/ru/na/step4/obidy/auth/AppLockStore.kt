@@ -14,6 +14,11 @@ class AppLockStore(context: Context) {
     val isConfigured: Boolean
         get() = prefs.contains(KEY_HASH) && prefs.contains(KEY_SALT)
 
+    /** When off, the app opens without asking for the password (settings toggle). */
+    var lockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_LOCK_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_LOCK_ENABLED, value).apply()
+
     var biometricEnabled: Boolean
         get() = prefs.getBoolean(KEY_BIOMETRIC, true)
         set(value) = prefs.edit().putBoolean(KEY_BIOMETRIC, value).apply()
@@ -39,6 +44,7 @@ class AppLockStore(context: Context) {
         private const val KEY_SALT = "salt"
         private const val KEY_HASH = "hash"
         private const val KEY_BIOMETRIC = "biometric_enabled"
+        private const val KEY_LOCK_ENABLED = "lock_enabled"
         private const val ITERATIONS = 120_000
         private const val KEY_LENGTH = 256
 

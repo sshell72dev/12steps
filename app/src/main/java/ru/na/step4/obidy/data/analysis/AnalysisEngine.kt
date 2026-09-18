@@ -174,18 +174,54 @@ class AnalysisEngine(
     }
 
     fun replaceAnswerText(answerIndex: Int, text: String): Boolean {
-        if (answerIndex !in answers.indices || answerIndex !in checkpoints.indices) return false
         val t = text.trim()
         if (t.isEmpty()) return false
+        return rewriteAnswer(answerIndex) { submit(t) }
+    }
+
+    fun replaceAnswerChoice(answerIndex: Int, id: String, extraText: String = ""): Boolean =
+        rewriteAnswer(answerIndex) { choose(id, extraText) }
+
+    /**
+     * Rewrites the answer at [answerIndex] and re-applies the answers that were given
+     * after it, so editing an earlier question no longer wipes the rest of the session.
+     * When the new answer leads to a different chain the later answers cannot be replayed,
+     * and only the edited answer is kept (the session continues from that point).
+     */
+    private fun rewriteAnswer(answerIndex: Int, rewrite: () -> Unit): Boolean {
+        if (answerIndex !in answers.indices || answerIndex !in checkpoints.indices) return false
+        val snapshot = capture()
+        val tail = answers.drop(answerIndex + 1)
         if (!rewindTo(answerIndex)) return false
-        submit(t)
+        val before = answers.size
+        rewrite()
+        if (answers.size != before + 1) {
+            restore(snapshot)
+            return false
+        }
+        if (tail.isEmpty()) return true
+        val edited = capture()
+        if (replayTail(tail)) return true
+        restore(edited)
         return true
     }
 
-    fun replaceAnswerChoice(answerIndex: Int, id: String, extraText: String = ""): Boolean {
-        if (answerIndex !in answers.indices || answerIndex !in checkpoints.indices) return false
-        if (!rewindTo(answerIndex)) return false
-        choose(id, extraText)
+    /** Re-applies [tail] on top of the current state; false when the chain diverged. */
+    private fun replayTail(tail: List<QaPair>): Boolean {
+        for (pair in tail) {
+            val question = screen() as? SessionScreen.Question ?: return false
+            if (question.question != pair.question) return false
+            val before = answers.size
+            if (isBranchPicker()) {
+                val branch = entry.branches.find {
+                    it.title.equals(pair.answer, ignoreCase = true)
+                } ?: return false
+                choose(branch.id)
+            } else {
+                submit(pair.answer)
+            }
+            if (answers.size != before + 1) return false
+        }
         return true
     }
 

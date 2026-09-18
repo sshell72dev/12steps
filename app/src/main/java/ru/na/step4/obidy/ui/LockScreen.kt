@@ -93,7 +93,7 @@ fun AppLockGate(
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         content()
-        if (!unlocked) {
+        if (!unlocked && store.lockEnabled) {
             val keyboard = LocalSoftwareKeyboardController.current
             LaunchedEffect(Unit) { keyboard?.hide() }
             BackHandler { }

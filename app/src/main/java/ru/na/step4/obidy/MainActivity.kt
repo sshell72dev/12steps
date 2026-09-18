@@ -69,7 +69,7 @@ class MainActivity : FragmentActivity() {
         override fun onStop(owner: LifecycleOwner) {
             if (biometricPromptActive) return
             if (SystemClock.elapsedRealtime() < suppressLockUntil) return
-            if (appLockStore.isConfigured) {
+            if (appLockStore.lockEnabled && appLockStore.isConfigured) {
                 unlocked = false
             }
         }
@@ -77,6 +77,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        unlocked = !appLockStore.lockEnabled
         ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
         handlePremiumReturn(intent)
         handleMessengerInvite(intent)

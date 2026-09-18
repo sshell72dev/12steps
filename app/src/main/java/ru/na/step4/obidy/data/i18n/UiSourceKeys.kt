@@ -167,6 +167,8 @@ object UiSourceKeys {
         "ui.lockWrongPassword",
         "ui.lockSave",
         "ui.lockUnlock",
+        "ui.lockNoPassword",
+        "ui.lockNoPasswordHint",
         "ui.lockOrPassword",
         "ui.lockBiometricTitle",
         "ui.lockBiometricSubtitle",
