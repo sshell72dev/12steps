@@ -1,5 +1,6 @@
 package ru.na.step4.obidy.ui.journal
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,20 +14,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -90,7 +91,8 @@ fun WordPickerScreen(
     title: String,
     kind: JournalFieldKind,
     selected: List<String>,
-    onToggle: (String) -> Unit,
+    onPick: (String) -> Unit,
+    onDictate: (String) -> Unit,
     onBack: () -> Unit,
     initialPage: Int = 0,
     onPageChange: (Int) -> Unit = {}
@@ -157,6 +159,13 @@ fun WordPickerScreen(
                     style = MaterialTheme.typography.labelMedium,
                     color = Forest
                 )
+                if (selected.isEmpty()) {
+                    Text(
+                        JournalRu.pickGestureHint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Moss
+                    )
+                }
                 if (searching) {
                     val grouped = EmotionCatalog.allWords(kind)
                         .filter { (_, word) -> word.contains(q, ignoreCase = true) }
@@ -182,7 +191,8 @@ fun WordPickerScreen(
                                             WordChip(
                                                 word = word,
                                                 selected = selected.any { it.equals(word, ignoreCase = true) },
-                                                onClick = { onToggle(word) }
+                                                onClick = { onPick(word) },
+                                                onLongClick = { onDictate(word) }
                                             )
                                         }
                                     }
@@ -220,7 +230,8 @@ fun WordPickerScreen(
                         WordColumnPage(
                             column = columns[page],
                             selected = selected,
-                            onToggle = onToggle
+                            onPick = onPick,
+                            onDictate = onDictate
                         )
                     }
                 }
@@ -235,7 +246,8 @@ fun WordPickerScreen(
 private fun WordColumnPage(
     column: WordColumn,
     selected: List<String>,
-    onToggle: (String) -> Unit
+    onPick: (String) -> Unit,
+    onDictate: (String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -257,30 +269,39 @@ private fun WordColumnPage(
                 WordChip(
                     word = word,
                     selected = selected.any { it.equals(word, ignoreCase = true) },
-                    onClick = { onToggle(word) }
+                    onClick = { onPick(word) },
+                    onLongClick = { onDictate(word) }
                 )
             }
         }
     }
 }
 
+/**
+ * Чип слова: обычное нажатие дописывает чувство через запятую,
+ * удержание — добавляет строку «Слово - » и включает диктовку.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WordChip(
     word: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(word) },
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Forest,
-            selectedLabelColor = Sand,
-            containerColor = Sand.copy(alpha = 0.85f),
-            labelColor = Forest
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) Forest else Sand.copy(alpha = 0.85f),
+        border = BorderStroke(1.dp, if (selected) Forest else Moss.copy(alpha = 0.35f)),
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+    ) {
+        Text(
+            word,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) Sand else Forest,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
-    )
+    }
 }
 
 /**
@@ -337,14 +358,12 @@ fun WordPickDictateHost(
                 page = it
                 onSavePage(it)
             },
-            onToggle = { word ->
-                val (next, dictate) = EmotionCatalog.pickWordForDictate(
-                    latestValue.value,
-                    word,
-                    kind
-                )
-                onValueChange(next)
-                if (dictate) pendingDictate = true
+            onPick = { word ->
+                onValueChange(EmotionCatalog.toggleWord(latestValue.value, word, kind))
+            },
+            onDictate = { word ->
+                onValueChange(EmotionCatalog.dictateWord(latestValue.value, word))
+                pendingDictate = true
             },
             onBack = onDismiss
         )

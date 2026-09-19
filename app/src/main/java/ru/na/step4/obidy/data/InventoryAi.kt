@@ -56,22 +56,20 @@ object InventoryAi {
         }
     }
 
+    /**
+     * Промпт полного разбора. Блок «Моя личность» здесь намеренно не передаётся:
+     * модель начинала ответ с него и до ситуации дело не доходило.
+     */
     fun fullAnalysisUserPrompt(
         target: String,
         typeNames: List<String>,
         situation: Situation,
-        personality: String?,
         questionnaire: String?
     ): String {
         val filled = QuestionFocus.buildSituationAnswersText(target, situation, typeNames)
         return buildString {
             questionnaire?.takeIf { it.isNotBlank() }?.let {
                 appendLine("Анкета:")
-                appendLine(it)
-                appendLine()
-            }
-            personality?.takeIf { it.isNotBlank() && it != "(пока не заполнено)" }?.let {
-                appendLine("Моя личность:")
                 appendLine(it)
                 appendLine()
             }

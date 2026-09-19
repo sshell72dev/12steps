@@ -137,21 +137,34 @@ object EmotionCatalog {
         columns(kind).flatMap { it.words }.filter { containsWord(text, it, kind) }
 
     /**
-     * Appends "Word - " on a new line (capitalized) for dictation after the dash.
-     * If the word is already present, removes its line / occurrence instead.
-     * @return Pair(newText, startDictation)
+     * Обычное нажатие: слово дописывается в поле через запятую.
+     * Повторное нажатие убирает слово — в том числе строку «Слово - » после диктовки.
      */
-    fun pickWordForDictate(
+    fun toggleWord(
         text: String,
         word: String,
         kind: JournalFieldKind = JournalFieldKind.FEELINGS
-    ): Pair<String, Boolean> {
+    ): String {
         val trimmedWord = word.trim()
-        if (trimmedWord.isBlank()) return text to false
+        if (trimmedWord.isBlank()) return text
         if (containsWord(text, trimmedWord, kind)) {
-            return removeWordOccurrence(text, trimmedWord, kind) to false
+            return removeWordOccurrence(text, trimmedWord, kind)
         }
-        return appendWordLine(text, trimmedWord) to true
+        return appendWordComma(text, trimmedWord)
+    }
+
+    /** Длинное нажатие: слово выводится отдельной строкой «Слово - », дальше идёт диктовка. */
+    fun dictateWord(text: String, word: String): String = appendWordLine(text, word)
+
+    fun appendWordComma(text: String, word: String): String {
+        val label = word.trim()
+        if (label.isEmpty()) return text
+        val trimmed = text.trimEnd()
+        return when {
+            trimmed.isEmpty() -> label
+            trimmed.endsWith(",") -> "$trimmed $label"
+            else -> "$trimmed, $label"
+        }
     }
 
     fun appendWordLine(text: String, word: String): String {
@@ -163,9 +176,6 @@ object EmotionCatalog {
         val trimmed = text.trimEnd()
         return if (trimmed.isEmpty()) line else "$trimmed\n$line"
     }
-
-    fun toggleWord(text: String, word: String, kind: JournalFieldKind = JournalFieldKind.FEELINGS): String =
-        pickWordForDictate(text, word, kind).first
 
     private fun removeWordOccurrence(
         text: String,

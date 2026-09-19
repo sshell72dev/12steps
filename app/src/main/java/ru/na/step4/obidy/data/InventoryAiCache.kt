@@ -6,7 +6,9 @@ import org.json.JSONObject
 
 data class CachedSituationAi(
     val insights: Map<String, InventoryFieldInsight> = emptyMap(),
-    val fullAnalysis: String = ""
+    val fullAnalysis: String = "",
+    /** Отпечаток входных данных, по которым сделан разбор: позволяет не тратить запрос повторно. */
+    val sourceHash: Int = 0
 )
 
 class InventoryAiCache(context: Context) {
@@ -21,14 +23,15 @@ class InventoryAiCache(context: Context) {
             val insights = parseInsights(entry.optJSONObject("insights"))
             val full = entry.optString("fullAnalysis").trim()
             if (insights.isEmpty() && full.isBlank()) null
-            else CachedSituationAi(insights, full)
+            else CachedSituationAi(insights, full, entry.optInt("sourceHash", 0))
         }
     }
 
     fun save(
         situationId: Long,
         insights: Map<String, InventoryFieldInsight>,
-        fullAnalysis: String = ""
+        fullAnalysis: String = "",
+        sourceHash: Int = 0
     ) {
         if (situationId <= 0L) return
         if (insights.isEmpty() && fullAnalysis.isBlank()) {
@@ -40,6 +43,7 @@ class InventoryAiCache(context: Context) {
             val all = root.optJSONObject(KEY_SITUATIONS) ?: JSONObject()
             val entry = JSONObject()
             if (fullAnalysis.isNotBlank()) entry.put("fullAnalysis", fullAnalysis)
+            if (sourceHash != 0) entry.put("sourceHash", sourceHash)
             if (insights.isNotEmpty()) {
                 val obj = JSONObject()
                 insights.forEach { (key, insight) -> obj.put(key, insightToJson(insight)) }
@@ -63,8 +67,9 @@ class InventoryAiCache(context: Context) {
             fullAnalysis != null -> fullAnalysis
             else -> existing?.fullAnalysis.orEmpty()
         }
-        save(situationId, merged, full)
-        return CachedSituationAi(merged, full)
+        val hash = existing?.sourceHash ?: 0
+        save(situationId, merged, full, hash)
+        return CachedSituationAi(merged, full, hash)
     }
 
     fun clear(situationId: Long) {

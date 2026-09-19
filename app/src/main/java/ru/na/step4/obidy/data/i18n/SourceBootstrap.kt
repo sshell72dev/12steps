@@ -399,6 +399,10 @@ object SourceBootstrap {
         SourceCatalog.put("journal.pickThoughts", "Мысли")
         SourceCatalog.put("journal.pickSearch", "Поиск")
         SourceCatalog.put("journal.pickSelected", "Выбрано: %1\$d")
+        SourceCatalog.put(
+            "journal.pickGestureHint",
+            "Нажатие — добавить через запятую, удержание — продиктовать"
+        )
         SourceCatalog.put("journal.pickApply", "Готово")
         SourceCatalog.put("journal.moveUp", "Выше")
         SourceCatalog.put("journal.moveDown", "Ниже")
@@ -439,6 +443,15 @@ object SourceBootstrap {
         SourceCatalog.put("journal.personalityEmpty", "Пока не заполнено. Портрет появится после анализа записей.")
         SourceCatalog.put("journal.personalityEdit", "Редактировать одним сообщением")
         SourceCatalog.put("journal.showPersonality", "Показать")
+        SourceCatalog.put("journal.personalityFormat", "Отформатировать ИИ")
+        SourceCatalog.put("journal.personalityFormatBusy", "Форматирую портрет…")
+        SourceCatalog.put("journal.personalityFormatDone", "Портрет отформатирован")
+        SourceCatalog.put(
+            "journal.personalityFormatToday",
+            "Форматирование доступно раз в день — сегодня уже выполнено"
+        )
+        SourceCatalog.put("journal.personalityFormatEmpty", "Портрет пуст — нечего форматировать")
+        SourceCatalog.put("journal.personalityFormatFail", "Не удалось отформатировать портрет")
         SourceCatalog.put("journal.onboardingHello", "Добро пожаловать")
         SourceCatalog.put("journal.onboardingName", "Как к вам обращаться?")
         SourceCatalog.put("journal.onboardingNameHint", "Имя")

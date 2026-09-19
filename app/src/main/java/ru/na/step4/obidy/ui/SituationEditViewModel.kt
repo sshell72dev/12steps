@@ -164,20 +164,6 @@ class SituationEditViewModel(
         viewModelScope.launch {
             autosaveJob?.cancel()
             repository.saveSituation(snap.toSituation().trimmed())
-            form.update {
-                it.copy(
-                    aiLoading = true,
-                    aiNotice = null,
-                    aiPrompt = "",
-                    fullAnalysis = if (fullMode) "" else it.fullAnalysis
-                )
-            }
-            val aiKey = "ai-inventory-$situationId"
-            activityLog?.aiBegin(
-                if (fullMode) "Инвентарь · полный разбор" else "Инвентарь · подсказки",
-                aiKey,
-                snap.title.ifBlank { snap.target }
-            )
             val target = snap.target.ifBlank {
                 repository.getById(snap.resentmentId)?.target.orEmpty()
             }
@@ -199,7 +185,6 @@ class SituationEditViewModel(
                     target = target,
                     typeNames = types,
                     situation = snap.toSituation(),
-                    personality = personality,
                     questionnaire = questionnaire
                 )
             } else {
@@ -213,13 +198,44 @@ class SituationEditViewModel(
                     questionnaire = questionnaire
                 )
             }
+            val fingerprint = user.hashCode()
+            if (fullMode) {
+                val cached = aiCache.get(snap.id)
+                if (cached != null && cached.fullAnalysis.isNotBlank() && cached.sourceHash == fingerprint) {
+                    // Разбор по этим же данным уже есть — показываем его, не тратя запрос ИИ.
+                    form.update {
+                        it.copy(
+                            aiLoading = false,
+                            aiNotice = null,
+                            aiPrompt = "",
+                            fullAnalysis = cached.fullAnalysis
+                        )
+                    }
+                    return@launch
+                }
+            }
+            val aiKey = "ai-inventory-$situationId"
+            form.update {
+                it.copy(
+                    aiLoading = true,
+                    aiNotice = null,
+                    aiPrompt = "",
+                    fullAnalysis = if (fullMode) "" else it.fullAnalysis
+                )
+            }
+            activityLog?.aiBegin(
+                if (fullMode) "Инвентарь · полный разбор" else "Инвентарь · подсказки",
+                aiKey,
+                snap.title.ifBlank { snap.target }
+            )
             val result = withContext(Dispatchers.IO) {
                 JournalAiClient.chat(
                     user = user,
                     role = if (fullMode) "inventory.analyze" else "inventory.work",
                     program = program,
                     premium = prefs.isPro || prefs.isAdmin,
-                    admin = prefs.isAdmin
+                    admin = prefs.isAdmin,
+                    maxTokens = if (fullMode) 8000 else 4000
                 )
             }
             activityLog?.aiDone(aiKey, snap.title.ifBlank { snap.target })
@@ -230,7 +246,7 @@ class SituationEditViewModel(
                         val remaining = if (prefs.isAdmin) Int.MAX_VALUE else prefs.remainingAiToday()
                         if (fullMode) {
                             val text = result.text.trim()
-                            aiCache.save(current.id, current.insights, text)
+                            aiCache.save(current.id, current.insights, text, fingerprint)
                             current.copy(
                                 aiLoading = false,
                                 remainingAi = remaining,

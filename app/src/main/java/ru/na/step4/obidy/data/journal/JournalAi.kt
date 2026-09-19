@@ -21,14 +21,15 @@ object JournalAiClient {
         program: String = "",
         language: String = ru.na.step4.obidy.data.i18n.I18n.languageCode(),
         premium: Boolean = false,
-        admin: Boolean = false
+        admin: Boolean = false,
+        maxTokens: Int = 4000
     ): Result {
         val payload = JSONObject()
             .put("role", role)
             .put("program", program)
             .put("user", user)
             .put("language", language)
-            .put("max_tokens", 4000)
+            .put("max_tokens", maxTokens.coerceIn(256, 8000))
             .put("premium", premium)
             .put("admin", admin)
         return when (val raw = AiHttp.post("/api/v1/chat", payload, readTimeoutMs = 180_000)) {

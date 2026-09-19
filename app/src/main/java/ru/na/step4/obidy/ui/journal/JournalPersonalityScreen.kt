@@ -41,6 +41,7 @@ import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.NoteView
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.components.rememberSavedNotice
+import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Moss
 import ru.na.step4.obidy.ui.theme.Sand
@@ -96,6 +97,17 @@ fun JournalPersonalityScreen(
                         state.personality.ifBlank { JournalRu.personalityEmpty },
                         style = MaterialTheme.typography.bodyLarge,
                         color = Forest
+                    )
+                }
+                JournalButton(
+                    if (state.personalityFormatBusy) JournalRu.personalityFormatBusy else JournalRu.personalityFormat,
+                    onClick = { viewModel.formatPersonality() }
+                )
+                state.personalityFormatNotice?.let { notice ->
+                    Text(
+                        notice,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Amber
                     )
                 }
                 if (!editing) {

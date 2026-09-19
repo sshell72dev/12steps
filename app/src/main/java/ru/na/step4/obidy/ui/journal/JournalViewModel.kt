@@ -48,6 +48,9 @@ data class JournalState(
     val personality: String = "",
     val personalityEnabled: Boolean = true,
     val personalityCollectEnabled: Boolean = false,
+    val personalityFormattedOn: String = "",
+    val personalityFormatBusy: Boolean = false,
+    val personalityFormatNotice: String? = null,
     val isPro: Boolean = false,
     val isAdmin: Boolean = false,
     val remainingAi: Int = JournalPrefs.DAILY_LIMIT,
@@ -483,6 +486,59 @@ class JournalViewModel(
         refreshMeta()
     }
 
+    /**
+     * Форматирование портрета через ИИ: убрать повторы и общее, дать структуру и сжать до 1000 символов.
+     * Доступно один раз в сутки.
+     */
+    fun formatPersonality() {
+        val current = _meta.value
+        if (current.personalityFormatBusy) return
+        val source = prefs.personality.trim()
+        if (source.isBlank()) {
+            _meta.update { it.copy(personalityFormatNotice = JournalRu.personalityFormatEmpty) }
+            return
+        }
+        if (prefs.personalityFormattedOn == localDayKey()) {
+            _meta.update { it.copy(personalityFormatNotice = JournalRu.personalityFormatToday) }
+            return
+        }
+        _meta.update { it.copy(personalityFormatBusy = true, personalityFormatNotice = null) }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                JournalAiClient.chat(
+                    user = source,
+                    role = "personality.format",
+                    program = currentProgram(),
+                    premium = premiumActive(),
+                    admin = prefs.isAdmin,
+                    maxTokens = 2000
+                )
+            }
+            when (result) {
+                is JournalAiClient.Result.Ok -> {
+                    val text = result.text.trim().take(1000)
+                    prefs.personality = text
+                    prefs.personalityFormattedOn = localDayKey()
+                    _meta.update {
+                        it.copy(
+                            personality = text,
+                            personalityFormatBusy = false,
+                            personalityFormatNotice = JournalRu.personalityFormatDone
+                        )
+                    }
+                }
+                is JournalAiClient.Result.Err -> _meta.update {
+                    it.copy(
+                        personalityFormatBusy = false,
+                        personalityFormatNotice = JournalRu.personalityFormatFail
+                    )
+                }
+            }
+        }
+    }
+
+    private fun localDayKey(): String = java.time.LocalDate.now().toString()
+
     fun pendingQuestion(): QuestionnaireQuestion? = prefs.profile.nextUnanswered()
 
     fun answerQuestion(id: String, value: String) {
@@ -851,7 +907,9 @@ class JournalViewModel(
                 fieldValues = old.fieldValues,
                 lastSaved = old.lastSaved,
                 editingId = old.editingId,
-                notice = old.notice
+                notice = old.notice,
+                personalityFormatBusy = old.personalityFormatBusy,
+                personalityFormatNotice = old.personalityFormatNotice
             )
         }
     }
@@ -866,6 +924,7 @@ class JournalViewModel(
             personality = prefs.personality,
             personalityEnabled = prefs.personalityEnabled,
             personalityCollectEnabled = prefs.profile.personalityCollectEnabled,
+            personalityFormattedOn = prefs.personalityFormattedOn,
             isPro = prefs.isPro,
             isAdmin = prefs.isAdmin,
             remainingAi = if (prefs.isAdmin) Int.MAX_VALUE else prefs.remainingAiToday(),

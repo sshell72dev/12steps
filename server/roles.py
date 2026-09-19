@@ -235,6 +235,18 @@ INVENTORY_ANALYZE_TASK = (
     "Ответ структурированный, конкретный, поддерживающий."
 )
 
+PERSONALITY_FORMAT_TASK = (
+    "Ты редактор личного портрета «Моя личность». Пользователь присылает текущий портрет.\n"
+    "Верни только переработанный текст портрета — без вступлений, пояснений, оценок и вопросов.\n"
+    "Что сделать:\n"
+    "1. Убрать повторы и дублирующиеся формулировки.\n"
+    "2. Убрать абстрактные рассуждения и общие слова — оставить конкретные черты, реакции, "
+    "ценности, ресурсы и зоны роста.\n"
+    "3. Сделать чёткую и понятную структуру: короткие абзацы или пункты, в каждом одна мысль.\n"
+    "4. Сжать текст до 1000 символов, сохранив весь смысл. Ничего не выдумывать и не добавлять от себя.\n"
+    "Формат: обычный текст без markdown-разметки, без заголовка «Моя личность» и без служебных маркеров."
+)
+
 PSYCH_SYSTEMS = {
     "analyze": PSYCH_ANALYZE,
     "recommend": PSYCH_RECOMMEND,
@@ -251,6 +263,7 @@ CHAT_TASKS = {
     "journal.help": JOURNAL_HELP_TASK,
     "journal.help_entry": JOURNAL_HELP_ENTRY_TASK,
     "journal.analyze": JOURNAL_ANALYZE_TASK,
+    "personality.format": PERSONALITY_FORMAT_TASK,
     "inventory.work": INVENTORY_WORK_TASK,
     "inventory.analyze": INVENTORY_ANALYZE_TASK,
     "lock.quote": LOCK_QUOTE,

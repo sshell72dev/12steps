@@ -56,6 +56,10 @@ object JournalRu {
     val pickThoughts: String get() = I18n.t("journal.pickThoughts", "Мысли")
     val pickSearch: String get() = I18n.t("journal.pickSearch", "Поиск")
     val pickSelected: String get() = I18n.t("journal.pickSelected", "Выбрано: %1\$d")
+    val pickGestureHint: String get() = I18n.t(
+        "journal.pickGestureHint",
+        "Нажатие — добавить через запятую, удержание — продиктовать"
+    )
     val pickApply: String get() = I18n.t("journal.pickApply", "Готово")
     val moveUp: String get() = I18n.t("journal.moveUp", "Выше")
     val moveDown: String get() = I18n.t("journal.moveDown", "Ниже")
@@ -96,6 +100,15 @@ object JournalRu {
     val personalityEmpty: String get() = I18n.t("journal.personalityEmpty", "Пока не заполнено. Портрет появится после анализа записей.")
     val personalityEdit: String get() = I18n.t("journal.personalityEdit", "Редактировать одним сообщением")
     val showPersonality: String get() = I18n.t("journal.showPersonality", "Показать")
+    val personalityFormat: String get() = I18n.t("journal.personalityFormat", "Отформатировать ИИ")
+    val personalityFormatBusy: String get() = I18n.t("journal.personalityFormatBusy", "Форматирую портрет…")
+    val personalityFormatDone: String get() = I18n.t("journal.personalityFormatDone", "Портрет отформатирован")
+    val personalityFormatToday: String get() =
+        I18n.t("journal.personalityFormatToday", "Форматирование доступно раз в день — сегодня уже выполнено")
+    val personalityFormatEmpty: String get() =
+        I18n.t("journal.personalityFormatEmpty", "Портрет пуст — нечего форматировать")
+    val personalityFormatFail: String get() =
+        I18n.t("journal.personalityFormatFail", "Не удалось отформатировать портрет")
     val onboardingHello: String get() = I18n.t("journal.onboardingHello", "Добро пожаловать")
     val onboardingName: String get() = I18n.t("journal.onboardingName", "Как к вам обращаться?")
     val onboardingNameHint: String get() = I18n.t("journal.onboardingNameHint", "Имя")

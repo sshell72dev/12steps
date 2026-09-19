@@ -222,6 +222,13 @@ class JournalPrefs(
             profile.personalityEnabled = value
         }
 
+    /** Дата (ISO) последнего форматирования портрета — лимит «раз в день». */
+    var personalityFormattedOn: String
+        get() = prefs.getString(KEY_PERSONALITY_FORMATTED, "").orEmpty()
+        set(value) {
+            prefs.edit().putString(KEY_PERSONALITY_FORMATTED, value).apply()
+        }
+
     var isPro: Boolean
         get() = prefs.getBoolean(KEY_PRO, false)
         set(value) {
@@ -350,6 +357,7 @@ class JournalPrefs(
         private const val KEY_CURRENT = "current_id"
         private const val KEY_PRO = "pro"
         private const val KEY_ADMIN = "admin"
+        private const val KEY_PERSONALITY_FORMATTED = "personality_formatted_on"
         private const val KEY_ADMIN_CODE = "admin_code"
         private const val KEY_DEVICE = "device_id"
         private const val KEY_NOTES_SYNC = "notes_synced_at"
