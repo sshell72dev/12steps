@@ -592,6 +592,9 @@ def api_analyze():
         str(payload.get("language") or payload.get("language_code") or "ru"),
         "\n".join(lines),
     )
+    review_length = str(payload.get("review_length") or "standard").strip().lower()
+    if review_length not in {"short", "standard", "long"}:
+        review_length = "standard"
     user_prompt = psych.render_language(language) + _build_self_analysis_prompt(
         title,
         lines,
@@ -600,9 +603,13 @@ def api_analyze():
         name=str(payload.get("name") or "").strip(),
         collect_personality=bool(payload.get("collect_personality")),
         language=language,
+        review_length=review_length,
     )
     system = roles.system_for_chat("analysis.review") or SYSTEM_PROMPT
     collect = bool(payload.get("collect_personality"))
+    max_tokens = {"short": 1400, "standard": 2200, "long": 6000}[review_length]
+    if collect:
+        max_tokens += 1300
     try:
         text = _deepseek_chat(
             api_key,
@@ -611,7 +618,7 @@ def api_analyze():
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_prompt},
             ],
-            max_tokens=3500 if collect else 2200,
+            max_tokens=max_tokens,
             timeout=180,
             thinking=model == MODEL_PREMIUM,
         )
@@ -1496,7 +1503,11 @@ def _build_self_analysis_prompt(
     name: str = "",
     collect_personality: bool = False,
     language: str = "ru",
+    review_length: str = "standard",
 ) -> str:
+    length = (review_length or "standard").strip().lower()
+    if length not in {"short", "standard", "long"}:
+        length = "standard"
     lang = (language or "ru").strip().lower().replace("_", "-")
     is_ru = lang in {"ru", "ru-ru", "russian"} or lang.startswith("ru-")
     if is_ru:
@@ -1583,6 +1594,33 @@ def _build_self_analysis_prompt(
             "reason_lang": label,
         }
 
+    volumes = (
+        {
+            "short": (
+                "ОБЪЁМ: Короткий ответ — 300–450 слов. Только суть: по 1–2 предложения на пункт, "
+                "без вступлений, повторов и общих рассуждений."
+            ),
+            "long": (
+                "ОБЪЁМ: Подробный ответ — 1500–2200 слов. Раскрывай каждый пункт развёрнуто: "
+                "конкретные примеры и цитаты из ответов, разбор причин и следствий, "
+                "детальные шаги в каждой рекомендации. Не пересказывай ответы целиком."
+            ),
+        }
+        if is_ru
+        else {
+            "short": (
+                "LENGTH: Short response — about 300–450 words. Key points only, "
+                "1–2 sentences per item, no introductions, repetition or general reasoning."
+            ),
+            "long": (
+                "LENGTH: Detailed response — about 1500–2200 words. Expand every item: "
+                "concrete examples and quotes from the answers, cause-and-effect reasoning, "
+                "detailed steps in each recommendation. Do not retell the answers in full."
+            ),
+        }
+    )
+    volume = volumes.get(length, h["volume"])
+
     prompt = f"{h['context']}:\n"
     prompt += f"{h['date']}: {_today_ru()}\n"
     if title:
@@ -1625,7 +1663,7 @@ def _build_self_analysis_prompt(
         f"- {h['p1']}\n"
         f"- {h['p2']}\n"
         f"- {h['p3']}\n\n"
-        f"{h['volume']}\n\n"
+        f"{volume}\n\n"
         f"{h['format']}\n\n"
     )
     if collect_personality:

@@ -13,8 +13,18 @@ object JournalRu {
     val pickStep: String get() = I18n.t("journal.pickStep", "Выбор Шага")
     val myEntries: String get() = I18n.t("journal.myEntries", "Мои записи")
     val myPersonality: String get() = I18n.t("journal.myPersonality", "Моя личность")
-    val aiHelp: String get() = I18n.t("journal.aiHelp", "Помощь ИИ по текущей точке")
-    val aiHelpPro: String get() = I18n.t("journal.aiHelpPro", "Premium · Помощь ИИ по текущей точке")
+    val literature: String get() = I18n.t("journal.literature", "Литература к вопросу")
+    val advice: String get() = I18n.t("journal.advice", "Рекомендации для тебя")
+    val aiLength: String get() = I18n.t("journal.aiLength", "Объём ответа")
+    val aiLengthShort: String get() = I18n.t("journal.aiLengthShort", "Короткий")
+    val aiLengthStandard: String get() = I18n.t("journal.aiLengthStandard", "Стандарт")
+    val aiLengthLong: String get() = I18n.t("journal.aiLengthLong", "Длинный")
+    val settingsLiterature: String get() = I18n.t("journal.settingsLiterature", "Настройка литературы к вопросу")
+    val settingsAdvice: String get() = I18n.t("journal.settingsAdvice", "Настройка рекомендаций для тебя")
+    val privacyNotice: String get() = I18n.t(
+        "journal.privacyNotice",
+        "Ответ строится только по вопросу и программе: имя, анкета и личные данные не передаются. Термины — по вашей программе."
+    )
     val nextPoint: String get() = I18n.t("journal.nextPoint", "Перейти в следующую точку")
     val settings: String get() = I18n.t("journal.settings", "Настройки")
     val help: String get() = I18n.t("journal.help", "Справка")

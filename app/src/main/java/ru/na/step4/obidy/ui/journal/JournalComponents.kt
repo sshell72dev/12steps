@@ -68,21 +68,29 @@ fun JournalButton(
     label: String,
     onClick: () -> Unit,
     filled: Boolean = false,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     if (filled) {
         Button(
             onClick = onClick,
+            enabled = enabled,
             modifier = modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Forest, contentColor = Sand),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Forest,
+                contentColor = Sand,
+                disabledContainerColor = Forest.copy(alpha = 0.35f),
+                disabledContentColor = Sand.copy(alpha = 0.7f)
+            ),
             shape = RoundedCornerShape(14.dp)
         ) { Text(label) }
     } else {
         OutlinedButton(
             onClick = onClick,
+            enabled = enabled,
             modifier = modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(14.dp)
-        ) { Text(label, color = Forest) }
+        ) { Text(label, color = if (enabled) Forest else Forest.copy(alpha = 0.38f)) }
     }
 }
 

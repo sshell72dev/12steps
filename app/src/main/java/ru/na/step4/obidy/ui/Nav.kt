@@ -129,7 +129,8 @@ private object Routes {
     const val JOURNAL_ENTRIES = "journal/entries"
     const val JOURNAL_ENTRY = "journal/entry/{id}"
     const val JOURNAL_PERSONALITY = "journal/personality"
-    const val JOURNAL_AI_HELP = "journal/ai/help"
+    const val JOURNAL_AI_LITERATURE = "journal/ai/literature"
+    const val JOURNAL_AI_ADVICE = "journal/ai/advice"
     const val JOURNAL_AI_HELP_ENTRY = "journal/ai/help/{id}"
     const val JOURNAL_AI_ANALYZE = "journal/ai/analyze"
     const val JOURNAL_AI_ANALYZE_ENTRY = "journal/ai/analyze/{id}"
@@ -549,7 +550,8 @@ fun Step4Nav() {
                         onPick = { navController.navigate(Routes.JOURNAL_PICK) },
                         onEntries = { navController.navigate(Routes.JOURNAL_ENTRIES) },
                         onPersonality = { navController.navigate(Routes.PROFILE) },
-                        onAiHelp = { navController.navigate(Routes.JOURNAL_AI_HELP) },
+                        onLiterature = { navController.navigate(Routes.JOURNAL_AI_LITERATURE) },
+                        onAdvice = { navController.navigate(Routes.JOURNAL_AI_ADVICE) },
                         onAiAnalyze = { id ->
                             navController.navigate(Routes.journalAnalyzeEntry(id))
                         },
@@ -597,7 +599,8 @@ fun Step4Nav() {
                 onPickParent = {
                     navController.popBackStack(Routes.JOURNAL_PICK, inclusive = false)
                 },
-                onAiHelp = { navController.navigate(Routes.JOURNAL_AI_HELP) },
+                onLiterature = { navController.navigate(Routes.JOURNAL_AI_LITERATURE) },
+                onAdvice = { navController.navigate(Routes.JOURNAL_AI_ADVICE) },
                 onAiAnalyze = { id ->
                     navController.navigate(Routes.journalAnalyzeEntry(id))
                 },
@@ -658,10 +661,19 @@ fun Step4Nav() {
                 onBack = { navController.popBackStack() }
             )
         }
-        composable(Routes.JOURNAL_AI_HELP) {
+        composable(Routes.JOURNAL_AI_LITERATURE) {
             JournalAiScreen(
                 viewModel = journalVm(it, navController, app),
-                mode = JournalAiMode.HELP,
+                mode = JournalAiMode.LITERATURE,
+                entryId = null,
+                onBack = { navController.popBackStack(Routes.JOURNAL, inclusive = false) },
+                onPro = { navController.navigate(Routes.JOURNAL_PRO) }
+            )
+        }
+        composable(Routes.JOURNAL_AI_ADVICE) {
+            JournalAiScreen(
+                viewModel = journalVm(it, navController, app),
+                mode = JournalAiMode.ADVICE,
                 entryId = null,
                 onBack = { navController.popBackStack(Routes.JOURNAL, inclusive = false) },
                 onPro = { navController.navigate(Routes.JOURNAL_PRO) }
@@ -674,7 +686,7 @@ fun Step4Nav() {
             val id = entry.arguments?.getString("id")
             JournalAiScreen(
                 viewModel = journalVm(entry, navController, app),
-                mode = JournalAiMode.HELP,
+                mode = JournalAiMode.HELP_ENTRY,
                 entryId = id,
                 onBack = { navController.popBackStack(Routes.JOURNAL, inclusive = false) },
                 onPro = { navController.navigate(Routes.JOURNAL_PRO) }

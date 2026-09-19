@@ -23,12 +23,14 @@ object AnalysisAiClient {
         profile: ProfileStore? = null,
         premium: Boolean = false,
         admin: Boolean = false,
-        goals: String? = null
+        goals: String? = null,
+        reviewLength: String = "standard"
     ): Result {
         val payload = JSONObject()
             .put("title", title)
             .put("premium", premium)
             .put("admin", admin)
+            .put("review_length", reviewLength)
             .put(
                 "answers",
                 JSONArray().also { arr ->

@@ -226,6 +226,7 @@ fun AnalysisSettingsScreen(
 ) {
     var tab by remember { mutableStateOf(0) }
     var cleanLong by remember { mutableStateOf(settings.cleanDayLong) }
+    var reviewLength by remember { mutableStateOf(settings.reviewLength) }
 
     Scaffold(
         containerColor = Sand,
@@ -309,6 +310,57 @@ fun AnalysisSettingsScreen(
                                     settings.cleanDayLong = true
                                 },
                                 label = { Text(Ru.analysisCleanDayLong) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Forest,
+                                    selectedLabelColor = Sand,
+                                    containerColor = SandDeep,
+                                    labelColor = Forest
+                                )
+                            )
+                        }
+                        Spacer(Modifier.height(22.dp))
+                        Text(
+                            Ru.analysisReviewLength,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Forest
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = reviewLength == AnalysisSettings.REVIEW_SHORT,
+                                onClick = {
+                                    reviewLength = AnalysisSettings.REVIEW_SHORT
+                                    settings.reviewLength = AnalysisSettings.REVIEW_SHORT
+                                },
+                                label = { Text(Ru.analysisReviewShort) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Forest,
+                                    selectedLabelColor = Sand,
+                                    containerColor = SandDeep,
+                                    labelColor = Forest
+                                )
+                            )
+                            FilterChip(
+                                selected = reviewLength == AnalysisSettings.REVIEW_STANDARD,
+                                onClick = {
+                                    reviewLength = AnalysisSettings.REVIEW_STANDARD
+                                    settings.reviewLength = AnalysisSettings.REVIEW_STANDARD
+                                },
+                                label = { Text(Ru.analysisReviewStandard) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Forest,
+                                    selectedLabelColor = Sand,
+                                    containerColor = SandDeep,
+                                    labelColor = Forest
+                                )
+                            )
+                            FilterChip(
+                                selected = reviewLength == AnalysisSettings.REVIEW_LONG,
+                                onClick = {
+                                    reviewLength = AnalysisSettings.REVIEW_LONG
+                                    settings.reviewLength = AnalysisSettings.REVIEW_LONG
+                                },
+                                label = { Text(Ru.analysisReviewLong) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = Forest,
                                     selectedLabelColor = Sand,

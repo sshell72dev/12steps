@@ -97,6 +97,15 @@ class AnalysisSettings(context: Context) {
     fun cleanDayId(): String =
         if (cleanDayLong) "clean-day-long" else "clean-day-short"
 
+    /** Объём ИИ-разбора самоанализа: short | standard | long. */
+    var reviewLength: String
+        get() = prefs.getString(KEY_REVIEW_LENGTH, REVIEW_STANDARD) ?: REVIEW_STANDARD
+        set(value) {
+            val clean = if (value in REVIEW_LENGTHS) value else REVIEW_STANDARD
+            prefs.edit().putString(KEY_REVIEW_LENGTH, clean).apply()
+            bump()
+        }
+
     fun overrides(): Map<String, CatalogEntry> {
         val raw = prefs.getString(KEY_OVERRIDES, null) ?: return emptyMap()
         return runCatching {
@@ -228,6 +237,11 @@ class AnalysisSettings(context: Context) {
     companion object {
         private const val PREFS = "self_analysis"
         private const val KEY_CLEAN_LONG = "clean_day_long"
+        private const val KEY_REVIEW_LENGTH = "review_length"
+        const val REVIEW_SHORT = "short"
+        const val REVIEW_STANDARD = "standard"
+        const val REVIEW_LONG = "long"
+        val REVIEW_LENGTHS = setOf(REVIEW_SHORT, REVIEW_STANDARD, REVIEW_LONG)
         private const val KEY_OVERRIDES = "catalog_overrides"
         private const val KEY_CUSTOM = "catalog_custom"
         private const val KEY_REMOTE_AT = "catalog_remote_at"

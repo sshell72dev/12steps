@@ -444,7 +444,8 @@ fun JournalSelectedScreen(
     viewModel: JournalViewModel,
     onMenu: () -> Unit,
     onPickParent: () -> Unit,
-    onAiHelp: () -> Unit,
+    onLiterature: () -> Unit,
+    onAdvice: () -> Unit,
     onAiAnalyze: (String) -> Unit,
     onResentments: () -> Unit,
     onEntries: () -> Unit
@@ -490,7 +491,8 @@ fun JournalSelectedScreen(
                 }
                 Text(JournalRu.thenWrite, color = Forest, style = MaterialTheme.typography.bodyLarge)
                 if (node?.type == NodeType.POINT) {
-                    JournalButton(JournalRu.aiHelp, onAiHelp)
+                    JournalButton(JournalRu.literature, onLiterature)
+                    JournalButton(JournalRu.advice, onAdvice)
                 }
                 if (state.writable) {
                     JournalEntryComposer(

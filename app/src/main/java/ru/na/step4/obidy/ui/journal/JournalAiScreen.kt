@@ -43,7 +43,7 @@ import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.steps12.voice.ui.SpeakableText
 import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
-enum class JournalAiMode { HELP, ANALYZE }
+enum class JournalAiMode { HELP_ENTRY, LITERATURE, ADVICE, ANALYZE }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,15 +59,24 @@ fun JournalAiScreen(
     val ai by viewModel.ai.collectAsStateWithLifecycle()
     LaunchedEffect(mode, entryId) {
         viewModel.resetAi()
-        if (mode == JournalAiMode.HELP) {
-            if (viewModel.prepareAiHelp()) viewModel.requestHelp(entryId)
-        } else {
-            val forceNew = viewModel.consumeAnalyzeForce()
-            if (entryId != null && !forceNew && viewModel.showCachedAnalyze(entryId)) {
-                return@LaunchedEffect
+        when (mode) {
+            JournalAiMode.HELP_ENTRY -> {
+                if (viewModel.prepareAiHelp()) viewModel.requestHelp(entryId)
             }
-            if (viewModel.prepareAiHelp()) {
-                viewModel.requestAnalyze(entryId, forceRefresh = true)
+            JournalAiMode.LITERATURE -> {
+                if (viewModel.prepareAiHelp()) viewModel.requestLiterature()
+            }
+            JournalAiMode.ADVICE -> {
+                if (viewModel.prepareAiHelp()) viewModel.requestAdvice()
+            }
+            JournalAiMode.ANALYZE -> {
+                val forceNew = viewModel.consumeAnalyzeForce()
+                if (entryId != null && !forceNew && viewModel.showCachedAnalyze(entryId)) {
+                    return@LaunchedEffect
+                }
+                if (viewModel.prepareAiHelp()) {
+                    viewModel.requestAnalyze(entryId, forceRefresh = true)
+                }
             }
         }
     }
@@ -78,10 +87,11 @@ fun JournalAiScreen(
             TopAppBar(
                 title = {
                     Text(
-                        when {
-                            mode == JournalAiMode.HELP && entryId != null -> JournalRu.aiHelpEntry
-                            mode == JournalAiMode.HELP -> JournalRu.aiHelp
-                            else -> JournalRu.aiAnalyze
+                        when (mode) {
+                            JournalAiMode.HELP_ENTRY -> JournalRu.aiHelpEntry
+                            JournalAiMode.LITERATURE -> JournalRu.literature
+                            JournalAiMode.ADVICE -> JournalRu.advice
+                            JournalAiMode.ANALYZE -> JournalRu.aiAnalyze
                         },
                         color = Forest
                     )
@@ -167,11 +177,10 @@ fun JournalAiScreen(
                         if (state.isAdmin && ui.prompt.isNotBlank()) {
                             ru.na.step4.obidy.ui.components.AdminPromptBlock(
                                 ui.prompt,
-                                origin = when {
-                                    mode == JournalAiMode.HELP ->
-                                        ru.na.step4.obidy.ui.components.PromptOrigin.journalHelp(entryId != null)
-                                    else ->
-                                        ru.na.step4.obidy.ui.components.PromptOrigin.journalAnalyze(entryId != null)
+                                origin = if (mode == JournalAiMode.ANALYZE) {
+                                    ru.na.step4.obidy.ui.components.PromptOrigin.journalAnalyze(entryId != null)
+                                } else {
+                                    ru.na.step4.obidy.ui.components.PromptOrigin.journalHelp(entryId != null)
                                 }
                             )
                         }
@@ -225,9 +234,12 @@ fun JournalAiScreen(
 }
 
 private fun continueAi(viewModel: JournalViewModel, mode: JournalAiMode, entryId: String?) {
-    if (mode == JournalAiMode.HELP) {
-        if (viewModel.prepareAiHelp()) viewModel.requestHelp(entryId)
-    } else {
-        if (viewModel.prepareAiHelp()) viewModel.requestAnalyze(entryId, forceRefresh = true)
+    when (mode) {
+        JournalAiMode.HELP_ENTRY -> if (viewModel.prepareAiHelp()) viewModel.requestHelp(entryId)
+        JournalAiMode.LITERATURE -> if (viewModel.prepareAiHelp()) viewModel.requestLiterature()
+        JournalAiMode.ADVICE -> if (viewModel.prepareAiHelp()) viewModel.requestAdvice()
+        JournalAiMode.ANALYZE -> if (viewModel.prepareAiHelp()) {
+            viewModel.requestAnalyze(entryId, forceRefresh = true)
+        }
     }
 }

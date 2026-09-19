@@ -229,6 +229,20 @@ class JournalPrefs(
             prefs.edit().putString(KEY_PERSONALITY_FORMATTED, value).apply()
         }
 
+    /** Объём ответа для «Литературы к вопросу» (short/standard/long). */
+    var literatureLength: String
+        get() = prefs.getString(KEY_LITERATURE_LENGTH, AiLength.STANDARD.key).orEmpty()
+        set(value) {
+            prefs.edit().putString(KEY_LITERATURE_LENGTH, value).apply()
+        }
+
+    /** Объём ответа для «Рекомендаций для тебя» (short/standard/long). */
+    var adviceLength: String
+        get() = prefs.getString(KEY_ADVICE_LENGTH, AiLength.STANDARD.key).orEmpty()
+        set(value) {
+            prefs.edit().putString(KEY_ADVICE_LENGTH, value).apply()
+        }
+
     var isPro: Boolean
         get() = prefs.getBoolean(KEY_PRO, false)
         set(value) {
@@ -313,11 +327,12 @@ class JournalPrefs(
         profile.skipQuestion(id)
     }
 
-    fun cachedHelp(nodeId: Int): String? =
-        prefs.getString(cacheKey(nodeId), null)
+    /** Кэш ответов «Литература к вопросу» и «Рекомендации для тебя» — отдельно по роли. */
+    fun cachedPointAi(nodeId: Int, role: String): String? =
+        prefs.getString(aiCacheKey(nodeId, role), null)
 
-    fun putCachedHelp(nodeId: Int, text: String) {
-        prefs.edit().putString(cacheKey(nodeId), text).apply()
+    fun putCachedPointAi(nodeId: Int, role: String, text: String) {
+        prefs.edit().putString(aiCacheKey(nodeId, role), text).apply()
     }
 
     fun remainingAiToday(): Int {
@@ -349,7 +364,7 @@ class JournalPrefs(
         return "${cal.get(java.util.Calendar.YEAR)}-${cal.get(java.util.Calendar.MONTH) + 1}-${cal.get(java.util.Calendar.DAY_OF_MONTH)}"
     }
 
-    private fun cacheKey(nodeId: Int) = "help_$nodeId"
+    private fun aiCacheKey(nodeId: Int, role: String) = "point_${role}_$nodeId"
 
     companion object {
         private const val PREFS = "journal_local"
@@ -369,6 +384,8 @@ class JournalPrefs(
         private const val KEY_EDITING = "entry_editing_id"
         private const val KEY_AI_DAY = "ai_day"
         private const val KEY_AI_COUNT = "ai_count"
+        private const val KEY_LITERATURE_LENGTH = "ai_length_literature"
+        private const val KEY_ADVICE_LENGTH = "ai_length_advice"
         const val DAILY_LIMIT = 3
     }
 }

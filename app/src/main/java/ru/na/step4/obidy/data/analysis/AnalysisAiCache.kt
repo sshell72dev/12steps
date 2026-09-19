@@ -8,15 +8,15 @@ class AnalysisAiCache(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun get(title: String, answers: List<QaPair>): String? {
-        val text = prefs.getString(entryKey(title, answers), null)?.trim().orEmpty()
+    fun get(title: String, answers: List<QaPair>, length: String): String? {
+        val text = prefs.getString(entryKey(title, answers, length), null)?.trim().orEmpty()
         return text.ifBlank { null }
     }
 
-    fun put(title: String, answers: List<QaPair>, text: String) {
+    fun put(title: String, answers: List<QaPair>, length: String, text: String) {
         val clean = text.trim()
         if (clean.isBlank()) return
-        val key = hash(title, answers)
+        val key = hash(title, answers, length)
         val keys = keys().toMutableList().apply {
             remove(key)
             add(0, key)
@@ -38,13 +38,15 @@ class AnalysisAiCache(context: Context) {
         return (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }
     }
 
-    private fun entryKey(title: String, answers: List<QaPair>): String =
-        PREFIX + hash(title, answers)
+    private fun entryKey(title: String, answers: List<QaPair>, length: String): String =
+        PREFIX + hash(title, answers, length)
 
-    private fun hash(title: String, answers: List<QaPair>): String {
+    private fun hash(title: String, answers: List<QaPair>, length: String): String {
         val language = ru.na.step4.obidy.data.i18n.I18n.languageCode()
         val raw = buildString {
             append(language)
+            append('\n')
+            append(length)
             append('\n')
             append(title.trim())
             answers.forEach { pair ->

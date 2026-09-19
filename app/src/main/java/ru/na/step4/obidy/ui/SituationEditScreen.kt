@@ -167,7 +167,8 @@ fun SituationEditScreen(
                     JournalButton(
                         InventoryStructure.workThroughQuestions,
                         onClick = { viewModel.requestWorkThrough() },
-                        filled = true
+                        filled = true,
+                        enabled = !state.aiLoading
                     )
                     if (!state.isPro && !state.isAdmin) {
                         JournalButton(JournalRu.proNeededTitle, onClick = onPro)
@@ -276,7 +277,8 @@ fun SituationEditScreen(
                     JournalButton(
                         InventoryStructure.workThroughFull,
                         onClick = { viewModel.requestWorkThrough() },
-                        filled = true
+                        filled = true,
+                        enabled = !state.aiLoading
                     )
                     if (!state.isPro && !state.isAdmin) {
                         JournalButton(JournalRu.proNeededTitle, onClick = onPro)

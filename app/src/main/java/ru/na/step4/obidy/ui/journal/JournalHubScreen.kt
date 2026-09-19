@@ -47,7 +47,8 @@ fun JournalHubScreen(
     onPick: () -> Unit,
     onEntries: () -> Unit,
     onPersonality: () -> Unit,
-    onAiHelp: () -> Unit,
+    onLiterature: () -> Unit,
+    onAdvice: () -> Unit,
     onAiAnalyze: (String) -> Unit,
     onSettings: () -> Unit,
     onHelp: () -> Unit,
@@ -151,7 +152,8 @@ fun JournalHubScreen(
                         NoteView(NoteIds.journal(node.id), node.description, node.displayTitle())
                     }
                     if (path?.current?.type == NodeType.POINT) {
-                        JournalButton(JournalRu.aiHelp, onAiHelp)
+                        JournalButton(JournalRu.literature, onLiterature)
+                        JournalButton(JournalRu.advice, onAdvice)
                     }
                     if (state.writable) {
                         JournalEntryComposer(

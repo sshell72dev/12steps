@@ -9,6 +9,36 @@ import ru.na.step4.obidy.data.profile.ProfileProblems
 import ru.na.step4.obidy.data.profile.ProfileQuestionnaire
 import ru.na.step4.obidy.data.profile.ProfileStore
 
+/** Объём ответа ИИ — настройка для «Литературы к вопросу» и «Рекомендаций для тебя». */
+enum class AiLength(val key: String) {
+    SHORT("short"),
+    STANDARD("standard"),
+    LONG("long");
+
+    fun label(): String = when (this) {
+        SHORT -> JournalRu.aiLengthShort
+        STANDARD -> JournalRu.aiLengthStandard
+        LONG -> JournalRu.aiLengthLong
+    }
+
+    fun instruction(): String = when (this) {
+        SHORT -> "Объём ответа: короткий — до 150 слов, только суть, без вступлений и повторов."
+        STANDARD -> "Объём ответа: стандарт — до 350 слов, по пунктам, без воды."
+        LONG -> "Объём ответа: длинный — до 700 слов, подробно по каждому пункту."
+    }
+
+    fun maxTokens(): Int = when (this) {
+        SHORT -> 900
+        STANDARD -> 2000
+        LONG -> 4000
+    }
+
+    companion object {
+        fun of(value: String?): AiLength =
+            entries.firstOrNull { it.key == value?.trim()?.lowercase() } ?: STANDARD
+    }
+}
+
 object JournalAiClient {
     sealed class Result {
         data class Ok(val text: String, val prompt: String = "") : Result()
@@ -53,11 +83,24 @@ object JournalPrompts {
     const val PERSONALITY_START = PersonalityPortrait.START
     const val PERSONALITY_END = PersonalityPortrait.END
 
-    fun helpPointUser(
-        path: TreePath,
-        personality: String?,
-        questionnaire: String? = null
-    ): String {
+    /** Лимит токенов для выбранного объёма ответа. */
+    fun lengthMaxTokens(lengthKey: String): Int = AiLength.of(lengthKey).maxTokens()
+
+    /**
+     * «Литература к вопросу»: без имени, анкеты и личных данных —
+     * только вопрос, текст точки и программа.
+     */
+    fun literatureUser(path: TreePath, program: String, lengthKey: String): String =
+        pointOnlyUser(path, program, AiLength.of(lengthKey))
+
+    /**
+     * «Рекомендации для тебя»: без имени, анкеты и личных данных —
+     * только вопрос, текст точки и программа.
+     */
+    fun adviceUser(path: TreePath, program: String, lengthKey: String): String =
+        pointOnlyUser(path, program, AiLength.of(lengthKey))
+
+    private fun pointOnlyUser(path: TreePath, program: String, length: AiLength): String {
         val node = path.current
         val selection = when (node.type) {
             NodeType.POINT -> "Точку \"${node.name}\""
@@ -66,24 +109,23 @@ object JournalPrompts {
         }
         val fullPath = listOfNotNull(path.step.name, path.chapter?.name, path.point?.name)
             .joinToString(" → ")
-        val personalityText = personality?.trim()
-            ?.takeIf { it.isNotBlank() && it != "(пока не заполнено)" }
         return buildString {
             append("Точка: ")
             append(selection)
-            append(" (Шаг: ${path.step.name})")
-            append(" (полный путь: $fullPath).\n")
+            append(" (Шаг: ${path.step.name}) (полный путь: $fullPath).\n")
             append("Текущая дата: ${nowStamp()}\n")
-            questionnaire?.takeIf { it.isNotBlank() }?.let {
-                append("\nДанные из анкеты:\n")
+            if (node.description.isNotBlank()) {
+                append("\nТекст точки:\n")
+                append(node.description)
+                append("\n")
+            }
+            program.trim().takeIf { it.isNotBlank() }?.let {
+                append("\nПрограмма: ")
                 append(it)
                 append("\n")
             }
-            if (personalityText != null) {
-                append("\nМоя личность:\n")
-                append(personalityText)
-                append("\n")
-            }
+            append("\n")
+            append(length.instruction())
         }
     }
 

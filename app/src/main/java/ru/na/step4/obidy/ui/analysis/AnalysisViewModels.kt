@@ -432,7 +432,8 @@ class AnalysisAiReviewViewModel(application: Application) : AndroidViewModel(app
 
     fun showCached(title: String, answers: List<QaPair>) {
         if (_state.value !is AiReviewUi.Idle) return
-        val cached = cache.get(title, answers) ?: return
+        val length = getApplication<Step4App>().analysisSettings.reviewLength
+        val cached = cache.get(title, answers, length) ?: return
         _state.value = AiReviewUi.Ready(
             ReflectionQuestions.cleanReviewSource(cached),
             fromCache = true
@@ -441,8 +442,9 @@ class AnalysisAiReviewViewModel(application: Application) : AndroidViewModel(app
 
     fun request(title: String, answers: List<QaPair>, force: Boolean = false) {
         if (_state.value is AiReviewUi.Loading) return
+        val reviewLength = getApplication<Step4App>().analysisSettings.reviewLength
         if (!force) {
-            val cached = cache.get(title, answers)
+            val cached = cache.get(title, answers, reviewLength)
             if (!cached.isNullOrBlank()) {
                 _state.value = AiReviewUi.Ready(
                     ReflectionQuestions.cleanReviewSource(cached),
@@ -463,7 +465,8 @@ class AnalysisAiReviewViewModel(application: Application) : AndroidViewModel(app
                     profile,
                     premium = premiumActive(),
                     admin = getApplication<Step4App>().journalPrefs.isAdmin,
-                    goals = getApplication<Step4App>().lifeBoard.goalsPromptBlock()
+                    goals = getApplication<Step4App>().lifeBoard.goalsPromptBlock(),
+                    reviewLength = reviewLength
                 )
             }
             app.activityLog.aiDone(key, "Самоанализ · ${answers.size} отв.")
@@ -476,7 +479,7 @@ class AnalysisAiReviewViewModel(application: Application) : AndroidViewModel(app
                     if (profile.personalityCollectEnabled && !portrait.isNullOrBlank()) {
                         profile.personality = portrait
                     }
-                    cache.put(title, answers, visible)
+                    cache.put(title, answers, reviewLength, visible)
                     AiReviewUi.Ready(visible, fromCache = false, prompt = result.prompt)
                 }
                 is AnalysisAiClient.Result.Err -> AiReviewUi.Error(result.message)

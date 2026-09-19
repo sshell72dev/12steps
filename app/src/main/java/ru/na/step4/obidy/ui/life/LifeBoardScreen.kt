@@ -76,9 +76,16 @@ fun LifeBoardScreen(
     var editing by remember { mutableStateOf<LifeItem?>(null) }
     var composing by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<LifeItem?>(null) }
-    val visible = items.filter {
-        if (showDone) it.status == LifeStatus.DONE else it.status == LifeStatus.IN_PROGRESS
-    }
+    val visible = items
+        .filter { if (showDone) it.status == LifeStatus.DONE else it.status == LifeStatus.IN_PROGRESS }
+        .let { list ->
+            // Идеи и заметки — свежие сверху.
+            if (kind == LifeKind.IDEA || kind == LifeKind.NOTE) {
+                list.sortedByDescending { it.createdAt.takeIf { t -> t > 0L } ?: it.updatedAt }
+            } else {
+                list
+            }
+        }
     val (title, body, empty) = when (kind) {
         LifeKind.GOAL -> Triple(LifeBoardRu.goals, LifeBoardRu.goalsBody, LifeBoardRu.emptyGoals)
         LifeKind.IDEA -> Triple(LifeBoardRu.ideas, LifeBoardRu.ideasBody, LifeBoardRu.emptyIdeas)
@@ -178,7 +185,7 @@ fun LifeBoardScreen(
                         visible.forEach { item ->
                             LifeCard(
                                 item = item,
-                                showDate = kind == LifeKind.EVENT,
+                                kind = kind,
                                 onOpen = { editing = item },
                                 onToggleStatus = {
                                     viewModel.setStatus(
@@ -220,11 +227,18 @@ fun LifeBoardScreen(
 @Composable
 private fun LifeCard(
     item: LifeItem,
-    showDate: Boolean,
+    kind: String,
     onOpen: () -> Unit,
     onToggleStatus: () -> Unit,
     onDelete: () -> Unit
 ) {
+    // Событие — дата события; идея и заметка — дата и время создания.
+    val dateLabel = when {
+        kind == LifeKind.EVENT && item.dueAt != null -> formatDate(item.dueAt)
+        (kind == LifeKind.IDEA || kind == LifeKind.NOTE) && item.createdAt > 0L ->
+            formatDateTime(item.createdAt)
+        else -> null
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -250,9 +264,9 @@ private fun LifeCard(
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             )
         }
-        if (showDate && item.dueAt != null) {
+        dateLabel?.let { label ->
             Spacer(Modifier.height(4.dp))
-            Text(formatDate(item.dueAt), style = MaterialTheme.typography.labelMedium, color = Amber)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = Amber)
         }
         if (item.body.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
@@ -371,3 +385,6 @@ private fun LifeEditor(
 
 private fun formatDate(millis: Long): String =
     SimpleDateFormat("d MMMM yyyy", Locale("ru")).format(Date(millis))
+
+private fun formatDateTime(millis: Long): String =
+    SimpleDateFormat("d MMMM yyyy, HH:mm", Locale("ru")).format(Date(millis))

@@ -566,57 +566,10 @@ class JournalViewModel(
         skipQuestOnce = true
     }
 
+    /** Помощь ИИ по конкретной записи дневника. */
     fun requestHelp(entryId: String? = null) {
-        if (entryId != null) {
-            requestHelpOnEntry(entryId)
-            return
-        }
-        val path = state.value.path ?: return
-        val cached = prefs.cachedHelp(path.current.id)
-        if (!cached.isNullOrBlank()) {
-            _ai.value = AiUi.Ready(cached, null, fromCache = true)
-            return
-        }
-        if (!prefs.canUseAi()) {
-            _ai.value = AiUi.Error(JournalRu.aiLimit)
-            return
-        }
-        viewModelScope.launch {
-            _ai.value = AiUi.Loading
-            val log = (app as Step4App).activityLog
-            val key = "ai-journal-help-${path.current.id}"
-            log.aiBegin("Дневник · помощь", key, path.current.displayTitle())
-            val program = currentProgram()
-            val personality = personalityForPrompt()
-            val questionnaire = LifeBoardPrompts.merge(
-                JournalPrompts.formatQuestionnaire(prefs.profile),
-                (app as Step4App).lifeBoard.goalsPromptBlock()
-            )
-            val user = JournalPrompts.helpPointUser(
-                path = path,
-                personality = personality,
-                questionnaire = questionnaire
-            )
-            val result = withContext(Dispatchers.IO) {
-                JournalAiClient.chat(
-                    user = user,
-                    role = "journal.help",
-                    program = program,
-                    premium = premiumActive(),
-                    admin = prefs.isAdmin
-                )
-            }
-            log.aiDone(key, path.current.displayTitle())
-            _ai.value = when (result) {
-                is JournalAiClient.Result.Ok -> {
-                    prefs.consumeAi()
-                    prefs.putCachedHelp(path.current.id, result.text)
-                    refreshMeta()
-                    AiUi.Ready(result.text, null, fromCache = false, prompt = result.prompt)
-                }
-                is JournalAiClient.Result.Err -> AiUi.Error(result.message)
-            }
-        }
+        val id = entryId ?: return
+        requestHelpOnEntry(id)
     }
 
     private fun requestHelpOnEntry(entryId: String) {
@@ -660,6 +613,60 @@ class JournalViewModel(
             _ai.value = when (result) {
                 is JournalAiClient.Result.Ok -> {
                     prefs.consumeAi()
+                    refreshMeta()
+                    AiUi.Ready(result.text, null, fromCache = false, prompt = result.prompt)
+                }
+                is JournalAiClient.Result.Err -> AiUi.Error(result.message)
+            }
+        }
+    }
+
+    /** «Литература к вопросу»: ответ по вопросу и программе, без имени и анкеты. */
+    fun requestLiterature() = requestPointAi("journal.literature")
+
+    /** «Рекомендации для тебя»: ответ по вопросу и программе, без имени и анкеты. */
+    fun requestAdvice() = requestPointAi("journal.advice")
+
+    private fun requestPointAi(role: String) {
+        val path = state.value.path ?: return
+        val nodeId = path.current.id
+        val cached = prefs.cachedPointAi(nodeId, role)
+        if (!cached.isNullOrBlank()) {
+            _ai.value = AiUi.Ready(cached, null, fromCache = true)
+            return
+        }
+        if (!prefs.canUseAi()) {
+            _ai.value = AiUi.Error(JournalRu.aiLimit)
+            return
+        }
+        val literature = role == "journal.literature"
+        val lengthKey = if (literature) prefs.literatureLength else prefs.adviceLength
+        viewModelScope.launch {
+            _ai.value = AiUi.Loading
+            val log = (app as Step4App).activityLog
+            val key = "ai-$role-$nodeId"
+            log.aiBegin(if (literature) "Дневник · литература" else "Дневник · рекомендации", key, path.current.displayTitle())
+            val program = currentProgram()
+            val user = if (literature) {
+                JournalPrompts.literatureUser(path, program, lengthKey)
+            } else {
+                JournalPrompts.adviceUser(path, program, lengthKey)
+            }
+            val result = withContext(Dispatchers.IO) {
+                JournalAiClient.chat(
+                    user = user,
+                    role = role,
+                    program = program,
+                    premium = premiumActive(),
+                    admin = prefs.isAdmin,
+                    maxTokens = JournalPrompts.lengthMaxTokens(lengthKey)
+                )
+            }
+            log.aiDone(key, path.current.displayTitle())
+            _ai.value = when (result) {
+                is JournalAiClient.Result.Ok -> {
+                    prefs.consumeAi()
+                    prefs.putCachedPointAi(nodeId, role, result.text)
                     refreshMeta()
                     AiUi.Ready(result.text, null, fromCache = false, prompt = result.prompt)
                 }
