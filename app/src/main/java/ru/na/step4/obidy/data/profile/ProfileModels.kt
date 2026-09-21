@@ -4,7 +4,9 @@ data class QuestionnaireQuestion(
     val id: String,
     val text: String,
     val options: List<String> = emptyList(),
-    val hint: String = ""
+    val hint: String = "",
+    /** Вопрос заполняется только в анкете и не предлагается в других разделах. */
+    val anketaOnly: Boolean = false
 )
 
 data class ProblemOption(
@@ -95,7 +97,8 @@ object ProfileQuestionnaire {
         QuestionnaireQuestion(
             ID_LAST_USE,
             "Дата последнего употребления/срыва",
-            hint = "Формат: ДД.ММ.ГГГГ или «сегодня», «вчера»"
+            hint = "Формат: ДД.ММ.ГГГГ или «сегодня», «вчера»",
+            anketaOnly = true
         ),
         QuestionnaireQuestion(
             ID_REASON,
@@ -117,6 +120,8 @@ object ProfileQuestionnaire {
             snapshot.answers[ID_PROGRAM].orEmpty().isNotBlank()
         return questions.firstOrNull { q ->
             if (q.id in snapshot.skipped) return@firstOrNull false
+            // Дату последнего употребления/срыва вводим только в анкете, в других разделах не предлагаем.
+            if (q.anketaOnly) return@firstOrNull false
             when (q.id) {
                 ID_NAME -> snapshot.name.isBlank()
                 ID_PROGRAM -> !programAnswered

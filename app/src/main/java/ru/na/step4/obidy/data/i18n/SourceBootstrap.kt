@@ -717,6 +717,7 @@ object SourceBootstrap {
         SourceCatalog.put("support.reportCd", "Сообщение администратору об ошибке")
         SourceCatalog.put("support.ideasCd", "Предложить идею администратору")
         SourceCatalog.put("support.moveFabs", "Переместить кнопки ошибки и идеи")
+        SourceCatalog.put("support.toggleFabs", "Показать или скрыть кнопки идеи и ошибки")
         SourceCatalog.put("support.screen", "Экран")
         SourceCatalog.put("support.user", "Пользователь")
         SourceCatalog.put("support.date", "Дата")

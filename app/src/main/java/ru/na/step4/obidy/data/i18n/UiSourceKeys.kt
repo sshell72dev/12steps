@@ -674,6 +674,7 @@ object UiSourceKeys {
         "support.reportCd",
         "support.ideasCd",
         "support.moveFabs",
+        "support.toggleFabs",
         "support.screen",
         "support.user",
         "support.date",

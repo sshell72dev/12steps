@@ -320,6 +320,7 @@ fun SituationEditScreen(
                     }
                     JournalButton(InventoryStructure.dismissAnalysis, viewModel::dismissAnalysis)
                 }
+                InventoryDeepSection(state = state, viewModel = viewModel)
             }
         }
     }
@@ -364,4 +365,155 @@ fun SituationEditScreen(
         )
     }
     } // Box
+}
+
+/**
+ * Углублённая проработка обиды: вопросы идут по одному, в конце — разбор с проработкой
+ * и возможность пойти глубже, пока пользователь не нажмёт «Завершить».
+ * Все отвеченные вопросы сохраняются у ситуации и показываются здесь же.
+ */
+@Composable
+private fun InventoryDeepSection(
+    state: SituationEditUiState,
+    viewModel: SituationEditViewModel
+) {
+    val started = state.deepStarted()
+    if (!started && !state.deepActive && state.fullAnalysis.isBlank()) return
+
+    Text(
+        InventoryStructure.deepTitle,
+        style = MaterialTheme.typography.titleMedium,
+        color = Forest
+    )
+
+    if (started) {
+        Text(
+            InventoryStructure.deepSavedTitle,
+            style = MaterialTheme.typography.labelMedium,
+            color = Amber
+        )
+        state.deep.rounds().forEach { round ->
+            val items = state.deep.itemsOf(round)
+            val analysis = state.deep.analysisOf(round)
+            if (items.isEmpty() && analysis.isBlank()) return@forEach
+            Text(
+                InventoryStructure.deepRoundTitle(round),
+                style = MaterialTheme.typography.titleSmall,
+                color = Forest
+            )
+            if (items.isNotEmpty()) {
+                JournalCard {
+                    items.forEach { item ->
+                        Text(
+                            item.question,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Forest,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                        Text(
+                            item.answer.ifBlank { "—" },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                }
+            }
+            if (analysis.isNotBlank()) {
+                Text(
+                    InventoryStructure.deepAnalysisTitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Amber
+                )
+                JournalCard {
+                    SpeakableText(analysis) {
+                        Text(
+                            analysis,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (state.deepActive) {
+        if (state.deepCurrent.isNotBlank()) {
+            Text(
+                InventoryStructure.deepQuestionTitle,
+                style = MaterialTheme.typography.labelMedium,
+                color = Amber
+            )
+            JournalCard {
+                SpeakableText(state.deepCurrent) {
+                    Text(
+                        state.deepCurrent,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Forest
+                    )
+                }
+            }
+            FieldBlock(
+                "",
+                InventoryStructure.deepAnswerTitle,
+                InventoryStructure.deepAnswerHint,
+                state.deepDraft,
+                viewModel::updateDeepDraft,
+                3
+            )
+            JournalButton(
+                InventoryStructure.deepAnswerSend,
+                onClick = { viewModel.submitDeepAnswer() },
+                filled = true,
+                enabled = state.deepDraft.isNotBlank() && !state.deepLoading
+            )
+        }
+        if (state.deepLoading) {
+            Text(
+                InventoryStructure.deepLoadingQuestion,
+                color = Forest,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        if (state.deepAnalysisForCurrentRound().isNotBlank()) {
+            JournalButton(
+                InventoryStructure.deepStart,
+                onClick = { viewModel.startDeepWork() },
+                filled = true,
+                enabled = !state.deepLoading
+            )
+        } else if (state.deep.answered.isNotEmpty()) {
+            JournalButton(
+                InventoryStructure.deepAnalyze,
+                onClick = { viewModel.requestDeepAnalysis() },
+                enabled = !state.deepLoading
+            )
+        }
+        Text(
+            InventoryStructure.deepHint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        JournalButton(
+            InventoryStructure.deepFinish,
+            onClick = { viewModel.finishDeepWork() },
+            enabled = !state.deepLoading
+        )
+    } else {
+        JournalButton(
+            InventoryStructure.deepStart,
+            onClick = { viewModel.startDeepWork() },
+            filled = true,
+            enabled = !state.deepLoading && !state.aiLoading
+        )
+        Text(
+            InventoryStructure.deepHint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    state.deepNotice?.let { notice ->
+        Text(notice, color = Forest, style = MaterialTheme.typography.bodyMedium)
+    }
 }

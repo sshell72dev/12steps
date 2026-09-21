@@ -72,6 +72,31 @@ class InventoryAiCache(context: Context) {
         return CachedSituationAi(merged, full, hash)
     }
 
+    /** Углублённая проработка ситуации: вопросы, ответы и разборы по кругам. */
+    fun deep(situationId: Long): InventoryDeepState {
+        if (situationId <= 0L) return InventoryDeepState()
+        return synchronized(lock) {
+            InventoryDeepState.fromJson(
+                read().optJSONObject(KEY_DEEPS)?.optJSONObject(situationId.toString())
+            )
+        }
+    }
+
+    fun saveDeep(situationId: Long, state: InventoryDeepState) {
+        if (situationId <= 0L) return
+        synchronized(lock) {
+            val root = read()
+            val all = root.optJSONObject(KEY_DEEPS) ?: JSONObject()
+            if (state.isEmpty) {
+                all.remove(situationId.toString())
+            } else {
+                all.put(situationId.toString(), InventoryDeepState.toJson(state))
+            }
+            root.put(KEY_DEEPS, all)
+            write(root)
+        }
+    }
+
     fun clear(situationId: Long) {
         if (situationId <= 0L) return
         synchronized(lock) {
@@ -80,6 +105,10 @@ class InventoryAiCache(context: Context) {
             if (!all.has(situationId.toString())) return
             all.remove(situationId.toString())
             root.put(KEY_SITUATIONS, all)
+            root.optJSONObject(KEY_DEEPS)?.let { deeps ->
+                deeps.remove(situationId.toString())
+                root.put(KEY_DEEPS, deeps)
+            }
             write(root)
         }
     }
@@ -124,5 +153,6 @@ class InventoryAiCache(context: Context) {
     companion object {
         private const val FILE_NAME = "inventory-ai-cache.json"
         private const val KEY_SITUATIONS = "situations"
+        private const val KEY_DEEPS = "deeps"
     }
 }

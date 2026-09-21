@@ -1,10 +1,11 @@
 package ru.na.step4.obidy.ui.support
 
 import android.content.Context
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -26,7 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BugReport
-import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -53,9 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -107,7 +106,7 @@ fun FeedbackHost(
             .zIndex(8f)
     ) {
         if (openKind == null) {
-            DraggableFeedbackFabs(
+            CollapsibleFeedbackFabs(
                 unread = unread,
                 onIdea = { openKind = SupportKind.IDEA },
                 onBug = { openKind = SupportKind.BUG }
@@ -136,40 +135,18 @@ fun FeedbackHost(
     }
 }
 
-private class FabSpotStore(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
-    fun hasSaved(): Boolean = prefs.contains(KEY_X)
-
-    fun x(): Float = prefs.getFloat(KEY_X, 1f)
-
-    fun y(): Float = prefs.getFloat(KEY_Y, 1f)
-
-    fun save(x: Float, y: Float) {
-        prefs.edit()
-            .putFloat(KEY_X, x.coerceIn(0f, 1f))
-            .putFloat(KEY_Y, y.coerceIn(0f, 1f))
-            .apply()
-    }
-
-    companion object {
-        private const val PREFS = "feedback_fabs"
-        private const val KEY_X = "x"
-        private const val KEY_Y = "y"
-    }
-}
-
 @Composable
-private fun DraggableFeedbackFabs(
+private fun CollapsibleFeedbackFabs(
     unread: Int,
     onIdea: () -> Unit,
     onBug: () -> Unit
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
-    val store = remember { FabSpotStore(context) }
     val pad = with(density) { 12.dp.toPx() }
     val defaultBottom = with(density) { 88.dp.toPx() }
+    val tabW = with(density) { 20.dp.toPx() }
+    val fabsW = with(density) { 56.dp.toPx() }
+    val gap = with(density) { 10.dp.toPx() }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -179,135 +156,90 @@ private fun DraggableFeedbackFabs(
     ) {
         val maxW = constraints.maxWidth.toFloat()
         val maxH = constraints.maxHeight.toFloat()
-        var clusterW by remember { mutableFloatStateOf(with(density) { 56.dp.toPx() }) }
         var clusterH by remember { mutableFloatStateOf(with(density) { 152.dp.toPx() }) }
-        var dragging by remember { mutableStateOf(false) }
-        var x by remember { mutableFloatStateOf(Float.NaN) }
-        var y by remember { mutableFloatStateOf(Float.NaN) }
+        var expanded by remember { mutableStateOf(false) }
 
-        fun clampTo(px: Float, py: Float): Pair<Float, Float> {
-            val maxX = (maxW - clusterW - pad).coerceAtLeast(pad)
-            val maxY = (maxH - clusterH - pad).coerceAtLeast(pad)
-            return px.coerceIn(pad, maxX) to py.coerceIn(pad, maxY)
-        }
+        val rowW = tabW + gap + fabsW
+        val collapsedX = maxW - tabW
+        val expandedX = (maxW - rowW - pad).coerceAtLeast(pad)
+        val x by animateFloatAsState(
+            targetValue = if (expanded) expandedX else collapsedX,
+            animationSpec = tween(durationMillis = 220),
+            label = "feedbackFabsX"
+        )
+        val y = (maxH - clusterH - defaultBottom).coerceAtLeast(pad)
 
-        fun defaultPos(): Pair<Float, Float> {
-            val dx = (maxW - clusterW - pad).coerceAtLeast(pad)
-            val dy = (maxH - clusterH - defaultBottom).coerceAtLeast(pad)
-            return clampTo(dx, dy)
-        }
-
-        fun fromSaved(): Pair<Float, Float> {
-            if (!store.hasSaved()) return defaultPos()
-            val rangeX = (maxW - clusterW - 2 * pad).coerceAtLeast(1f)
-            val rangeY = (maxH - clusterH - 2 * pad).coerceAtLeast(1f)
-            return clampTo(pad + store.x() * rangeX, pad + store.y() * rangeY)
-        }
-
-        fun persist() {
-            val rangeX = (maxW - clusterW - 2 * pad).coerceAtLeast(1f)
-            val rangeY = (maxH - clusterH - 2 * pad).coerceAtLeast(1f)
-            store.save((x - pad) / rangeX, (y - pad) / rangeY)
-        }
-
-        fun moveBy(dx: Float, dy: Float) {
-            val curX = if (x.isNaN()) fromSaved().first else x
-            val curY = if (y.isNaN()) fromSaved().second else y
-            val next = clampTo(curX + dx, curY + dy)
-            x = next.first
-            y = next.second
-        }
-
-        LaunchedEffect(maxW, maxH, clusterW, clusterH, dragging) {
-            if (dragging || maxW <= 0f || clusterW <= 0f) return@LaunchedEffect
-            val pos = fromSaved()
-            x = pos.first
-            y = pos.second
-        }
-
-        val start = fromSaved()
-        val shownX = if (x.isNaN()) start.first else x
-        val shownY = if (y.isNaN()) start.second else y
-
-        Column(
-            modifier = Modifier
-                .offset { IntOffset(shownX.roundToInt(), shownY.roundToInt()) }
-                .onGloballyPositioned { coords ->
-                    val w = coords.size.width.toFloat()
-                    val h = coords.size.height.toFloat()
-                    if (w > 0f && kotlin.math.abs(w - clusterW) > 1f) clusterW = w
-                    if (h > 0f && kotlin.math.abs(h - clusterH) > 1f) clusterH = h
-                }
-                .graphicsLayer {
-                    scaleX = if (dragging) 1.05f else 1f
-                    scaleY = if (dragging) 1.05f else 1f
-                    alpha = if (dragging) 0.92f else 1f
-                }
-                .pointerInput(maxW, maxH, clusterW, clusterH) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var dragged = false
-                        val slop = viewConfiguration.touchSlop
-                        var total = Offset.Zero
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            val delta = change.position - change.previousPosition
-                            total += delta
-                            if (!dragged && total.getDistance() > slop) {
-                                dragged = true
-                                dragging = true
-                            }
-                            if (dragged) {
-                                change.consume()
-                                moveBy(delta.x, delta.y)
-                            }
-                        }
-                        if (dragged) {
-                            val curX = if (x.isNaN()) shownX else x
-                            val curY = if (y.isNaN()) shownY else y
-                            val c = clampTo(curX, curY)
-                            x = c.first
-                            y = c.second
-                            persist()
-                            dragging = false
-                        }
+        if (expanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures { expanded = false }
                     }
-                },
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                Icons.Outlined.DragHandle,
-                contentDescription = SupportRu.moveFabs,
-                tint = Forest.copy(alpha = 0.55f),
-                modifier = Modifier.size(28.dp)
             )
-            FloatingActionButton(
-                onClick = onIdea,
-                containerColor = SandDeep,
-                contentColor = Forest,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+        }
+
+        Row(
+            modifier = Modifier
+                .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
+                .onGloballyPositioned { coords ->
+                    val h = coords.size.height.toFloat()
+                    if (h > 0f && kotlin.math.abs(h - clusterH) > 1f) clusterH = h
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 20.dp, height = 76.dp)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 14.dp,
+                            bottomStart = 14.dp,
+                            topEnd = 5.dp,
+                            bottomEnd = 5.dp
+                        )
+                    )
+                    .background(Forest.copy(alpha = 0.9f))
+                    .clickable { expanded = !expanded },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Outlined.Lightbulb, contentDescription = SupportRu.ideasCd)
+                Icon(
+                    Icons.Outlined.ChevronLeft,
+                    contentDescription = SupportRu.toggleFabs,
+                    tint = Sand,
+                    modifier = Modifier.size(18.dp)
+                )
             }
-            FloatingActionButton(
-                onClick = onBug,
-                containerColor = Forest,
-                contentColor = Sand,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                BadgedBox(
-                    badge = {
-                        if (unread > 0) {
-                            Badge(containerColor = Amber, contentColor = Forest) {
-                                Text(if (unread > 9) "9+" else unread.toString())
+                FloatingActionButton(
+                    onClick = onIdea,
+                    containerColor = SandDeep,
+                    contentColor = Forest,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                ) {
+                    Icon(Icons.Outlined.Lightbulb, contentDescription = SupportRu.ideasCd)
+                }
+                FloatingActionButton(
+                    onClick = onBug,
+                    containerColor = Forest,
+                    contentColor = Sand,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                ) {
+                    BadgedBox(
+                        badge = {
+                            if (unread > 0) {
+                                Badge(containerColor = Amber, contentColor = Forest) {
+                                    Text(if (unread > 9) "9+" else unread.toString())
+                                }
                             }
                         }
+                    ) {
+                        Icon(Icons.Outlined.BugReport, contentDescription = SupportRu.reportCd)
                     }
-                ) {
-                    Icon(Icons.Outlined.BugReport, contentDescription = SupportRu.reportCd)
                 }
             }
         }

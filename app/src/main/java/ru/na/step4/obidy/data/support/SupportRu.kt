@@ -17,7 +17,7 @@ object SupportRu {
     val emptyIdeas: String get() = I18n.t("support.emptyIdeas", "Пока нет идей.")
     val reportCd: String get() = I18n.t("support.reportCd", "Сообщение администратору об ошибке")
     val ideasCd: String get() = I18n.t("support.ideasCd", "Предложить идею администратору")
-    val moveFabs: String get() = I18n.t("support.moveFabs", "Переместить кнопки ошибки и идеи")
+    val toggleFabs: String get() = I18n.t("support.toggleFabs", "Показать или скрыть кнопки идеи и ошибки")
     val screen: String get() = I18n.t("support.screen", "Экран")
     val user: String get() = I18n.t("support.user", "Пользователь")
     val date: String get() = I18n.t("support.date", "Дата")

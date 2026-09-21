@@ -175,4 +175,30 @@ object InventoryStructure {
     val insertAllDrafts: String get() = I18n.t("inventory.insertAllDrafts", "Вставить все")
     val dismissDraft: String get() = I18n.t("inventory.dismissDraft", "Скрыть")
     val dismissAnalysis: String get() = I18n.t("inventory.dismissAnalysis", "Скрыть разбор")
+
+    val deepTitle: String get() = I18n.t("inventory.deepTitle", "Углублённая проработка")
+    val deepHint: String get() = I18n.t(
+        "inventory.deepHint",
+        "Вопросы для проработки идут по одному. Отвечайте своими словами: после ответов можно сделать разбор с проработкой и пойти глубже — или завершить."
+    )
+    val deepStart: String get() = I18n.t("inventory.deepStart", "Проработать глубже")
+    val deepQuestionTitle: String get() = I18n.t("inventory.deepQuestionTitle", "Вопрос для проработки")
+    val deepAnswerTitle: String get() = I18n.t("inventory.deepAnswerTitle", "Мой ответ")
+    val deepAnswerHint: String get() = I18n.t("inventory.deepAnswerHint", "Ответьте своими словами")
+    val deepAnswerSend: String get() = I18n.t("inventory.deepAnswerSend", "Ответить")
+    val deepAnalyze: String get() = I18n.t("inventory.deepAnalyze", "Разбор с проработкой")
+    val deepAnalysisTitle: String get() = I18n.t("inventory.deepAnalysisTitle", "Разбор с проработкой")
+    val deepFinish: String get() = I18n.t("inventory.deepFinish", "Завершить")
+    val deepSavedTitle: String get() = I18n.t("inventory.deepSavedTitle", "Отвеченные вопросы")
+    val deepNeedAnswers: String get() = I18n.t(
+        "inventory.deepNeedAnswers",
+        "Сначала ответьте хотя бы на один вопрос — тогда можно сделать разбор с проработкой."
+    )
+    val deepLoadingQuestion: String get() = I18n.t(
+        "inventory.deepLoadingQuestion",
+        "Подбираю следующий вопрос…"
+    )
+
+    fun deepRoundTitle(round: Int): String =
+        I18n.t("inventory.deepRoundTitle", "Круг") + " " + round
 }

@@ -278,10 +278,10 @@ fun Step4Nav() {
         }
     }
     val resumeId = remember { app.analysisProgress.lastActiveId() }
-    val startDestination = if (resumeId.isNullOrBlank()) {
-        Routes.HOME
-    } else {
-        Routes.analysisSession(resumeId)
+    val startDestination = when {
+        messengerOn -> Routes.MESSENGER
+        resumeId.isNullOrBlank() -> Routes.HOME
+        else -> Routes.analysisSession(resumeId)
     }
     val currentRoute by navController.currentBackStackEntryAsState()
     LaunchedEffect(currentRoute) {

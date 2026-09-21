@@ -15,6 +15,9 @@ import kotlinx.coroutines.withContext
 import ru.na.step4.obidy.data.CachedSituationAi
 import ru.na.step4.obidy.data.InventoryAi
 import ru.na.step4.obidy.data.InventoryAiCache
+import ru.na.step4.obidy.data.InventoryDeepAnalysis
+import ru.na.step4.obidy.data.InventoryDeepItem
+import ru.na.step4.obidy.data.InventoryDeepState
 import ru.na.step4.obidy.data.InventoryFieldInsight
 import ru.na.step4.obidy.data.InventoryStructure
 import ru.na.step4.obidy.data.QuestionFocus
@@ -47,8 +50,19 @@ data class SituationEditUiState(
     val aiNotice: String? = null,
     val aiPrompt: String = "",
     val insights: Map<String, InventoryFieldInsight> = emptyMap(),
-    val fullAnalysis: String = ""
+    val fullAnalysis: String = "",
+    val deep: InventoryDeepState = InventoryDeepState(),
+    val deepCurrent: String = "",
+    val deepDraft: String = "",
+    val deepActive: Boolean = false,
+    val deepLoading: Boolean = false,
+    val deepNotice: String? = null
 ) {
+    /** Есть ли уже сохранённые вопросы, ответы или разборы по кругам. */
+    fun deepStarted(): Boolean = !deep.isEmpty
+
+    /** Разбор текущего круга: пусто, если его ещё не делали. */
+    fun deepAnalysisForCurrentRound(): String = deep.analysisOf(deep.round)
     val progress: Int
         get() = toSituation().progressSteps
 
@@ -96,7 +110,9 @@ class SituationEditViewModel(
             repository.getSituation(situationId)?.let { item ->
                 val target = repository.getById(item.resentmentId)?.target.orEmpty()
                 val cached = aiCache.get(item.id)
-                form.value = item.toUiState(target).withCachedAi(cached)
+                form.value = item.toUiState(target)
+                    .withCachedAi(cached)
+                    .copy(deep = aiCache.deep(item.id))
                 activityLog?.inventoryStart(
                     item.title.ifBlank { target },
                     item.id
@@ -294,6 +310,163 @@ class SituationEditViewModel(
         it.copy(fullAnalysis = "", aiNotice = null, aiPrompt = "")
     }
 
+    fun updateDeepDraft(value: String) {
+        form.update { it.copy(deepDraft = value) }
+    }
+
+    /** Начать проработку: если разбор круга уже есть — идём на следующий круг. */
+    fun startDeepWork() {
+        val snap = form.value
+        if (snap.deepLoading) return
+        val nextRound = if (snap.deepAnalysisForCurrentRound().isNotBlank()) snap.deep.round + 1 else snap.deep.round
+        val deep = if (nextRound != snap.deep.round) snap.deep.copy(round = nextRound) else snap.deep
+        if (deep !== snap.deep) aiCache.saveDeep(snap.id, deep)
+        form.update { it.copy(deep = deep, deepActive = true, deepCurrent = "", deepDraft = "", deepNotice = null) }
+        requestDeepQuestion(nextRound)
+    }
+
+    /** Ответ на текущий вопрос: сохраняем и, пока круг не закончен, просим следующий вопрос. */
+    fun submitDeepAnswer() {
+        val snap = form.value
+        if (snap.deepLoading) return
+        val question = snap.deepCurrent.trim()
+        val answer = snap.deepDraft.trim()
+        if (question.isBlank() || answer.isBlank()) return
+        val items = snap.deep.items.toMutableList()
+        val index = items.indexOfFirst { it.round == snap.deep.round && it.question == question }
+        if (index >= 0) items[index] = items[index].copy(answer = answer)
+        else items += InventoryDeepItem(snap.deep.round, question, answer)
+        val deep = snap.deep.copy(items = items)
+        aiCache.saveDeep(snap.id, deep)
+        form.update { it.copy(deep = deep, deepCurrent = "", deepDraft = "", deepNotice = null) }
+        if (deep.itemsOf(deep.round).size < DEEP_QUESTIONS_PER_ROUND) requestDeepQuestion(deep.round)
+    }
+
+    /** Разбор с проработкой по ответам текущего круга. */
+    fun requestDeepAnalysis() {
+        val snap = form.value
+        if (snap.deepLoading) return
+        val round = snap.deep.round
+        val answered = snap.deep.itemsOf(round).filter { it.answer.isNotBlank() }
+        if (answered.isEmpty()) {
+            form.update { it.copy(deepNotice = InventoryStructure.deepNeedAnswers) }
+            return
+        }
+        if (!prefs.canUseAi()) {
+            form.update { it.copy(deepNotice = JournalRu.aiLimit) }
+            return
+        }
+        form.update { it.copy(deepLoading = true, deepNotice = null) }
+        viewModelScope.launch {
+            val context = deepContext(snap)
+            val user = InventoryAi.deepAnalysisUserPrompt(
+                target = context.first,
+                typeNames = context.second,
+                situation = snap.toSituation(),
+                round = round,
+                answers = answered
+            )
+            val result = withContext(Dispatchers.IO) {
+                JournalAiClient.chat(
+                    user = user,
+                    role = "inventory.deep_analysis",
+                    program = context.third,
+                    premium = prefs.isPro || prefs.isAdmin,
+                    admin = prefs.isAdmin,
+                    maxTokens = 4000
+                )
+            }
+            form.update { current ->
+                when (result) {
+                    is JournalAiClient.Result.Ok -> {
+                        prefs.consumeAi()
+                        val text = result.text.trim()
+                        val deep = current.deep.copy(
+                            analyses = current.deep.analyses.filterNot { it.round == round } +
+                                InventoryDeepAnalysis(round, text)
+                        )
+                        aiCache.saveDeep(current.id, deep)
+                        current.copy(
+                            deep = deep,
+                            deepLoading = false,
+                            remainingAi = if (prefs.isAdmin) Int.MAX_VALUE else prefs.remainingAiToday(),
+                            deepNotice = if (text.isBlank()) JournalRu.aiError else null
+                        )
+                    }
+                    is JournalAiClient.Result.Err -> current.copy(
+                        deepLoading = false,
+                        deepNotice = result.message
+                    )
+                }
+            }
+        }
+    }
+
+    /** Закрыть сессию проработки: вопросы и разборы уже сохранены. */
+    fun finishDeepWork() {
+        form.update { it.copy(deepActive = false, deepCurrent = "", deepDraft = "", deepNotice = null) }
+    }
+
+    private fun requestDeepQuestion(round: Int) {
+        val snap = form.value
+        if (!prefs.canUseAi()) {
+            form.update { it.copy(deepLoading = false, deepNotice = JournalRu.aiLimit) }
+            return
+        }
+        form.update { it.copy(deepLoading = true, deepNotice = null) }
+        viewModelScope.launch {
+            val context = deepContext(snap)
+            val roundItems = snap.deep.itemsOf(round)
+            val user = InventoryAi.deepQuestionUserPrompt(
+                target = context.first,
+                typeNames = context.second,
+                situation = snap.toSituation(),
+                round = round,
+                asked = roundItems.map { it.question },
+                answers = roundItems.filter { it.answer.isNotBlank() }
+            )
+            val result = withContext(Dispatchers.IO) {
+                JournalAiClient.chat(
+                    user = user,
+                    role = "inventory.deep_question",
+                    program = context.third,
+                    premium = prefs.isPro || prefs.isAdmin,
+                    admin = prefs.isAdmin,
+                    maxTokens = 900
+                )
+            }
+            form.update { current ->
+                when (result) {
+                    is JournalAiClient.Result.Ok -> {
+                        prefs.consumeAi()
+                        val question = result.text.trim()
+                        current.copy(
+                            deepLoading = false,
+                            deepCurrent = question,
+                            remainingAi = if (prefs.isAdmin) Int.MAX_VALUE else prefs.remainingAiToday(),
+                            deepNotice = if (question.isBlank()) JournalRu.aiError else null
+                        )
+                    }
+                    is JournalAiClient.Result.Err -> current.copy(
+                        deepLoading = false,
+                        deepNotice = result.message
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun deepContext(snap: SituationEditUiState): Triple<String, List<String>, String> {
+        val target = snap.target.ifBlank {
+            repository.getById(snap.resentmentId)?.target.orEmpty()
+        }
+        val types = repository.getTypesForSituation(snap.id).map { it.name }
+        val program = prefs.profile.program.ifBlank {
+            prefs.questionnaireAnswers()["section1:program_type"].orEmpty()
+        }
+        return Triple(target, types, program)
+    }
+
     fun saveThen(onSaved: (Long) -> Unit) {
         viewModelScope.launch {
             autosaveJob?.cancel()
@@ -389,6 +562,9 @@ class SituationEditViewModel(
     }
 
     companion object {
+        /** Сколько вопросов задаём в одном круге, прежде чем предложить разбор. */
+        private const val DEEP_QUESTIONS_PER_ROUND = 5
+
         fun factory(
             repository: ResentmentRepository,
             id: Long,

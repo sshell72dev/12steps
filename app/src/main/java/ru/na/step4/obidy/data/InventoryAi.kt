@@ -78,6 +78,64 @@ object InventoryAi {
         }
     }
 
+    /** Промпт одного вопроса углублённой проработки: спрашиваем по одному, без повторов. */
+    fun deepQuestionUserPrompt(
+        target: String,
+        typeNames: List<String>,
+        situation: Situation,
+        round: Int,
+        asked: List<String>,
+        answers: List<InventoryDeepItem>
+    ): String {
+        val filled = QuestionFocus.buildSituationAnswersText(target, situation, typeNames)
+        return buildString {
+            appendLine("Ситуация обиды:")
+            appendLine(filled)
+            appendLine()
+            if (round > 1) {
+                appendLine("Это круг $round: предыдущие круги человек уже прошёл, углубляйся дальше, не повторяй общее.")
+                appendLine()
+            }
+            if (answers.isNotEmpty()) {
+                appendLine("Уже отвечено в этом круге:")
+                answers.forEach { item ->
+                    appendLine("- Вопрос: ${item.question}")
+                    appendLine("  Ответ: ${item.answer}")
+                }
+                appendLine()
+            }
+            if (asked.isNotEmpty()) {
+                appendLine("Эти вопросы уже задавались — не повторяй их:")
+                asked.forEach { appendLine("- $it") }
+                appendLine()
+            }
+            appendLine("Задай ровно один следующий вопрос по этой ситуации.")
+        }
+    }
+
+    /** Промпт разбора с проработкой по ответам одного круга. */
+    fun deepAnalysisUserPrompt(
+        target: String,
+        typeNames: List<String>,
+        situation: Situation,
+        round: Int,
+        answers: List<InventoryDeepItem>
+    ): String {
+        val filled = QuestionFocus.buildSituationAnswersText(target, situation, typeNames)
+        return buildString {
+            appendLine("Ситуация обиды:")
+            appendLine(filled)
+            appendLine()
+            appendLine("Круг $round — вопросы и ответы человека:")
+            answers.forEach { item ->
+                appendLine("- Вопрос: ${item.question}")
+                appendLine("  Ответ: ${item.answer}")
+            }
+            appendLine()
+            appendLine("Сделай разбор с проработкой по этим ответам.")
+        }
+    }
+
     fun parseInsights(
         raw: String,
         emptyKeys: Set<String>,
