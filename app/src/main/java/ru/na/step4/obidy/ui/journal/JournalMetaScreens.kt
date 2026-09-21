@@ -50,6 +50,7 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.BuildConfig
 import ru.na.step4.obidy.Step4App
 import ru.na.step4.obidy.data.analysis.AnalysisSettings
+import ru.na.step4.obidy.data.journal.AiLength
 import ru.na.step4.obidy.data.journal.JournalPrefs
 import ru.na.step4.obidy.data.journal.JournalProblems
 import ru.na.step4.obidy.data.journal.JournalRu
@@ -63,6 +64,7 @@ import ru.na.step4.obidy.data.support.SupportRu
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.step4.obidy.ui.theme.SandDeep
 import ru.na.steps12.voice.ui.LocalVoicePlugin
 import ru.na.steps12.voice.ui.SpeakableText
 import ru.na.steps12.voice.ui.VoiceOutlinedTextField
@@ -137,6 +139,8 @@ fun JournalSettingsScreen(
     var adminChecking by remember { mutableStateOf(false) }
     var adminError by remember { mutableStateOf<String?>(null) }
     var settingsTab by remember { mutableStateOf(0) }
+    var literatureLength by remember { mutableStateOf(journalPrefs.literatureLength) }
+    var adviceLength by remember { mutableStateOf(journalPrefs.adviceLength) }
     val openJson = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -221,6 +225,22 @@ fun JournalSettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (settingsTab == 0) {
+                Text(JournalRu.settingsLiterature, color = Amber, style = MaterialTheme.typography.labelMedium)
+                AiLengthRow(
+                    current = literatureLength,
+                    onSelect = {
+                        literatureLength = it
+                        journalPrefs.literatureLength = it
+                    }
+                )
+                Text(JournalRu.settingsAdvice, color = Amber, style = MaterialTheme.typography.labelMedium)
+                AiLengthRow(
+                    current = adviceLength,
+                    onSelect = {
+                        adviceLength = it
+                        journalPrefs.adviceLength = it
+                    }
+                )
                 Text(JournalRu.exportJson, color = Amber, style = MaterialTheme.typography.labelMedium)
                 Text(
                     JournalRu.exportJsonHint,
@@ -395,6 +415,29 @@ fun JournalSettingsScreen(
                 ) { Text(Ru.cancel) }
             }
         )
+    }
+}
+
+@Composable
+private fun AiLengthRow(current: String, onSelect: (String) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        AiLength.entries.forEach { option ->
+            FilterChip(
+                selected = current == option.key,
+                onClick = { onSelect(option.key) },
+                label = { Text(option.label()) },
+                modifier = Modifier.weight(1f),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Forest,
+                    selectedLabelColor = Sand,
+                    containerColor = SandDeep,
+                    labelColor = Forest
+                )
+            )
+        }
     }
 }
 

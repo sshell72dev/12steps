@@ -37,6 +37,9 @@ def connect(host: str, user: str, password: str):
     errors = []
     try:
         ftp = FTP_TLS()
+        # Сервер в ответе на PASV отдаёт адрес, недоступный снаружи (мы за NAT),
+        # поэтому для data-канала берём тот же адрес, что и для control-соединения.
+        ftp.trust_server_pasv_ipv4_address = True
         ftp.connect(host, 21, timeout=25)
         ftp.auth()
         ftp.prot_p()
@@ -47,6 +50,7 @@ def connect(host: str, user: str, password: str):
         errors.append(f"FTPES {host}: {exc}")
     try:
         ftp = FTP()
+        ftp.trust_server_pasv_ipv4_address = True
         ftp.connect(host, 21, timeout=25)
         ftp.login(user, password)
         ftp.set_pasv(True)

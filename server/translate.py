@@ -5,14 +5,10 @@ import json
 import re
 from typing import Any
 
+import roles
 
-SYSTEM_PROMPT = (
-    "You are a professional translator for a 12-step recovery mobile app. "
-    "Translate UI labels, titles, hints and reference literature excerpts accurately. "
-    "Keep placeholders like %1$d, %2$s, {{vars}} and HTML/markdown unchanged. "
-    "Keep line breaks. Do not add explanations. Do not invent content. "
-    "Return ONLY a JSON array of objects with keys \"key\" and \"text\"."
-)
+
+SYSTEM_PROMPT = roles.TRANSLATE_UI
 
 
 def build_user_prompt(target_language: str, items: list[dict[str, str]]) -> str:

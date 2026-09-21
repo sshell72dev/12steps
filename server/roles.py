@@ -1,6 +1,8 @@
 """Stable system roles for DeepSeek. User messages carry only live data."""
 from __future__ import annotations
 
+import time
+
 PROFILE_DEFAULT = (
     "По умолчанию учитывай анкету пользователя, его программу выздоровления "
     "и блок «Моя личность», если они есть в запросе. "
@@ -177,32 +179,14 @@ LOCK_QUOTE = (
     "Ответ — только сам текст, без кавычек и пояснений."
 )
 
-TERMS_BLOCK = (
-    "Не используй имя человека, данные анкеты, семейные и личные подробности. "
-    "Опирайся только на текст вопроса, программу и её терминологию. "
-    "Терминология: Анонимные Наркоманы — «чистый», «чистота», «чистый день»; "
-    "Анонимные Алкоголики — «трезвый», «трезвость», «трезвый день»; "
-    "другие программы 12 шагов — «выздоровление», «воздержание». "
-    "Названия шагов и глав — как принято в программе человека."
+JOURNAL_HELP_TASK = (
+    "Пользователь выбрал точку дневника. Дай помощь по ней, включая:\n"
+    "1. Выдержки из одобренной литературы, релевантные для этой точки и программы человека\n"
+    "2. Персонализированные советы, которые помогут продвинуться дальше\n"
+    "3. Практические рекомендации с конкретными заданиями\n"
+    "4. Примеры из жизни других зависимых, которые прошли через эту точку\n"
+    "Не придумывай цитаты. Ответ структурированный, полезный и мотивирующий."
 )
-
-JOURNAL_LITERATURE_TASK = (
-    "Пользователь выбрал точку дневника. Подбери литературу к этому вопросу:\n"
-    "1. Выдержки из одобренной литературы (АА, АН, Ал-Анон и аналоги) именно по этой точке\n"
-    "2. Короткое пояснение, как выдержка отвечает на вопрос точки\n"
-    "3. Где об этом сказано: книга, раздел, шаг\n"
-    "Не придумывай цитаты, страницы и авторов: не помнишь точно — дай пересказ без кавычек.\n"
-    "Не заменяй спонсора и не ставь диагнозов.\n"
-) + TERMS_BLOCK
-
-JOURNAL_ADVICE_TASK = (
-    "Пользователь выбрал точку дневника. Дай рекомендации, как пройти эту точку:\n"
-    "1. С чего начать сегодня — одно конкретное действие\n"
-    "2. Практическое задание на ближайшие дни по этой точке\n"
-    "3. Что уточнить у спонсора или обсудить на группе\n"
-    "4. Типичная ловушка на этом месте программы и как её обойти\n"
-    "Не заменяй спонсора, группу и специалиста. Без диагнозов.\n"
-) + TERMS_BLOCK
 
 JOURNAL_HELP_ENTRY_TASK = (
     "Ниже запись пользователя по теме дневника. Дай поддержку и помощь, включая:\n"
@@ -253,81 +237,262 @@ INVENTORY_ANALYZE_TASK = (
     "Ответ структурированный, конкретный, поддерживающий."
 )
 
-INVENTORY_DEEP_QUESTION_TASK = (
-    "Ты помогаешь человеку проработать обиду по программе 12 шагов.\n"
-    "Человек передаёт ситуацию и уже заданные вопросы с ответами.\n"
-    "Задай ровно ОДИН следующий вопрос: короткий, конкретный, без вступлений, нумерации и пояснений.\n"
-    "Вопрос помогает увидеть свою часть ответственности: страх, гордыня, ожидания, корысть, самооправдание.\n"
-    "Не повторяй уже заданные вопросы и не давай советов. Выведи только текст вопроса."
-) + TERMS_BLOCK
-
-INVENTORY_DEEP_ANALYSIS_TASK = (
-    "Ты помогаешь человеку проработать обиду по программе 12 шагов.\n"
-    "Человек передаёт ситуацию и свои ответы на вопросы одного круга.\n"
-    "Сделай разбор с проработкой:\n"
-    "1. Что видно в ответах: мотивы, страхи, ожидания, эго, самооправдание\n"
-    "2. Где человек ещё не честен с собой или смотрит только на другого\n"
-    "3. Какая его часть ответственности в этой ситуации\n"
-    "4. Что делать дальше по шагам программы — конкретно\n"
-    "Пиши конкретно, без общих слов, без оценок человека и без диагнозов."
-) + TERMS_BLOCK
-
-PERSONALITY_FORMAT_TASK = (
-    "Ты редактор личного портрета «Моя личность». Пользователь присылает текущий портрет.\n"
-    "Верни только переработанный текст портрета — без вступлений, пояснений, оценок и вопросов.\n"
-    "Что сделать:\n"
-    "1. Убрать повторы и дублирующиеся формулировки.\n"
-    "2. Убрать абстрактные рассуждения и общие слова — оставить конкретные черты, реакции, "
-    "ценности, ресурсы и зоны роста.\n"
-    "3. Сделать чёткую и понятную структуру: короткие абзацы или пункты, в каждом одна мысль.\n"
-    "4. Сжать текст до 1000 символов, сохранив весь смысл. Ничего не выдумывать и не добавлять от себя.\n"
-    "Формат: обычный текст без markdown-разметки, без заголовка «Моя личность» и без служебных маркеров."
+TRANSLATE_UI = (
+    "You are a professional translator for a 12-step recovery mobile app. "
+    "Translate UI labels, titles, hints and reference literature excerpts accurately. "
+    "Keep placeholders like %1$d, %2$s, {{vars}} and HTML/markdown unchanged. "
+    "Keep line breaks. Do not add explanations. Do not invent content. "
+    "Return ONLY a JSON array of objects with keys \"key\" and \"text\"."
 )
 
-PSYCH_SYSTEMS = {
-    "analyze": PSYCH_ANALYZE,
-    "recommend": PSYCH_RECOMMEND,
-    "questions": PSYCH_QUESTIONS,
-    "questions_retry": PSYCH_QUESTIONS,
-    "questions_next": PSYCH_QUESTIONS_NEXT,
-    "dialogue_question": PSYCH_DIALOGUE,
-    "assistant": PSYCH_ASSISTANT,
-    "tts_understanding": PSYCH_TTS,
-    "reminder_outreach": PSYCH_REMINDER,
+# Реестр промтов для админки: ровно те тексты, которые уходят в модель.
+# id = имя роли (role) в /api/v1/chat и вид (kind) в /api/v1/psych.
+PROMPT_CASES: list[dict[str, str]] = [
+    {
+        "id": "psych.analyze",
+        "group": "Электронный психолог",
+        "title": "Разбор ситуации",
+        "description": (
+            "Мягкий разбор ситуации без осуждения, 400–600 слов: что могло происходить, "
+            "какие мотивы и реакции могли быть задействованы, раздел «Слепые зоны». "
+            "В конце — портрет «Моя личность» и блок SPIRITUAL_DELTA с оценкой работы."
+        ),
+        "text": PSYCH_ANALYZE,
+    },
+    {
+        "id": "psych.recommend",
+        "group": "Электронный психолог",
+        "title": "Рекомендации по ситуации",
+        "description": (
+            "3–7 практических шагов по ситуации: мягко, конкретно, без осуждения. "
+            "В конце обновлённый портрет «Моя личность»."
+        ),
+        "text": PSYCH_RECOMMEND,
+    },
+    {
+        "id": "psych.questions",
+        "group": "Электронный психолог",
+        "title": "Вопросы для самоанализа",
+        "description": (
+            "Список индивидуальных вопросов по ситуации — только JSON-массив строк. "
+            "Этот же текст используется и при повторной генерации вопросов."
+        ),
+        "text": PSYCH_QUESTIONS,
+    },
+    {
+        "id": "psych.questions_next",
+        "group": "Электронный психолог",
+        "title": "Следующий вопрос проработки",
+        "description": (
+            "Один следующий вопрос для углублённой проработки с опорой на текст ситуации "
+            "и весь диалог. Ответ — JSON-объект с ключом «question»."
+        ),
+        "text": PSYCH_QUESTIONS_NEXT,
+    },
+    {
+        "id": "psych.dialogue_question",
+        "group": "Электронный психолог",
+        "title": "Вопрос в живом диалоге",
+        "description": (
+            "Реплика-вопрос в переписке: чередует вопросы о фактах и о состоянии, "
+            "ведёт одну связную линию, учитывает весь диалог с начала. Ответ — JSON."
+        ),
+        "text": PSYCH_DIALOGUE,
+    },
+    {
+        "id": "psych.assistant",
+        "group": "Электронный психолог",
+        "title": "Итоговый разбор с ответами",
+        "description": (
+            "Разбор ситуации с опорой на ответы пользователя и анкету, плюс конкретные шаги дальше. "
+            "В конце — портрет «Моя личность»."
+        ),
+        "text": PSYCH_ASSISTANT,
+    },
+    {
+        "id": "psych.tts_understanding",
+        "group": "Электронный психолог",
+        "title": "Пересказ для озвучки",
+        "description": (
+            "Короткий пересказ понимания ситуации от первого лица, 2–4 предложения. "
+            "Без советов и разбора — только пересказ."
+        ),
+        "text": PSYCH_TTS,
+    },
+    {
+        "id": "psych.reminder_outreach",
+        "group": "Электронный психолог",
+        "title": "Напоминание-приглашение",
+        "description": (
+            "Сообщение-приглашение написать боту-психологу: 1–2 коротких предложения, "
+            "каждый раз новая формулировка."
+        ),
+        "text": PSYCH_REMINDER,
+    },
+    {
+        "id": "journal.help",
+        "group": "Дневник 12 шагов",
+        "title": "Помощь по точке дневника",
+        "description": (
+            "Помощь по выбранной точке: выдержки из одобренной литературы, персональные советы, "
+            "практические задания и примеры других зависимых."
+        ),
+        "text": f"{BASE}\n{JOURNAL_HELP_TASK}",
+    },
+    {
+        "id": "journal.help_entry",
+        "group": "Дневник 12 шагов",
+        "title": "Разбор записи в дневнике",
+        "description": (
+            "Поддержка и разбор записи пользователя по теме дневника: отражение смысла и эмоций, "
+            "на что опереться, что уточнить и что сделать в ближайшие дни."
+        ),
+        "text": f"{BASE}\n{JOURNAL_HELP_ENTRY_TASK}",
+    },
+    {
+        "id": "journal.analyze",
+        "group": "Дневник 12 шагов",
+        "title": "Оценка ответов по вопросу",
+        "description": (
+            "Насколько полно раскрыт вопрос дневника, что улучшить, конкретные рекомендации. "
+            "В конце — портрет «Моя личность» и блок SPIRITUAL_DELTA."
+        ),
+        "text": f"{BASE}\n{JOURNAL_ANALYZE_TASK}",
+    },
+    {
+        "id": "inventory.work",
+        "group": "Обиды · 4 шаг",
+        "title": "Проработка одной обиды",
+        "description": (
+            "Черновики ответов от первого лица по пустым вопросам и короткие слепые зоны "
+            "по заполненным. Маркеры [[ключ]] сохраняются без изменений."
+        ),
+        "text": f"{BASE}\n{INVENTORY_WORK_TASK}",
+    },
+    {
+        "id": "inventory.analyze",
+        "group": "Обиды · 4 шаг",
+        "title": "Анализ ситуации 4 шага",
+        "description": (
+            "Полная проработка одной ситуации по написанному: полнота раскрытия, слепые зоны, "
+            "что улучшить, рекомендации для более честной инвентаризации."
+        ),
+        "text": f"{BASE}\n{INVENTORY_ANALYZE_TASK}",
+    },
+    {
+        "id": "analysis.review",
+        "group": "Самоанализ и обложка",
+        "title": "Оценка самоанализа",
+        "description": (
+            "Объективная поддерживающая обратная связь по ответам на самоанализ. "
+            "Без диагнозов и медицинских советов; при признаках кризиса — направление к помощи."
+        ),
+        "text": ANALYSIS_REVIEW,
+    },
+    {
+        "id": "lock.quote",
+        "group": "Самоанализ и обложка",
+        "title": "Цитата на обложку",
+        "description": (
+            "Короткий мотивирующий текст на обложку под сроком чистоты, 1–2 предложения. "
+            "Не использует имя, анкету, цели и срок чистоты, даже если они переданы."
+        ),
+        "text": LOCK_QUOTE,
+    },
+    {
+        "id": "translate.ui",
+        "group": "Служебные",
+        "title": "Перевод интерфейса",
+        "description": (
+            "Служебный промт перевода подписей и литературы приложения на другой язык. "
+            "Ответ — только JSON-массив объектов с ключами «key» и «text»."
+        ),
+        "text": TRANSLATE_UI,
+    },
+]
+
+PROMPTS_BY_ID: dict[str, dict[str, str]] = {case["id"]: case for case in PROMPT_CASES}
+
+# Вид (kind) из /api/v1/psych → id промта.
+PSYCH_PROMPT_IDS = {
+    "analyze": "psych.analyze",
+    "recommend": "psych.recommend",
+    "questions": "psych.questions",
+    "questions_retry": "psych.questions",
+    "questions_next": "psych.questions_next",
+    "dialogue_question": "psych.dialogue_question",
+    "assistant": "psych.assistant",
+    "tts_understanding": "psych.tts_understanding",
+    "reminder_outreach": "psych.reminder_outreach",
 }
 
-CHAT_TASKS = {
-    "journal.literature": JOURNAL_LITERATURE_TASK,
-    "journal.advice": JOURNAL_ADVICE_TASK,
-    "journal.help_entry": JOURNAL_HELP_ENTRY_TASK,
-    "journal.analyze": JOURNAL_ANALYZE_TASK,
-    "personality.format": PERSONALITY_FORMAT_TASK,
-    "inventory.work": INVENTORY_WORK_TASK,
-    "inventory.analyze": INVENTORY_ANALYZE_TASK,
-    "inventory.deep_question": INVENTORY_DEEP_QUESTION_TASK,
-    "inventory.deep_analysis": INVENTORY_DEEP_ANALYSIS_TASK,
-    "lock.quote": LOCK_QUOTE,
-    "analysis.review": ANALYSIS_REVIEW,
-}
+
+_OVERRIDE_CACHE: dict[str, str] = {}
+_OVERRIDE_CACHE_AT = 0.0
+_OVERRIDE_TTL_SECONDS = 10.0
+
+
+def _prompt_overrides() -> dict[str, str]:
+    """Правки промтов из админки. Короткий кэш, чтобы запросы не читали БД каждый раз."""
+    global _OVERRIDE_CACHE, _OVERRIDE_CACHE_AT
+    now = time.monotonic()
+    if _OVERRIDE_CACHE_AT and now - _OVERRIDE_CACHE_AT < _OVERRIDE_TTL_SECONDS:
+        return _OVERRIDE_CACHE
+    try:
+        import db as _db
+
+        loaded = _db.prompt_overrides()
+    except Exception:
+        loaded = {}
+    _OVERRIDE_CACHE = {str(k): str(v) for k, v in loaded.items() if str(v).strip()}
+    _OVERRIDE_CACHE_AT = now
+    return _OVERRIDE_CACHE
+
+
+def invalidate_prompt_cache() -> None:
+    """Сбросить кэш сразу после сохранения промта в админке."""
+    global _OVERRIDE_CACHE, _OVERRIDE_CACHE_AT
+    _OVERRIDE_CACHE = {}
+    _OVERRIDE_CACHE_AT = 0.0
+
+
+def prompt_text(prompt_id: str) -> str:
+    custom = _prompt_overrides().get(prompt_id, "")
+    if custom.strip():
+        return custom
+    return PROMPTS_BY_ID.get(prompt_id, {}).get("text", "")
+
+
+def prompt_is_custom(prompt_id: str) -> bool:
+    return bool(_prompt_overrides().get(prompt_id, "").strip())
+
+
+def prompt_cases() -> list[dict]:
+    return [
+        {**case, "text": prompt_text(case["id"]), "custom": prompt_is_custom(case["id"])}
+        for case in PROMPT_CASES
+    ]
+
+
+def _canonical_prompt_id(role: str) -> str:
+    name = (role or "").strip()
+    if name.startswith("psych."):
+        name = PSYCH_PROMPT_IDS.get(name.split(".", 1)[1], "")
+    return name if name in PROMPTS_BY_ID else ""
 
 
 def system_for_psych(kind: str) -> str:
-    return PSYCH_SYSTEMS.get(kind, PSYCH_BASE)
+    pid = PSYCH_PROMPT_IDS.get((kind or "").strip(), "")
+    if not pid:
+        return PSYCH_BASE
+    return prompt_text(pid)
 
 
 def system_for_chat(role: str, program: str = "") -> str | None:
-    name = (role or "").strip()
-    if name == "lock.quote":
-        return LOCK_QUOTE
-    if name.startswith("psych."):
-        text = system_for_psych(name.split(".", 1)[1])
-    elif name == "analysis.review":
-        text = ANALYSIS_REVIEW
-    else:
-        task = CHAT_TASKS.get(name)
-        if not task:
-            return None
-        text = f"{BASE}\n{task}"
+    pid = _canonical_prompt_id(role)
+    if not pid:
+        return None
+    text = prompt_text(pid)
     prog = (program or "").strip()
     if prog:
         text = f"{text}\nПрограмма выздоровления пользователя: {prog}."

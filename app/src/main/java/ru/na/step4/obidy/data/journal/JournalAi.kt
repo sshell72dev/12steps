@@ -28,9 +28,9 @@ enum class AiLength(val key: String) {
     }
 
     fun maxTokens(): Int = when (this) {
-        SHORT -> 900
-        STANDARD -> 2000
-        LONG -> 4000
+        SHORT -> 2400
+        STANDARD -> 4500
+        LONG -> 8000
     }
 
     companion object {

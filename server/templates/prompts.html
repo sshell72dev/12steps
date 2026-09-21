@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Промты</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --sand-deep: #e6dfd0;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --ok: #2f6b45;
+        --warn: #8a6a1a;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #ece8df;
+        color: var(--ink);
+      }
+      .top {
+        background: var(--forest);
+        color: var(--sand);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .top a { color: var(--sand); text-decoration: none; opacity: .88; margin-left: 14px; font-size: 13px; }
+      .top a:hover { opacity: 1; }
+      .top a.active { opacity: 1; text-decoration: underline; }
+      .top b { font-size: 16px; }
+      .top span { opacity: .78; font-size: 13px; }
+      .ghost {
+        background: transparent;
+        color: var(--sand);
+        border: 1px solid rgba(243, 239, 230, 0.28);
+        border-radius: 10px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .wrap { max-width: 900px; margin: 0 auto; padding: 28px 16px 48px; }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 20px;
+        margin-top: 14px;
+      }
+      h1 { margin: 0 0 8px; font-size: 22px; color: var(--forest); }
+      h2 { margin: 26px 0 4px; font-size: 17px; color: var(--forest); }
+      h3 { margin: 0; font-size: 16px; color: var(--forest); }
+      .muted { color: var(--muted); font-size: 14px; line-height: 1.5; }
+      .head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+      .badge {
+        font-size: 11px;
+        font-weight: 650;
+        border-radius: 999px;
+        padding: 3px 9px;
+        background: rgba(138, 106, 26, 0.14);
+        color: var(--warn);
+        white-space: nowrap;
+      }
+      .id { font-family: monospace; font-size: 12px; color: var(--muted); }
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 10px;
+        padding: 11px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fbfaf7;
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        resize: vertical;
+      }
+      .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+      button {
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--forest);
+        color: var(--sand);
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .secondary { background: var(--sand-deep); color: var(--forest); }
+      .notice, .warn { margin-bottom: 14px; padding: 10px 12px; border-radius: 12px; }
+      .notice { background: rgba(47, 107, 69, 0.1); border: 1px solid rgba(47, 107, 69, 0.28); color: var(--ok); }
+      .warn { background: rgba(138, 106, 26, 0.1); border: 1px solid rgba(138, 106, 26, 0.28); color: var(--warn); }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div>
+        <b>12 шагов · Админка</b>
+        <span>{{ domain }}</span>
+        <a href="{{ url_for('settings') }}">ИИ</a>
+        <a href="{{ url_for('notes_admin') }}">Подсказки</a>
+        <a href="{{ url_for('analyses_admin') }}">Самоанализ</a>
+        <a class="active" href="{{ url_for('prompts_admin') }}">Промты</a>
+        <a href="{{ url_for('voice_settings') }}">Голос</a>
+        <a href="{{ url_for('support_admin') }}">Ошибки</a>
+      </div>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="ghost" type="submit">Выйти</button>
+      </form>
+    </div>
+    <div class="wrap">
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+      {% if warn %}<div class="warn">{{ warn }}</div>{% endif %}
+
+      <div class="card">
+        <h1>Промты</h1>
+        <div class="muted">
+          Все системные промты, которые сервер отправляет в модель, — по одному на каждый случай.
+          Правка действует со следующего запроса ИИ. Все запросы идут через <b>deepseek-v4-flash</b>.
+        </div>
+        <div class="muted" style="margin-top:8px;">
+          Всего промтов: <b>{{ total }}</b>. Изменено вручную: <b>{{ custom_count }}</b>.
+          Удалять и добавлять промты нельзя: список соответствует сценариям приложения.
+        </div>
+      </div>
+
+      {% for group, items in groups %}
+        <h2>{{ group }}</h2>
+        {% for case in items %}
+        <div class="card" id="{{ case.id }}">
+          <div class="head">
+            <h3>{{ case.title }}</h3>
+            {% if case.custom %}<span class="badge">изменён вручную</span>{% endif %}
+            <span class="id">{{ case.id }}</span>
+          </div>
+          <div class="muted" style="margin-top:6px;">{{ case.description }}</div>
+          <form method="post">
+            <input type="hidden" name="id" value="{{ case.id }}" />
+            <textarea name="text" rows="14" spellcheck="false">{{ case.text }}</textarea>
+            <div class="actions">
+              <button type="submit" name="action" value="save">Сохранить</button>
+              {% if case.custom %}
+              <button
+                class="secondary"
+                type="submit"
+                name="action"
+                value="reset"
+                onclick="return confirm('Вернуть стандартный текст промта?')"
+              >
+                Вернуть стандартный
+              </button>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+    {% set admin_report_from = 'prompts' %}
+    {% include '_admin_report_fab.html' %}
+    {% include "_messenger_plugin.html" %}
+    {% include "_voice_plugin.html" %}
+  </body>
+</html>

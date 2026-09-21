@@ -276,6 +276,7 @@ ADMIN_SOURCE_PAGES = {
     "settings": "Админка · ИИ",
     "notes": "Админка · Подсказки",
     "analyses": "Админка · Самоанализ",
+    "prompts": "Админка · Промты",
     "voice": "Админка · Голос",
     "support": "Админка · Ошибки",
 }
@@ -446,6 +447,42 @@ def all_settings() -> dict[str, str]:
         cur.execute("SELECT `key`, `value` FROM app_settings")
         rows = cur.fetchall()
     return {str(row["key"]): str(row["value"] or "") for row in rows}
+
+
+PROMPT_KEY_PREFIX = "prompt:"
+
+
+def prompt_overrides() -> dict[str, str]:
+    """Тексты промтов, изменённые в админке: {prompt_id: text}."""
+    pattern = PROMPT_KEY_PREFIX + "%"
+    with cursor() as cur:
+        cur.execute(
+            "SELECT `key`, `value` FROM app_settings WHERE `key` LIKE %s",
+            (pattern,),
+        )
+        rows = cur.fetchall() or []
+    return {
+        str(row["key"])[len(PROMPT_KEY_PREFIX) :]: str(row["value"] or "")
+        for row in rows
+    }
+
+
+def set_prompt_override(prompt_id: str, text: str) -> None:
+    pid = (prompt_id or "").strip()[:48]
+    if not pid:
+        raise ValueError("prompt_id required")
+    set_setting(PROMPT_KEY_PREFIX + pid, text or "")
+
+
+def delete_prompt_override(prompt_id: str) -> None:
+    pid = (prompt_id or "").strip()[:48]
+    if not pid:
+        return
+    with cursor() as cur:
+        cur.execute(
+            "DELETE FROM app_settings WHERE `key` = %s",
+            (PROMPT_KEY_PREFIX + pid,),
+        )
 
 
 NOTE_MODES = ("popup", "collapsed", "expanded")

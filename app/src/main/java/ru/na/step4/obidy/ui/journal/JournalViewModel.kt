@@ -630,7 +630,10 @@ class JournalViewModel(
     private fun requestPointAi(role: String) {
         val path = state.value.path ?: return
         val nodeId = path.current.id
-        val cached = prefs.cachedPointAi(nodeId, role)
+        val literature = role == "journal.literature"
+        val lengthKey = if (literature) prefs.literatureLength else prefs.adviceLength
+        val cacheRole = "$role.$lengthKey"
+        val cached = prefs.cachedPointAi(nodeId, cacheRole)
         if (!cached.isNullOrBlank()) {
             _ai.value = AiUi.Ready(cached, null, fromCache = true)
             return
@@ -639,8 +642,6 @@ class JournalViewModel(
             _ai.value = AiUi.Error(JournalRu.aiLimit)
             return
         }
-        val literature = role == "journal.literature"
-        val lengthKey = if (literature) prefs.literatureLength else prefs.adviceLength
         viewModelScope.launch {
             _ai.value = AiUi.Loading
             val log = (app as Step4App).activityLog
@@ -666,7 +667,7 @@ class JournalViewModel(
             _ai.value = when (result) {
                 is JournalAiClient.Result.Ok -> {
                     prefs.consumeAi()
-                    prefs.putCachedPointAi(nodeId, role, result.text)
+                    prefs.putCachedPointAi(nodeId, cacheRole, result.text)
                     refreshMeta()
                     AiUi.Ready(result.text, null, fromCache = false, prompt = result.prompt)
                 }

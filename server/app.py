@@ -456,6 +456,55 @@ def notes_admin():
     )
 
 
+@app.route("/prompts", methods=["GET", "POST"])
+@login_required
+def prompts_admin():
+    """Вкладка «Промты»: все системные промты по случаям с правкой вручную."""
+    notice = ""
+    warn = ""
+    if request.method == "POST":
+        action = (request.form.get("action") or "save").strip()
+        prompt_id = (request.form.get("id") or "").strip()
+        if prompt_id not in roles.PROMPTS_BY_ID:
+            warn = "Неизвестный промт."
+        elif action == "reset":
+            db.delete_prompt_override(prompt_id)
+            roles.invalidate_prompt_cache()
+            notice = "Промт возвращён к стандартному тексту."
+        else:
+            text = request.form.get("text") or ""
+            if not text.strip():
+                warn = (
+                    "Текст промта не может быть пустым — "
+                    "нажмите «Вернуть стандартный», чтобы сбросить правку."
+                )
+            else:
+                db.set_prompt_override(prompt_id, text)
+                roles.invalidate_prompt_cache()
+                notice = "Промт сохранён. Новые запросы к ИИ используют новый текст."
+        if not warn:
+            return redirect(url_for("prompts_admin", saved=prompt_id, _anchor=prompt_id))
+    if request.args.get("saved"):
+        notice = "Промт сохранён. Новые запросы к ИИ используют новый текст."
+
+    cases = roles.prompt_cases()
+    groups: list[tuple[str, list[dict]]] = []
+    for case in cases:
+        name = case.get("group") or "Прочее"
+        if not groups or groups[-1][0] != name:
+            groups.append((name, []))
+        groups[-1][1].append(case)
+    return render_template(
+        "prompts.html",
+        domain=config.DOMAIN,
+        notice=notice,
+        warn=warn,
+        groups=groups,
+        total=len(cases),
+        custom_count=sum(1 for case in cases if case.get("custom")),
+    )
+
+
 @app.get("/api/v1/config")
 def api_config():
     if not _api_ok():
@@ -754,7 +803,7 @@ def api_translate():
             api_key,
             model,
             [
-                {"role": "system", "content": translate.SYSTEM_PROMPT},
+                {"role": "system", "content": roles.prompt_text("translate.ui") or translate.SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
             max_tokens=min(8000, 200 + sum(len(i["text"]) for i in items) * 3),
