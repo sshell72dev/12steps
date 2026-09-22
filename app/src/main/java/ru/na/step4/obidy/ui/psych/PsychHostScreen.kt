@@ -888,9 +888,9 @@ private fun AiSettingsBody(vm: PsychViewModel) {
     ) {
         Text(PsychRu.personality, style = MaterialTheme.typography.titleMedium, color = Forest)
         SwitchRow(
-            if (s.personalityCollectEnabled) PsychRu.personalityOn else PsychRu.personalityOff,
-            s.personalityCollectEnabled
-        ) { vm.setPersonalityCollect(it) }
+            PsychRu.personalityOff, // «Моя личность» временно выключена
+            false
+        ) { }
         var portrait by remember(s.myPersonality) { mutableStateOf(s.myPersonality) }
         PsychField(portrait, { portrait = it }, PsychRu.personalityEdit, 5)
         MenuBtn(Ru.save) {

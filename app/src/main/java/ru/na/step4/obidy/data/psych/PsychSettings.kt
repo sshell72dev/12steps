@@ -262,8 +262,8 @@ class PsychSettings(
             "pro_expiry" to if (isPro) java.time.Instant.ofEpochMilli(proExpiryMillis).toString() else "",
             "goals" to goalsProvider(),
             "my_personality" to snap.personality,
-            "my_personality_collect_enabled" to personalityCollectEnabled,
-            "my_personality_use_enabled" to snap.personalityEnabled,
+            "my_personality_collect_enabled" to false, // «Моя личность» временно выключена
+            "my_personality_use_enabled" to false, // «Моя личность» временно выключена
             "ai_response_variant" to aiResponseVariant,
             "ai_response_style" to aiResponseStyle,
             "work_question_difficulty" to workQuestionDifficulty,

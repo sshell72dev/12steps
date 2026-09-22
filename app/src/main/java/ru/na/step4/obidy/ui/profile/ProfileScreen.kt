@@ -253,12 +253,12 @@ fun ProfileScreen(
                 NoteView(NoteIds.JOURNAL_PERSONALITY, ProfileRu.personalityHint, ProfileRu.sectionPersonality)
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        if (snap.personalityEnabled) ProfileRu.personalityOn else ProfileRu.personalityOff,
+                        ProfileRu.personalityOff, // «Моя личность» временно выключена
                         modifier = Modifier.weight(1f),
                         color = Forest
                     )
                     Switch(
-                        checked = snap.personalityEnabled,
+                        checked = false, // «Моя личность» временно выключена
                         onCheckedChange = viewModel::setPersonalityEnabled,
                         colors = SwitchDefaults.colors(checkedTrackColor = Forest)
                     )

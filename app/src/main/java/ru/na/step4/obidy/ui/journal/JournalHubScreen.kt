@@ -174,7 +174,7 @@ fun JournalHubScreen(
                 }
                 JournalButton(JournalRu.pickStep, onPick, filled = true)
                 JournalButton(JournalRu.myEntries, onEntries)
-                JournalButton(JournalRu.myPersonality, onPersonality)
+                JournalButton(JournalRu.myPersonality, onPersonality, enabled = false)
                 if (next != null) {
                     JournalButton("${JournalRu.nextPoint}: ${next.name.take(42)}", { viewModel.goNextPoint() })
                 }

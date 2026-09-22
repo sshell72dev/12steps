@@ -114,11 +114,6 @@ object JournalPrompts {
             append(selection)
             append(" (Шаг: ${path.step.name}) (полный путь: $fullPath).\n")
             append("Текущая дата: ${nowStamp()}\n")
-            if (node.description.isNotBlank()) {
-                append("\nТекст точки:\n")
-                append(node.description)
-                append("\n")
-            }
             program.trim().takeIf { it.isNotBlank() }?.let {
                 append("\nПрограмма: ")
                 append(it)
@@ -178,11 +173,6 @@ object JournalPrompts {
             append(" (Шаг: ${path.step.displayTitle()})")
             appendLine()
             appendLine("Полный путь: ${path.line()}")
-            if (node.description.isNotBlank()) {
-                appendLine()
-                appendLine("Текст точки:")
-                appendLine(node.description)
-            }
             questionnaire?.takeIf { it.isNotBlank() }?.let {
                 appendLine()
                 appendLine("Данные из анкеты:")

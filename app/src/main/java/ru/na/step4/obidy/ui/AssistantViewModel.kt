@@ -196,11 +196,8 @@ class AssistantViewModel(
         val program = snap?.program?.takeIf { it.isNotBlank() }
             ?: snap?.answers?.get(ProfileQuestionnaire.ID_PROGRAM)?.takeIf { it.isNotBlank() }
             ?: "(не указана)"
-        val personality = when {
-            snap == null -> "(пока не заполнено)"
-            !snap.personalityEnabled -> "(не использовать)"
-            else -> snap.personality.trim().ifBlank { "(пока не заполнено)" }
-        }
+        // Блок «Моя личность» временно выключен — в промпт ассистента портрет не подмешиваем.
+        val personality = "(не использовать)"
         return mapOf(
             "questionnaire" to questionnaire,
             "program" to program,

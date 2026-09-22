@@ -51,11 +51,11 @@ class ProfileStore(context: Context) {
         set(value) = update { copy(personality = value.trim()) }
 
     var personalityEnabled: Boolean
-        get() = current.personalityEnabled
+        get() = false // «Моя личность» временно выключена до доработки
         set(value) = update { copy(personalityEnabled = value) }
 
     var personalityCollectEnabled: Boolean
-        get() = current.personalityCollectEnabled
+        get() = false // «Моя личность» временно выключена до доработки
         set(value) = update { copy(personalityCollectEnabled = value) }
 
     var languageCode: String
