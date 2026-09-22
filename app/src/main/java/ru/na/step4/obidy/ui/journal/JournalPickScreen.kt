@@ -133,7 +133,7 @@ fun JournalPickScreen(
                             onToggleStep = { viewModel.togglePickStep(step.id) },
                             onToggleChapter = viewModel::togglePickChapter,
                             isChapterExpanded = { chapterId ->
-                                expandedStep == step.id && (pickAllChapters || expandedChapter == chapterId)
+                                expandedStep == step.id && expandedChapter == chapterId
                             },
                             visiblePoints = { chapter ->
                                 chapterShowsAllPoints
