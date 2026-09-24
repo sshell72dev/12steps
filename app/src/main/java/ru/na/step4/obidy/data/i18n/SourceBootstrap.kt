@@ -899,6 +899,55 @@ object SourceBootstrap {
         SourceCatalog.put("messenger.challengeAnalysisLabel", "Самоанализ")
         SourceCatalog.put("messenger.challengeInventoryLabel", "Работа по IP")
         SourceCatalog.put("messenger.challengeMembers", "участников")
+        SourceCatalog.put("messenger.groupInfo", "О группе")
+        SourceCatalog.put("messenger.topicsTitle", "Темы")
+        SourceCatalog.put("messenger.topicsEmpty", "Пока нет тем — создайте первую.")
+        SourceCatalog.put(
+            "messenger.topicsScreenHint",
+            "Темы — подгруппы внутри группы: у каждой своя лента. «Общий» — лента всей группы."
+        )
+        SourceCatalog.put("messenger.topicGeneral", "Общий")
+        SourceCatalog.put("messenger.topicCreate", "Новая тема")
+        SourceCatalog.put("messenger.topicRename", "Переименовать тему")
+        SourceCatalog.put("messenger.topicDelete", "Удалить тему")
+        SourceCatalog.put(
+            "messenger.topicDeleteQuestion",
+            "Удалить эту тему вместе с её лентой сообщений?"
+        )
+        SourceCatalog.put("messenger.topicNameHint", "Название темы")
+        SourceCatalog.put("messenger.topicNotFound", "Тема не найдена.")
+        SourceCatalog.put("messenger.confirmYes", "Удалить")
+        SourceCatalog.put("messenger.confirmNo", "Отмена")
+        SourceCatalog.put("messenger.save", "Сохранить")
+        SourceCatalog.put("messenger.photoTooLarge", "Фото слишком большое — выберите меньше.")
+        SourceCatalog.put(
+            "messenger.photoBadFormat",
+            "Не получилось прочитать изображение. Возьмите другое фото."
+        )
+        SourceCatalog.put(
+            "messenger.groupLocked",
+            "Группа челленджа закрыта: выходить и переименовывать её нельзя."
+        )
+        SourceCatalog.put(
+            "messenger.ownerImmutable",
+            "Создателя группы нельзя удалить или заменить."
+        )
+        SourceCatalog.put("messenger.nameRequired", "Укажите название.")
+        SourceCatalog.put("messenger.noRights", "Недостаточно прав для этого действия.")
+        SourceCatalog.put("messenger.profileTitle", "Профиль")
+        SourceCatalog.put("messenger.photoHint", "Фото видят те, с кем вы переписываетесь.")
+        SourceCatalog.put("messenger.photoAdd", "Добавить фото")
+        SourceCatalog.put("messenger.photoChange", "Сменить фото")
+        SourceCatalog.put("messenger.photoDelete", "Удалить фото")
+        SourceCatalog.put("messenger.groupPhotoAdd", "Добавить фото группы")
+        SourceCatalog.put("messenger.groupSettings", "Настройки группы")
+        SourceCatalog.put("messenger.renameHint", "Название группы")
+        SourceCatalog.put("messenger.topicsOpen", "Темы")
+        SourceCatalog.put("messenger.topicsHint", "Темы — подгруппы внутри группы: у каждой своя лента сообщений.")
+        SourceCatalog.put("messenger.deleteGroup", "Удалить группу")
+        SourceCatalog.put("messenger.deleteGroupQuestion", "Удалить группу? Она исчезнет у всех участников.")
+        SourceCatalog.put("messenger.removeMember", "Удалить")
+        SourceCatalog.put("messenger.removeMemberQuestion", "Удалить участника из группы?")
         SourceCatalog.put("voicehands.title", "Голосовой режим ожидания")
         SourceCatalog.put("voicehands.experiment", "Эксперимент")
         SourceCatalog.put(

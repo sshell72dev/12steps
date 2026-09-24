@@ -1,5 +1,6 @@
 package ru.na.step4.obidy.ui.messenger
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -22,6 +23,7 @@ import ru.na.step4.obidy.data.messenger.MessengerMessage
 import ru.na.step4.obidy.data.messenger.MessengerRepository
 import ru.na.step4.obidy.data.messenger.MessengerResult
 import ru.na.step4.obidy.data.messenger.MessengerRu
+import ru.na.step4.obidy.data.messenger.MessengerTopic
 
 data class MessengerGate(
     val enabled: Boolean = true,
@@ -43,10 +45,14 @@ class MessengerViewModel(
     val pairToken = repository.pairToken
     val error = repository.error
     val playingId = repository.voicePlayer.playingId
+    val myAvatarUrl = repository.myAvatarUrl
+    val groupRefresh = repository.groupRefresh
 
     var chatTitle: String = ""
         private set
     var chatGroupId: String = ""
+        private set
+    var chatAvatarUrl: String = ""
         private set
     var qrKind: String = "pair"
         private set
@@ -59,6 +65,9 @@ class MessengerViewModel(
 
     private val _groupInfo = MutableStateFlow<MessengerGroupInfo?>(null)
     val groupInfo: StateFlow<MessengerGroupInfo?> = _groupInfo.asStateFlow()
+
+    private val _topics = MutableStateFlow<List<MessengerTopic>>(emptyList())
+    val topics: StateFlow<List<MessengerTopic>> = _topics.asStateFlow()
 
     private val _challenges = MutableStateFlow<List<MessengerChallenge>>(emptyList())
     val challenges: StateFlow<List<MessengerChallenge>> = _challenges.asStateFlow()
@@ -132,11 +141,13 @@ class MessengerViewModel(
     fun openChat(chat: MessengerChat) {
         chatTitle = chat.title
         chatGroupId = chat.groupId
+        chatAvatarUrl = chat.avatarUrl
     }
 
-    fun openChat(id: String, title: String, groupId: String) {
+    fun openChat(id: String, title: String, groupId: String, avatarUrl: String = "") {
         chatTitle = title
         chatGroupId = groupId
+        chatAvatarUrl = avatarUrl
     }
 
     fun startChatPolling(chatId: String) {
@@ -162,6 +173,16 @@ class MessengerViewModel(
 
     fun sendVoice(chatId: String, file: File, durationMs: Int) {
         viewModelScope.launch { repository.sendVoice(chatId, file, durationMs) }
+    }
+
+    fun editMessage(messageId: Long, body: String) {
+        val text = body.trim()
+        if (text.isBlank()) return
+        viewModelScope.launch { repository.editMessage(messageId, text) }
+    }
+
+    fun deleteMessage(messageId: Long) {
+        viewModelScope.launch { repository.deleteMessage(messageId) }
     }
 
     fun playVoice(message: MessengerMessage) {
@@ -223,6 +244,67 @@ class MessengerViewModel(
             if (repository.addMembers(groupId, userIds)) loadGroup(groupId)
         }
     }
+
+    fun uploadAvatar(uri: Uri) {
+        viewModelScope.launch {
+            if (repository.uploadMyAvatar(uri)) loadGroup(groupInfo.value?.id.orEmpty())
+        }
+    }
+
+    fun deleteAvatar() {
+        viewModelScope.launch { repository.deleteMyAvatar() }
+    }
+
+    fun renameGroup(groupId: String, name: String) {
+        viewModelScope.launch {
+            if (repository.renameGroup(groupId, name)) loadGroup(groupId)
+        }
+    }
+
+    fun deleteGroup(groupId: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            if (repository.deleteGroup(groupId)) {
+                _groupInfo.value = null
+                onDone()
+            }
+        }
+    }
+
+    fun removeMember(groupId: String, userId: String) {
+        viewModelScope.launch {
+            if (repository.removeMember(groupId, userId)) loadGroup(groupId)
+        }
+    }
+
+    fun loadTopics(groupId: String) {
+        viewModelScope.launch { _topics.value = repository.loadTopics(groupId) }
+    }
+
+    fun createTopic(groupId: String, name: String) {
+        viewModelScope.launch { repository.createTopic(groupId, name) }
+    }
+
+    fun renameTopic(groupId: String, topicId: String, name: String) {
+        viewModelScope.launch { repository.renameTopic(groupId, topicId, name) }
+    }
+
+    fun deleteTopic(groupId: String, topicId: String) {
+        viewModelScope.launch { repository.deleteTopic(groupId, topicId) }
+    }
+
+    fun uploadGroupAvatar(groupId: String, uri: Uri) {
+        viewModelScope.launch {
+            if (repository.uploadGroupAvatar(groupId, uri)) loadGroup(groupId)
+        }
+    }
+
+    fun deleteGroupAvatar(groupId: String) {
+        viewModelScope.launch {
+            if (repository.deleteGroupAvatar(groupId)) loadGroup(groupId)
+        }
+    }
+
+    suspend fun avatarBytes(url: String): ByteArray? = repository.avatarBytes(url)
 
     fun rotateGroupQr(groupId: String) {
         viewModelScope.launch {

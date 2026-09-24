@@ -65,6 +65,67 @@ object MessengerRu {
     val challengeAnalysisLabel: String get() = I18n.t("messenger.challengeAnalysisLabel", "Самоанализ")
     val challengeInventoryLabel: String get() = I18n.t("messenger.challengeInventoryLabel", "Работа по IP")
     val challengeMembers: String get() = I18n.t("messenger.challengeMembers", "участников")
+    val groupInfo: String get() = I18n.t("messenger.groupInfo", "О группе")
+    val topicsTitle: String get() = I18n.t("messenger.topicsTitle", "Темы")
+    val topicsEmpty: String get() = I18n.t("messenger.topicsEmpty", "Пока нет тем — создайте первую.")
+    val topicsScreenHint: String get() = I18n.t(
+        "messenger.topicsScreenHint",
+        "Темы — подгруппы внутри группы: у каждой своя лента. «Общий» — лента всей группы."
+    )
+    val topicGeneral: String get() = I18n.t("messenger.topicGeneral", "Общий")
+    val topicCreate: String get() = I18n.t("messenger.topicCreate", "Новая тема")
+    val topicRename: String get() = I18n.t("messenger.topicRename", "Переименовать тему")
+    val topicDelete: String get() = I18n.t("messenger.topicDelete", "Удалить тему")
+    val topicDeleteQuestion: String get() = I18n.t(
+        "messenger.topicDeleteQuestion",
+        "Удалить эту тему вместе с её лентой сообщений?"
+    )
+    val topicNameHint: String get() = I18n.t("messenger.topicNameHint", "Название темы")
+    val topicNotFound: String get() = I18n.t("messenger.topicNotFound", "Тема не найдена.")
+    val confirmYes: String get() = I18n.t("messenger.confirmYes", "Удалить")
+    val confirmNo: String get() = I18n.t("messenger.confirmNo", "Отмена")
+    val save: String get() = I18n.t("messenger.save", "Сохранить")
+    val photoTooLarge: String get() = I18n.t("messenger.photoTooLarge", "Фото слишком большое — выберите меньше.")
+    val photoBadFormat: String get() = I18n.t(
+        "messenger.photoBadFormat",
+        "Не получилось прочитать изображение. Возьмите другое фото."
+    )
+    val groupLocked: String get() = I18n.t(
+        "messenger.groupLocked",
+        "Группа челленджа закрыта: выходить и переименовывать её нельзя."
+    )
+    val ownerImmutable: String get() = I18n.t(
+        "messenger.ownerImmutable",
+        "Создателя группы нельзя удалить или заменить."
+    )
+    val nameRequired: String get() = I18n.t("messenger.nameRequired", "Укажите название.")
+    val noRights: String get() = I18n.t("messenger.noRights", "Недостаточно прав для этого действия.")
+    val profileTitle: String get() = I18n.t("messenger.profileTitle", "Профиль")
+    val photoHint: String get() = I18n.t(
+        "messenger.photoHint",
+        "Фото видят те, с кем вы переписываетесь."
+    )
+    val photoAdd: String get() = I18n.t("messenger.photoAdd", "Добавить фото")
+    val photoChange: String get() = I18n.t("messenger.photoChange", "Сменить фото")
+    val photoDelete: String get() = I18n.t("messenger.photoDelete", "Удалить фото")
+    val groupPhotoAdd: String get() = I18n.t("messenger.groupPhotoAdd", "Добавить фото группы")
+    val groupSettings: String get() = I18n.t("messenger.groupSettings", "Настройки группы")
+    val renameHint: String get() = I18n.t("messenger.renameHint", "Название группы")
+    val topicsOpen: String get() = I18n.t("messenger.topicsOpen", "Темы")
+    val topicsHint: String get() = I18n.t(
+        "messenger.topicsHint",
+        "Темы — подгруппы внутри группы: у каждой своя лента сообщений."
+    )
+    val deleteGroup: String get() = I18n.t("messenger.deleteGroup", "Удалить группу")
+    val deleteGroupQuestion: String get() = I18n.t(
+        "messenger.deleteGroupQuestion",
+        "Удалить группу? Она исчезнет у всех участников."
+    )
+    val removeMember: String get() = I18n.t("messenger.removeMember", "Удалить")
+    val removeMemberQuestion: String get() = I18n.t(
+        "messenger.removeMemberQuestion",
+        "Удалить участника из группы?"
+    )
 
     fun challengeTitle(key: String, fallback: String): String = when (key) {
         "steps" -> challengeSteps

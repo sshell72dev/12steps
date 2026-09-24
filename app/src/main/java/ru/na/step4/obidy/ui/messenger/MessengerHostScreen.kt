@@ -54,8 +54,11 @@ private object MRoutes {
     const val SCAN = "scan"
     const val GROUP_NEW = "group/new"
     const val GROUP = "group/{id}"
+    const val TOPICS = "group/{id}/topics"
+    const val PROFILE = "profile"
     fun chat(id: String) = "chat/$id"
     fun group(id: String) = "group/$id"
+    fun topics(id: String) = "group/$id/topics"
 }
 
 @Composable
@@ -132,6 +135,7 @@ fun MessengerHostScreen(
                     },
                     onScan = { nav.navigate(MRoutes.SCAN) },
                     onNewGroup = { nav.navigate(MRoutes.GROUP_NEW) },
+                    onProfile = { nav.navigate(MRoutes.PROFILE) },
                     onJoinChallenge = { key ->
                         viewModel.joinChallenge(key) { created ->
                             if (created != null && created.chatId.isNotBlank()) {
@@ -155,9 +159,11 @@ fun MessengerHostScreen(
                     chatId = id,
                     title = viewModel.chatTitle,
                     groupId = viewModel.chatGroupId,
+                    avatarUrl = viewModel.chatAvatarUrl,
                     viewModel = viewModel,
                     onBack = { nav.popBackStack() },
                     onGroupInfo = { groupId -> nav.navigate(MRoutes.group(groupId)) },
+                    onTopics = { groupId -> nav.navigate(MRoutes.topics(groupId)) },
                     onOpenAlert = { message ->
                         val target = AppAlerts.resolveTarget(
                             message.senderId,
@@ -227,7 +233,36 @@ fun MessengerHostScreen(
                     groupId = id,
                     viewModel = viewModel,
                     onBack = { nav.popBackStack() },
-                    onShowQr = { nav.navigate(MRoutes.QR) }
+                    onShowQr = { nav.navigate(MRoutes.QR) },
+                    onShowTopics = { nav.navigate(MRoutes.topics(id)) },
+                    onGroupDeleted = { nav.popBackStack() }
+                )
+            }
+            composable(
+                MRoutes.TOPICS,
+                arguments = listOf(navArgument("id") { type = NavType.StringType })
+            ) { entry ->
+                val topicGroupId = entry.arguments?.getString("id").orEmpty()
+                MessengerTopicsScreen(
+                    groupId = topicGroupId,
+                    viewModel = viewModel,
+                    onBack = { nav.popBackStack() },
+                    onOpenGroup = { gid -> nav.navigate(MRoutes.group(gid)) },
+                    onOpenTopic = { chatId, title ->
+                        viewModel.openChat(
+                            chatId,
+                            title,
+                            topicGroupId,
+                            viewModel.groupInfo.value?.avatarUrl.orEmpty()
+                        )
+                        nav.navigate(MRoutes.chat(chatId))
+                    }
+                )
+            }
+            composable(MRoutes.PROFILE) {
+                MessengerProfileScreen(
+                    viewModel = viewModel,
+                    onBack = { nav.popBackStack() }
                 )
             }
         }

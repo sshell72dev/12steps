@@ -45,6 +45,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import ru.na.step4.obidy.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -108,22 +113,32 @@ fun AssistantScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            Ru.assistantTitle,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Forest
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_app_avatar),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
                         )
-                        Text(
-                            text = if (state.questionAssist.active) {
-                                state.questionAssist.focusTitle
-                            } else {
-                                Ru.assistantStep.format(state.session.funnelStep.key)
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Amber,
-                            maxLines = 2
-                        )
+                        Spacer(Modifier.size(10.dp))
+                        Column {
+                            Text(
+                                Ru.assistantTitle,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Forest
+                            )
+                            Text(
+                                text = if (state.questionAssist.active) {
+                                    state.questionAssist.focusTitle
+                                } else {
+                                    Ru.assistantStep.format(state.session.funnelStep.key)
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Amber,
+                                maxLines = 2
+                            )
+                        }
                     }
                 },
                 navigationIcon = {

@@ -18,6 +18,24 @@ internal object MessengerHttp {
         return request("POST", path, messengerId, payload, null, readTimeoutMs)
     }
 
+    fun delete(path: String, messengerId: String, readTimeoutMs: Int = 20_000): MessengerResult<Response> {
+        return request("DELETE", path, messengerId, null, null, readTimeoutMs)
+    }
+
+    fun postFile(
+        path: String,
+        messengerId: String,
+        file: File,
+        fieldName: String,
+        fileName: String,
+        mimeType: String,
+        extraFields: Map<String, String> = emptyMap(),
+        readTimeoutMs: Int = 60_000
+    ): MessengerResult<Response> {
+        val part = Multipart(file, fieldName, fileName, mimeType, extraFields)
+        return request("POST", path, messengerId, null, part, readTimeoutMs)
+    }
+
     fun postMultipart(
         path: String,
         messengerId: String,
@@ -25,7 +43,16 @@ internal object MessengerHttp {
         durationMs: Int,
         readTimeoutMs: Int = 60_000
     ): MessengerResult<Response> {
-        return request("POST", path, messengerId, null, Multipart(file, durationMs), readTimeoutMs)
+        return postFile(
+            path = path,
+            messengerId = messengerId,
+            file = file,
+            fieldName = "file",
+            fileName = "voice.m4a",
+            mimeType = "audio/mp4",
+            extraFields = mapOf("duration_ms" to durationMs.toString()),
+            readTimeoutMs = readTimeoutMs
+        )
     }
 
     fun getBytes(path: String, messengerId: String, readTimeoutMs: Int = 30_000): MessengerResult<ByteArray> {
@@ -55,7 +82,13 @@ internal object MessengerHttp {
         }
     }
 
-    private data class Multipart(val file: File, val durationMs: Int)
+    private data class Multipart(
+        val file: File,
+        val fieldName: String,
+        val fileName: String,
+        val mimeType: String,
+        val extraFields: Map<String, String>
+    )
 
     private fun request(
         method: String,
@@ -89,14 +122,17 @@ internal object MessengerHttp {
                 connection.outputStream.use { out ->
                     val crlf = "\r\n"
                     fun write(text: String) = out.write(text.toByteArray(Charsets.UTF_8))
-                    write("--$boundary$crlf")
-                    write("Content-Disposition: form-data; name=\"duration_ms\"$crlf$crlf")
-                    write("${multipart.durationMs}$crlf")
+                    multipart.extraFields.forEach { (name, value) ->
+                        write("--$boundary$crlf")
+                        write("Content-Disposition: form-data; name=\"$name\"$crlf$crlf")
+                        write("$value$crlf")
+                    }
                     write("--$boundary$crlf")
                     write(
-                        "Content-Disposition: form-data; name=\"file\"; filename=\"voice.m4a\"$crlf"
+                        "Content-Disposition: form-data; name=\"${multipart.fieldName}\"; " +
+                            "filename=\"${multipart.fileName}\"$crlf"
                     )
-                    write("Content-Type: audio/mp4$crlf$crlf")
+                    write("Content-Type: ${multipart.mimeType}$crlf$crlf")
                     multipart.file.inputStream().use { it.copyTo(out) }
                     write(crlf)
                     write("--$boundary--$crlf")

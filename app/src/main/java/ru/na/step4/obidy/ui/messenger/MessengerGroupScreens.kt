@@ -1,5 +1,8 @@
 package ru.na.step4.obidy.ui.messenger
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,11 +12,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PersonRemove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -107,14 +116,26 @@ fun MessengerGroupInfoScreen(
     groupId: String,
     viewModel: MessengerViewModel,
     onBack: () -> Unit,
-    onShowQr: () -> Unit
+    onShowQr: () -> Unit,
+    onShowTopics: () -> Unit,
+    onGroupDeleted: () -> Unit = {}
 ) {
     val info by viewModel.groupInfo.collectAsStateWithLifecycle()
     val contacts by viewModel.contacts.collectAsStateWithLifecycle()
+    val refresh by viewModel.groupRefresh.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf(setOf<String>()) }
-    LaunchedEffect(groupId) { viewModel.loadGroup(groupId) }
+    var nameDraft by remember(info?.id) { mutableStateOf(info?.name.orEmpty()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var memberToRemove by remember { mutableStateOf<MessengerContact?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) viewModel.uploadGroupAvatar(groupId, uri)
+    }
+    LaunchedEffect(groupId, refresh) {
+        viewModel.loadGroup(groupId)
+    }
     val memberIds = info?.members?.map { it.id }?.toSet().orEmpty()
     val addable = contacts.filter { it.id !in memberIds }
+    val canManage = info?.canManage == true
     Scaffold(
         containerColor = Sand,
         topBar = {
@@ -132,23 +153,72 @@ fun MessengerGroupInfoScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                MessengerAvatar(
+                    avatarUrl = info?.avatarUrl.orEmpty(),
+                    title = info?.name.orEmpty(),
+                    size = 96.dp,
+                    viewModel = viewModel
+                )
+                if (canManage) {
+                    JournalButton(
+                        label = if (info?.avatarUrl.isNullOrBlank()) {
+                            MessengerRu.groupPhotoAdd
+                        } else {
+                            MessengerRu.photoChange
+                        },
+                        onClick = {
+                            picker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        filled = true
+                    )
+                    if (!info?.avatarUrl.isNullOrBlank()) {
+                        JournalButton(
+                            label = MessengerRu.photoDelete,
+                            onClick = { viewModel.deleteGroupAvatar(groupId) }
+                        )
+                    }
+                    Text(MessengerRu.groupSettings, style = MaterialTheme.typography.titleMedium, color = Forest)
+                    VoiceOutlinedTextField(
+                        value = nameDraft,
+                        onValueChange = { nameDraft = it.take(40) },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(MessengerRu.renameHint) },
+                        singleLine = true
+                    )
+                    JournalButton(
+                        label = MessengerRu.save,
+                        onClick = {
+                            val trimmed = nameDraft.trim()
+                            if (trimmed.isNotBlank()) viewModel.renameGroup(groupId, trimmed)
+                        },
+                        filled = true
+                    )
+                }
                 JournalButton(label = MessengerRu.groupQr, onClick = {
                     info?.let { viewModel.openGroupQr(it) }
                     onShowQr()
                 }, filled = true)
+                JournalButton(
+                    label = MessengerRu.topicsOpen,
+                    onClick = onShowTopics
+                )
+                Text(MessengerRu.topicsHint, style = MaterialTheme.typography.bodySmall)
                 Text(MessengerRu.members, style = MaterialTheme.typography.titleMedium, color = Forest)
                 info?.members?.forEach { member ->
-                    Text(
-                        buildString {
-                            append(member.displayName.ifBlank { member.id.take(8) })
-                            if (info?.ownerId == member.id) append(" · ${MessengerRu.owner}")
-                        },
-                        style = MaterialTheme.typography.bodyLarge
+                    MemberRow(
+                        member = member,
+                        ownerLabel = if (info?.ownerId == member.id) MessengerRu.owner else "",
+                        canRemove = canManage && member.id != info?.ownerId,
+                        viewModel = viewModel,
+                        onRemove = { memberToRemove = member }
                     )
                 }
-                if (info?.isOwner == true) {
+                if (canManage) {
                     Text(MessengerRu.addToGroup, style = MaterialTheme.typography.titleMedium, color = Forest)
                     if (addable.isEmpty()) {
                         Text(MessengerRu.noFriends, style = MaterialTheme.typography.bodyMedium)
@@ -177,7 +247,87 @@ fun MessengerGroupInfoScreen(
                             filled = true
                         )
                     }
+                    JournalButton(
+                        label = MessengerRu.deleteGroup,
+                        onClick = { confirmDelete = true }
+                    )
                 }
+            }
+        }
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(MessengerRu.deleteGroup) },
+            text = { Text(MessengerRu.deleteGroupQuestion) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    viewModel.deleteGroup(groupId) { onGroupDeleted() }
+                }) { Text(MessengerRu.confirmYes, color = Forest) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
+    }
+    memberToRemove?.let { member ->
+        AlertDialog(
+            onDismissRequest = { memberToRemove = null },
+            title = { Text(MessengerRu.removeMember) },
+            text = {
+                Text(
+                    "${MessengerRu.removeMemberQuestion} " +
+                        member.displayName.ifBlank { member.id.take(8) }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = member.id
+                    memberToRemove = null
+                    viewModel.removeMember(groupId, target)
+                }) { Text(MessengerRu.confirmYes, color = Forest) }
+            },
+            dismissButton = {
+                TextButton(onClick = { memberToRemove = null }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun MemberRow(
+    member: MessengerContact,
+    ownerLabel: String,
+    canRemove: Boolean,
+    viewModel: MessengerViewModel,
+    onRemove: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MessengerAvatar(
+            avatarUrl = member.avatarUrl,
+            title = member.displayName.ifBlank { member.id.take(8) },
+            size = 40.dp,
+            viewModel = viewModel
+        )
+        Text(
+            buildString {
+                append(member.displayName.ifBlank { member.id.take(8) })
+                if (ownerLabel.isNotBlank()) append(" · $ownerLabel")
+            },
+            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+            style = MaterialTheme.typography.bodyLarge
+        )
+        if (canRemove) {
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Outlined.PersonRemove, MessengerRu.removeMember, tint = Forest)
             }
         }
     }

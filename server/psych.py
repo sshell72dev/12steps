@@ -242,8 +242,29 @@ def render_personality(profile: dict[str, Any]) -> str:
     return f"\nМОЯ ЛИЧНОСТЬ (портрет личности пользователя):\n{body}\n"
 
 
-def system_for(kind: str) -> str:
-    return roles.system_for_psych(kind)
+def anketa_block(payload: dict[str, Any]) -> str:
+    """Анкета пользователя для системного промта.
+
+    Берёт готовый текст анкеты из профиля (`questionnaire_text`) или из поля
+    `questionnaire` и дополняет его программой, если её нет в тексте.
+    Возвращает пустую строку, если анкеты нет — тогда промт уходит без неё.
+    """
+    source = _as_dict(payload)
+    profile = _as_dict(source.get("profile")) if isinstance(source.get("profile"), dict) else {}
+    questionnaire = _str(source.get("questionnaire")) or _str(profile.get("questionnaire_text"))
+    body = questionnaire.strip()
+    if not body:
+        return ""
+    program = _str(profile.get("recovery_program")) or _str(profile.get("program"))
+    if not program:
+        program = _str(source.get("program"))
+    if program and program not in body:
+        body = f"{body}\nПрограмма: {program}"
+    return f"АНКЕТА ПОЛЬЗОВАТЕЛЯ:\n{body}"
+
+
+def system_for(kind: str, anketa: str = "") -> str:
+    return roles.system_for_psych(kind, anketa)
 
 
 def render_qa(

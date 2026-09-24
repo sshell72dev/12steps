@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -80,9 +81,11 @@ fun MessengerChatScreen(
     chatId: String,
     title: String,
     groupId: String,
+    avatarUrl: String = "",
     viewModel: MessengerViewModel,
     onBack: () -> Unit,
     onGroupInfo: (String) -> Unit,
+    onTopics: (String) -> Unit = {},
     onOpenAlert: (MessengerMessage) -> Unit = {}
 ) {
     val messages by viewModel.repository.messages(chatId).collectAsStateWithLifecycle(emptyList())
@@ -130,10 +133,26 @@ fun MessengerChatScreen(
         containerColor = Sand,
         topBar = {
             TopAppBar(
-                title = { Text(title.ifBlank { MessengerRu.title }, color = Forest) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (avatarUrl.isNotBlank() && !alertsChat) {
+                            MessengerAvatar(
+                                avatarUrl = avatarUrl,
+                                title = title,
+                                size = 34.dp,
+                                viewModel = viewModel
+                            )
+                            Spacer(Modifier.size(10.dp))
+                        }
+                        Text(title.ifBlank { MessengerRu.title }, color = Forest)
+                    }
+                },
                 navigationIcon = { AppNavIcon(onBack = onBack) },
                 actions = {
                     if (groupId.isNotBlank() && !alertsChat) {
+                        IconButton(onClick = { onTopics(groupId) }) {
+                            Icon(Icons.Outlined.MenuBook, MessengerRu.topicsOpen, tint = Forest)
+                        }
                         IconButton(onClick = { onGroupInfo(groupId) }) {
                             Icon(Icons.Outlined.Info, MessengerRu.members, tint = Forest)
                         }

@@ -37,6 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import ru.na.step4.obidy.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -102,7 +107,17 @@ fun SupportInboxScreen(repository: SupportRepository) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(SupportRu.inbox, color = Forest, style = MaterialTheme.typography.titleLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(R.drawable.ic_app_avatar),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+            )
+            Spacer(Modifier.size(10.dp))
+            Text(SupportRu.inbox, color = Forest, style = MaterialTheme.typography.titleLarge)
+        }
         if (!notice.isNullOrBlank()) {
             Text(notice.orEmpty(), color = Amber)
         }

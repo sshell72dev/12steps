@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.QrCodeScanner
@@ -35,6 +36,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import ru.na.step4.obidy.R
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -63,6 +67,7 @@ fun MessengerHubScreen(
     onMyQr: () -> Unit,
     onScan: () -> Unit,
     onNewGroup: () -> Unit,
+    onProfile: () -> Unit,
     onJoinChallenge: (String) -> Unit
 ) {
     val chats by viewModel.chats.collectAsStateWithLifecycle()
@@ -79,6 +84,9 @@ fun MessengerHubScreen(
                 title = { Text(MessengerRu.title, color = Forest) },
                 navigationIcon = { AppNavIcon(onBack = onBack) },
                 actions = {
+                    IconButton(onClick = onProfile) {
+                        Icon(Icons.Outlined.AccountCircle, MessengerRu.profileTitle, tint = Forest)
+                    }
                     IconButton(onClick = onMyQr) {
                         Icon(Icons.Outlined.QrCode, MessengerRu.myQr, tint = Forest)
                     }
@@ -130,7 +138,7 @@ fun MessengerHubScreen(
                         }
                     }
                     items(chats, key = { it.id }) { chat ->
-                        ChatRow(chat = chat, onClick = { onOpenChat(chat) })
+                        ChatRow(chat = chat, viewModel = viewModel, onClick = { onOpenChat(chat) })
                     }
                     item { Spacer(Modifier.height(72.dp)) }
                 }
@@ -175,8 +183,7 @@ private fun ChallengeJoinCard(
 }
 
 @Composable
-private fun ChatRow(chat: MessengerChat, onClick: () -> Unit) {
-    val letter = chat.title.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "#"
+private fun ChatRow(chat: MessengerChat, viewModel: MessengerViewModel, onClick: () -> Unit) {
     val preview = if (chat.lastKind == "voice" && chat.lastBody.isBlank()) {
         MessengerRu.voiceMessage
     } else {
@@ -189,14 +196,21 @@ private fun ChatRow(chat: MessengerChat, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(Forest),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(letter, color = Sand, style = MaterialTheme.typography.titleMedium)
+        if (chat.isService) {
+            Image(
+                painter = painterResource(R.drawable.ic_app_avatar),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+            )
+        } else {
+            MessengerAvatar(
+                avatarUrl = chat.avatarUrl,
+                title = chat.title,
+                size = 48.dp,
+                viewModel = viewModel
+            )
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(

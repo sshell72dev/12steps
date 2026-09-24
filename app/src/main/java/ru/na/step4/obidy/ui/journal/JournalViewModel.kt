@@ -178,10 +178,6 @@ class JournalViewModel(
     }
 
     fun togglePickChapter(id: Int) {
-        if (_pickAllChapters.value) {
-            _chapterShowsAllPoints.update { if (id in it) it - id else it + id }
-            return
-        }
         val currentChapterId = state.value.path?.chapter?.id
         if (_expandedChapter.value == id) {
             if (id == currentChapterId && id !in _chapterShowsAllPoints.value) {
@@ -197,9 +193,6 @@ class JournalViewModel(
     }
 
     fun visiblePickPoints(chapter: TreeNode): List<TreeNode> {
-        if (_pickAllChapters.value && _expandedStep.value == chapter.parentId) {
-            return chapter.children
-        }
         val path = state.value.path ?: return chapter.children
         if (chapter.id != path.chapter?.id) return chapter.children
         val point = path.point ?: return chapter.children
@@ -511,12 +504,12 @@ class JournalViewModel(
                     program = currentProgram(),
                     premium = premiumActive(),
                     admin = prefs.isAdmin,
-                    maxTokens = 2000
+                    maxTokens = 4000
                 )
             }
             when (result) {
                 is JournalAiClient.Result.Ok -> {
-                    val text = result.text.trim().take(1000)
+                    val text = result.text.trim()
                     prefs.personality = text
                     prefs.personalityFormattedOn = localDayKey()
                     _meta.update {
@@ -606,7 +599,8 @@ class JournalViewModel(
                     role = "journal.help_entry",
                     program = program,
                     premium = premiumActive(),
-                    admin = prefs.isAdmin
+                    admin = prefs.isAdmin,
+                    questionnaire = questionnaire
                 )
             }
             log.aiDone(key, path.current.displayTitle())
@@ -653,6 +647,15 @@ class JournalViewModel(
             } else {
                 JournalPrompts.adviceUser(path, program, lengthKey)
             }
+            // «Литература к вопросу» идёт без анкеты, «Рекомендации для тебя» — с анкетой.
+            val questionnaire = if (literature) {
+                null
+            } else {
+                LifeBoardPrompts.merge(
+                    JournalPrompts.formatQuestionnaire(prefs.profile),
+                    (app as Step4App).lifeBoard.goalsPromptBlock()
+                )
+            }
             val result = withContext(Dispatchers.IO) {
                 JournalAiClient.chat(
                     user = user,
@@ -660,7 +663,8 @@ class JournalViewModel(
                     program = program,
                     premium = premiumActive(),
                     admin = prefs.isAdmin,
-                    maxTokens = JournalPrompts.lengthMaxTokens(lengthKey)
+                    maxTokens = JournalPrompts.lengthMaxTokens(lengthKey),
+                    questionnaire = questionnaire
                 )
             }
             log.aiDone(key, path.current.displayTitle())
@@ -730,7 +734,8 @@ class JournalViewModel(
                     role = "journal.analyze",
                     program = program,
                     premium = premiumActive(),
-                    admin = prefs.isAdmin
+                    admin = prefs.isAdmin,
+                    questionnaire = questionnaire
                 )
             }
             log.aiDone(key, path.current.displayTitle())

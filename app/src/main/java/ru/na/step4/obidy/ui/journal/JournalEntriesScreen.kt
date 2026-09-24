@@ -159,8 +159,6 @@ private fun EntryCard(
         Spacer(Modifier.height(6.dp))
         Text(
             remember(entry.text) { journalEntryAnnotated(entry.text) },
-            maxLines = 5,
-            overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

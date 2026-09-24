@@ -4,6 +4,7 @@ import os
 import ssl
 import subprocess
 import sys
+import time
 from ftplib import FTP, FTP_TLS, error_perm
 from pathlib import Path
 
@@ -33,28 +34,43 @@ def load_env() -> None:
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
+def flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def connect(host: str, user: str, password: str):
+    """Подключение к хостингу.
+
+    Переменные окружения для обхода проблем с data-каналом:
+    - FTP_PLAIN=1  — сразу обычный FTP без TLS (иногда data-канал рвёт именно TLS);
+    - FTP_ACTIVE=1 — активный режим вместо пассивного (если pasv-порты блокируются).
+    """
+    passive = not flag("FTP_ACTIVE")
     errors = []
-    try:
-        ftp = FTP_TLS()
-        # Сервер в ответе на PASV отдаёт адрес, недоступный снаружи (мы за NAT),
-        # поэтому для data-канала берём тот же адрес, что и для control-соединения.
-        ftp.trust_server_pasv_ipv4_address = True
-        ftp.connect(host, 21, timeout=25)
-        ftp.auth()
-        ftp.prot_p()
-        ftp.login(user, password)
-        ftp.set_pasv(True)
-        return ftp, f"ftpes://{host}"
-    except Exception as exc:
-        errors.append(f"FTPES {host}: {exc}")
+    if not flag("FTP_PLAIN"):
+        try:
+            ftp = FTP_TLS()
+            # Сервер в ответе на PASV может отдавать адрес, недоступный снаружи (мы за NAT),
+            # поэтому для data-канала берём тот же адрес, что и для control-соединения.
+            # False — для data-канала берём адрес control-соединения, а не тот,
+            # что сервер отдал в PASV (он бывает недоступен снаружи, мы за NAT).
+            # С True подключение к data-порту падало с WinError 10060.
+            ftp.trust_server_pasv_ipv4_address = False
+            ftp.connect(host, 21, timeout=25)
+            ftp.auth()
+            ftp.prot_p()
+            ftp.login(user, password)
+            ftp.set_pasv(passive)
+            return ftp, f"ftpes://{host}" + ("" if passive else " (active)")
+        except Exception as exc:
+            errors.append(f"FTPES {host}: {exc}")
     try:
         ftp = FTP()
-        ftp.trust_server_pasv_ipv4_address = True
+        ftp.trust_server_pasv_ipv4_address = False
         ftp.connect(host, 21, timeout=25)
         ftp.login(user, password)
-        ftp.set_pasv(True)
-        return ftp, f"ftp://{host}"
+        ftp.set_pasv(passive)
+        return ftp, f"ftp://{host}" + ("" if passive else " (active)")
     except Exception as exc:
         errors.append(f"FTP {host}: {exc}")
     raise RuntimeError(" | ".join(errors))

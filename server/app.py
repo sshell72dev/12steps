@@ -654,9 +654,9 @@ def api_analyze():
         language=language,
         review_length=review_length,
     )
-    system = roles.system_for_chat("analysis.review") or SYSTEM_PROMPT
+    system = roles.system_for_chat("analysis.review", "", psych.anketa_block(payload)) or SYSTEM_PROMPT
     collect = bool(payload.get("collect_personality"))
-    max_tokens = {"short": 1400, "standard": 2200, "long": 6000}[review_length]
+    max_tokens = {"short": 4000, "standard": 6000, "long": 8192}[review_length]
     if collect:
         max_tokens += 1300
     try:
@@ -711,7 +711,8 @@ def api_psych():
 
     try:
         user_prompt = psych.build_prompt(kind, payload)
-        system = psych.system_for(kind)
+        anketa = psych.anketa_block(payload)
+        system = psych.system_for(kind, anketa)
     except ValueError:
         return jsonify({"error": "kind_required"}), 400
 
@@ -721,13 +722,13 @@ def api_psych():
         "questions_next",
         "dialogue_question",
     }
-    max_tokens = 400 if kind in {"reminder_outreach", "tts_understanding"} else 1800
+    max_tokens = 800 if kind in {"reminder_outreach", "tts_understanding"} else 6000
     if kind in {"analyze", "recommend", "assistant"}:
         profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
         collect = bool(profile.get("my_personality_collect_enabled"))
-        max_tokens = 4000 if collect else 3200
+        max_tokens = 8192 + (1300 if collect else 0)
     if json_mode:
-        max_tokens = 900
+        max_tokens = 4000
     timeout = 60 if kind in {"reminder_outreach", "tts_understanding"} else 90
     if kind in {"analyze", "recommend", "assistant"}:
         timeout = 180
@@ -755,10 +756,13 @@ def api_psych():
                 api_key,
                 model,
                 [
-                    {"role": "system", "content": psych.system_for("questions_retry")},
+                    {
+                        "role": "system",
+                        "content": psych.system_for("questions_retry", anketa),
+                    },
                     {"role": "user", "content": retry_prompt},
                 ],
-                max_tokens=900,
+                max_tokens=4000,
                 timeout=timeout,
                 thinking=False,
             )
@@ -806,7 +810,7 @@ def api_translate():
                 {"role": "system", "content": roles.prompt_text("translate.ui") or translate.SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            max_tokens=min(8000, 200 + sum(len(i["text"]) for i in items) * 3),
+            max_tokens=min(8192, 200 + sum(len(i["text"]) for i in items) * 3),
             timeout=180,
             thinking=False,
         )
@@ -836,7 +840,8 @@ def api_chat():
         max_tokens = int(payload.get("max_tokens") or 4000)
     except (TypeError, ValueError):
         max_tokens = 4000
-    max_tokens = max(256, min(max_tokens, 8000))
+    # Верхнего потолка нет: ответ не должен обрываться на середине мысли.
+    max_tokens = max(256, max_tokens)
 
     api_key = db.get_setting("deepseek_api_key", "")
     model = _model_for_user(_payload_premium(payload))
@@ -844,7 +849,7 @@ def api_chat():
         return jsonify({"error": "not_configured"}), 503
 
     if role:
-        resolved = roles.system_for_chat(role, program)
+        resolved = roles.system_for_chat(role, program, psych.anketa_block(payload))
         if not resolved:
             return jsonify({"error": "role_unknown"}), 400
         system = resolved

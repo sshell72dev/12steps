@@ -22,15 +22,15 @@ enum class AiLength(val key: String) {
     }
 
     fun instruction(): String = when (this) {
-        SHORT -> "Объём ответа: короткий — до 150 слов, только суть, без вступлений и повторов."
-        STANDARD -> "Объём ответа: стандарт — до 350 слов, по пунктам, без воды."
-        LONG -> "Объём ответа: длинный — до 700 слов, подробно по каждому пункту."
+        SHORT -> "Объём ответа: короткий — только суть, без вступлений и повторов. Ответ доведи до конца, не обрывай мысль."
+        STANDARD -> "Объём ответа: стандарт — по пунктам, без воды. Ответ доведи до конца, не обрывай мысль."
+        LONG -> "Объём ответа: длинный — подробно по каждому пункту. Ответ доведи до конца, ничего не пропускай."
     }
 
     fun maxTokens(): Int = when (this) {
-        SHORT -> 2400
-        STANDARD -> 4500
-        LONG -> 8000
+        SHORT -> 4000
+        STANDARD -> 6000
+        LONG -> 8192
     }
 
     companion object {
@@ -52,16 +52,20 @@ object JournalAiClient {
         language: String = ru.na.step4.obidy.data.i18n.I18n.languageCode(),
         premium: Boolean = false,
         admin: Boolean = false,
-        maxTokens: Int = 4000
+        maxTokens: Int = 4000,
+        questionnaire: String? = null
     ): Result {
         val payload = JSONObject()
             .put("role", role)
             .put("program", program)
             .put("user", user)
             .put("language", language)
-            .put("max_tokens", maxTokens.coerceIn(256, 8000))
+            .put("max_tokens", maxTokens.coerceAtLeast(256))
             .put("premium", premium)
             .put("admin", admin)
+            .apply {
+                questionnaire?.trim()?.takeIf { it.isNotEmpty() }?.let { put("questionnaire", it) }
+            }
         return when (val raw = AiHttp.post("/api/v1/chat", payload, readTimeoutMs = 180_000)) {
             is AiHttp.Result.Err -> Result.Err(raw.message)
             is AiHttp.Result.Ok -> parse(raw.code, raw.body)

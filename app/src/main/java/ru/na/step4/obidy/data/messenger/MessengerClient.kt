@@ -106,6 +106,19 @@ class MessengerClient(private val messengerId: () -> String) {
         ) { }
     }
 
+    fun editMessage(messageId: Long, body: String): MessengerResult<MessengerMessage> {
+        val payload = JSONObject().put("body", body)
+        return map(
+            MessengerHttp.post("/api/v1/messenger/messages/$messageId/edit", messengerId(), payload)
+        ) { obj -> parseMessage(obj.optJSONObject("message")) }
+    }
+
+    fun deleteMessage(messageId: Long): MessengerResult<MessengerMessage> {
+        return map(
+            MessengerHttp.delete("/api/v1/messenger/messages/$messageId", messengerId())
+        ) { obj -> parseMessage(obj.optJSONObject("message")) }
+    }
+
     fun createGroup(name: String, userIds: List<String>): MessengerResult<MessengerJoinResult> {
         val ids = JSONArray()
         userIds.forEach { ids.put(it) }
@@ -149,7 +162,7 @@ class MessengerClient(private val messengerId: () -> String) {
             if (arr != null) {
                 for (i in 0 until arr.length()) {
                     val row = arr.optJSONObject(i) ?: continue
-                    members += MessengerContact(row.optString("id"), row.optString("display_name"))
+                    members += parseContact(row)
                 }
             }
             MessengerGroupInfo(
@@ -157,6 +170,8 @@ class MessengerClient(private val messengerId: () -> String) {
                 name = g.optString("name"),
                 ownerId = g.optString("owner_id"),
                 isOwner = g.optBoolean("is_owner"),
+                canManage = g.optBoolean("can_manage"),
+                avatarUrl = g.optString("avatar_url"),
                 members = members,
                 token = obj.optString("token"),
                 chatId = obj.optString("chat_id")
@@ -176,6 +191,95 @@ class MessengerClient(private val messengerId: () -> String) {
                 for (i in 0 until arr.length()) add(arr.optString(i))
             }
         }
+    }
+
+    fun uploadMyAvatar(file: File, mimeType: String): MessengerResult<MessengerUser> {
+        return map(
+            MessengerHttp.postFile(
+                path = "/api/v1/messenger/me/avatar",
+                messengerId = messengerId(),
+                file = file,
+                fieldName = "file",
+                fileName = "avatar",
+                mimeType = mimeType
+            )
+        ) { obj -> parseUser(obj.optJSONObject("user")) }
+    }
+
+    fun deleteMyAvatar(): MessengerResult<Unit> {
+        return map(MessengerHttp.delete("/api/v1/messenger/me/avatar", messengerId())) { }
+    }
+
+    fun uploadGroupAvatar(groupId: String, file: File, mimeType: String): MessengerResult<String> {
+        return map(
+            MessengerHttp.postFile(
+                path = "/api/v1/messenger/groups/$groupId/avatar",
+                messengerId = messengerId(),
+                file = file,
+                fieldName = "file",
+                fileName = "avatar",
+                mimeType = mimeType
+            )
+        ) { obj -> obj.optString("avatar_url") }
+    }
+
+    fun deleteGroupAvatar(groupId: String): MessengerResult<Unit> {
+        return map(
+            MessengerHttp.delete("/api/v1/messenger/groups/$groupId/avatar", messengerId())
+        ) { }
+    }
+
+    fun renameGroup(groupId: String, name: String): MessengerResult<String> {
+        val payload = JSONObject().put("name", name)
+        return map(MessengerHttp.post("/api/v1/messenger/groups/$groupId", messengerId(), payload)) { obj ->
+            obj.optJSONObject("group")?.optString("name").orEmpty().ifBlank { name }
+        }
+    }
+
+    fun deleteGroup(groupId: String): MessengerResult<Unit> {
+        return map(MessengerHttp.delete("/api/v1/messenger/groups/$groupId", messengerId())) { }
+    }
+
+    fun removeMember(groupId: String, userId: String): MessengerResult<Unit> {
+        return map(
+            MessengerHttp.delete("/api/v1/messenger/groups/$groupId/members/$userId", messengerId())
+        ) { }
+    }
+
+    fun topics(groupId: String): MessengerResult<List<MessengerTopic>> {
+        return map(
+            MessengerHttp.get("/api/v1/messenger/groups/$groupId/topics", messengerId())
+        ) { obj -> parseTopics(obj.optJSONArray("topics")) }
+    }
+
+    fun createTopic(groupId: String, name: String): MessengerResult<MessengerTopic> {
+        val payload = JSONObject().put("name", name)
+        return map(
+            MessengerHttp.post("/api/v1/messenger/groups/$groupId/topics", messengerId(), payload)
+        ) { obj -> parseTopic(obj.optJSONObject("topic")) }
+    }
+
+    fun renameTopic(groupId: String, topicId: String, name: String): MessengerResult<String> {
+        val payload = JSONObject().put("name", name)
+        return map(
+            MessengerHttp.post(
+                "/api/v1/messenger/groups/$groupId/topics/$topicId",
+                messengerId(),
+                payload
+            )
+        ) { obj ->
+            obj.optJSONObject("topic")?.optString("name").orEmpty().ifBlank { name }
+        }
+    }
+
+    fun deleteTopic(groupId: String, topicId: String): MessengerResult<Unit> {
+        return map(
+            MessengerHttp.delete("/api/v1/messenger/groups/$groupId/topics/$topicId", messengerId())
+        ) { }
+    }
+
+    fun imageBytes(url: String): MessengerResult<ByteArray> {
+        return MessengerHttp.getBytes(url, messengerId())
     }
 
     fun downloadVoice(messageId: Long): MessengerResult<ByteArray> {
@@ -206,6 +310,13 @@ class MessengerClient(private val messengerId: () -> String) {
             "disabled" -> MessengerRu.disabledTitle
             "self_invite" -> MessengerRu.selfInvite
             "invite_not_found", "bad_token" -> MessengerRu.badQr
+            "file_too_large" -> MessengerRu.photoTooLarge
+            "bad_image" -> MessengerRu.photoBadFormat
+            "challenge_locked" -> MessengerRu.groupLocked
+            "owner_immutable" -> MessengerRu.ownerImmutable
+            "topic_not_found" -> MessengerRu.topicNotFound
+            "name_required" -> MessengerRu.nameRequired
+            "forbidden" -> MessengerRu.noRights
             else -> MessengerRu.error
         }
     }
@@ -231,7 +342,11 @@ class MessengerClient(private val messengerId: () -> String) {
 
     private fun parseUser(obj: JSONObject?): MessengerUser {
         val row = obj ?: return MessengerUser()
-        return MessengerUser(row.optString("id"), row.optString("display_name"))
+        return MessengerUser(
+            id = row.optString("id"),
+            displayName = row.optString("display_name"),
+            avatarUrl = row.optString("avatar_url")
+        )
     }
 
     private fun parseContacts(arr: JSONArray?): List<MessengerContact> {
@@ -239,9 +354,38 @@ class MessengerClient(private val messengerId: () -> String) {
         return buildList {
             for (i in 0 until arr.length()) {
                 val row = arr.optJSONObject(i) ?: continue
-                add(MessengerContact(row.optString("id"), row.optString("display_name")))
+                add(parseContact(row))
             }
         }
+    }
+
+    private fun parseContact(row: JSONObject) = MessengerContact(
+        id = row.optString("id"),
+        displayName = row.optString("display_name"),
+        avatarUrl = row.optString("avatar_url")
+    )
+
+    private fun parseTopics(arr: JSONArray?): List<MessengerTopic> {
+        if (arr == null) return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                add(parseTopic(arr.optJSONObject(i)))
+            }
+        }
+    }
+
+    private fun parseTopic(obj: JSONObject?): MessengerTopic {
+        val row = obj ?: JSONObject()
+        return MessengerTopic(
+            id = row.optString("id"),
+            name = row.optString("name"),
+            chatId = row.optString("chat_id"),
+            isGeneral = row.optBoolean("is_default"),
+            unread = row.optInt("unread"),
+            lastBody = row.optString("last_body"),
+            lastKind = row.optString("last_kind"),
+            lastAt = row.optLong("last_at")
+        )
     }
 
     private fun parseChats(arr: JSONArray?): List<MessengerChat> {
@@ -256,6 +400,7 @@ class MessengerClient(private val messengerId: () -> String) {
                         title = row.optString("title"),
                         peerId = row.optString("peer_id"),
                         groupId = row.optString("group_id"),
+                        avatarUrl = row.optString("avatar_url"),
                         isOwner = row.optBoolean("is_owner"),
                         lastBody = row.optString("last_body"),
                         lastKind = row.optString("last_kind"),
@@ -288,7 +433,9 @@ class MessengerClient(private val messengerId: () -> String) {
             body = row.optString("body"),
             voiceDurationMs = row.optInt("voice_duration_ms"),
             createdAt = row.optLong("created_at"),
-            mine = row.optBoolean("mine")
+            mine = row.optBoolean("mine"),
+            editedAt = row.optLong("edited_at"),
+            deleted = row.optBoolean("deleted")
         )
     }
 }

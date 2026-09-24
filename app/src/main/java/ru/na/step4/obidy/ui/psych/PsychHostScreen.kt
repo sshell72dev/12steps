@@ -72,6 +72,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.CircleShape
+import ru.na.step4.obidy.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -158,17 +162,27 @@ fun PsychHostScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            PsychRu.eyebrow,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Amber
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_app_avatar),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
                         )
-                        Text(
-                            Ru.sectionPsych,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Forest
-                        )
+                        Spacer(Modifier.size(10.dp))
+                        Column {
+                            Text(
+                                PsychRu.eyebrow,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Amber
+                            )
+                            Text(
+                                Ru.sectionPsych,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Forest
+                            )
+                        }
                     }
                 },
                 navigationIcon = { AppNavIcon(onBack = onBack) },
@@ -493,10 +507,8 @@ private fun DialogueBody(
         showField = questionReady && !waitingNext,
         header = {
             CollapsedRecordBlock(page.situation.text, forceCollapsed = waitingNext)
-            if (!composing) {
-                page.answers.forEach { qa ->
-                    QaCard(qa)
-                }
+            page.answers.forEach { qa ->
+                CollapsedQaCard(qa)
             }
             if (vm.isAdmin && page.prompt.isNotBlank() && !composing) {
                 ru.na.step4.obidy.ui.components.AdminPromptBlock(
@@ -1627,6 +1639,59 @@ private fun ReadableText(text: String) {
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollapsedQaCard(qa: PsychQa) {
+    var open by remember(qa.question) { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SandDeep.copy(alpha = 0.72f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                qa.question,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { open = !open }
+                    .padding(start = 12.dp, top = 12.dp, bottom = 12.dp),
+                style = MaterialTheme.typography.titleSmall,
+                color = Forest,
+                maxLines = if (open) Int.MAX_VALUE else 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            SpeakIconButton(text = qa.question, tint = Forest)
+            Icon(
+                imageVector = if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = Forest,
+                modifier = Modifier
+                    .clickable { open = !open }
+                    .padding(8.dp)
+            )
+        }
+        if (open) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    qa.answer,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SpeakIconButton(text = qa.answer, tint = Forest)
             }
         }
     }

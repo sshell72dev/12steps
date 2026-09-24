@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "chats")
@@ -15,6 +16,7 @@ data class MessengerChatRow(
     val title: String,
     val peerId: String,
     val groupId: String,
+    val avatarUrl: String,
     val isOwner: Boolean,
     val lastBody: String,
     val lastKind: String,
@@ -32,7 +34,9 @@ data class MessengerMessageRow(
     val body: String,
     val voiceDurationMs: Int,
     val createdAt: Long,
-    val mine: Boolean
+    val mine: Boolean,
+    val editedAt: Long = 0L,
+    val deleted: Boolean = false
 )
 
 @Entity(tableName = "contacts")
@@ -63,6 +67,16 @@ interface MessengerDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertMessages(rows: List<MessengerMessageRow>)
+
+    @Query("DELETE FROM messages WHERE chatId = :chatId")
+    suspend fun clearMessages(chatId: String)
+
+    /** Заменяет ленту чата целиком: так доходят правки и удаления сообщений. */
+    @Transaction
+    suspend fun replaceMessages(chatId: String, rows: List<MessengerMessageRow>) {
+        clearMessages(chatId)
+        upsertMessages(rows)
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertContacts(rows: List<MessengerContactRow>)

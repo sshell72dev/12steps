@@ -113,20 +113,14 @@ fun JournalCard(
 @Composable
 fun DescriptionBlock(text: String, initiallyExpanded: Boolean = false) {
     if (text.isBlank()) return
-    var expanded by remember(text) { mutableStateOf(initiallyExpanded || text.length < 420) }
-    val shown = if (expanded) text else text.take(360).trimEnd() + "…"
+    // Текст выводится целиком: ответы ИИ не сворачиваются и не обрезаются.
     Column {
-        SpeakableText(if (expanded) text else shown) {
-        Text(
-            shown,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        }
-        if (text.length >= 420) {
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) JournalRu.readLess else JournalRu.readMore, color = Forest)
-            }
+        SpeakableText(text) {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

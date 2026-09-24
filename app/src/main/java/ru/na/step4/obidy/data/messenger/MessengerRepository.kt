@@ -1,7 +1,9 @@
 package ru.na.step4.obidy.data.messenger
 
 import android.content.Context
+import android.net.Uri
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,6 +34,19 @@ class MessengerRepository(
 
     private val _displayName = MutableStateFlow(prefs.displayName)
     val displayName: StateFlow<String> = _displayName.asStateFlow()
+
+    private val _myAvatarUrl = MutableStateFlow("")
+    val myAvatarUrl: StateFlow<String> = _myAvatarUrl.asStateFlow()
+
+    private val avatarMemory = ConcurrentHashMap<String, ByteArray>()
+
+    private val _groupRefresh = MutableStateFlow(0)
+
+    /** Меняется после правок группы и фото, чтобы экран группы перечитал данные. */
+    val groupRefresh: StateFlow<Int> = _groupRefresh.asStateFlow()
+
+    /** Идентификатор профиля в мессенджере: по нему сервер отличает владельца группы. */
+    val myId: String get() = prefs.messengerId
 
     private val _pairToken = MutableStateFlow("")
     val pairToken: StateFlow<String> = _pairToken.asStateFlow()
@@ -97,6 +112,7 @@ class MessengerRepository(
             is MessengerResult.Ok -> {
                 prefs.displayName = result.value.first.displayName.ifBlank { name }
                 _displayName.value = prefs.displayName
+                _myAvatarUrl.value = result.value.first.avatarUrl
                 _pairToken.value = result.value.second
                 true
             }
@@ -184,11 +200,12 @@ class MessengerRepository(
             markAlertsRead()
             return@withContext
         }
-        val after = dao.lastMessageId(chatId)
-        when (val result = client.messages(chatId, after)) {
+        when (val result = client.messages(chatId, 0)) {
             is MessengerResult.Ok -> {
+                // Полная сверка ленты: так приходят и новые сообщения,
+                // и правки, и удаления.
+                dao.replaceMessages(chatId, result.value.map { it.toRow() })
                 if (result.value.isNotEmpty()) {
-                    dao.upsertMessages(result.value.map { it.toRow() })
                     client.markRead(chatId, result.value.maxOf { it.id })
                 }
             }
@@ -221,6 +238,42 @@ class MessengerRepository(
             is MessengerResult.Ok -> {
                 dao.upsertMessages(listOf(result.value.toRow()))
                 file.delete()
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun editMessage(messageId: Long, body: String): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.editMessage(messageId, body)) {
+            is MessengerResult.Ok -> {
+                dao.upsertMessages(listOf(result.value.toRow()))
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun deleteMessage(messageId: Long): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.deleteMessage(messageId)) {
+            is MessengerResult.Ok -> {
+                dao.upsertMessages(listOf(result.value.toRow()))
                 refreshChats()
                 true
             }
@@ -311,6 +364,255 @@ class MessengerRepository(
         }
     }
 
+    suspend fun refreshProfile(): MessengerUser? = withContext(Dispatchers.IO) {
+        when (val result = client.me()) {
+            is MessengerResult.Ok -> {
+                _myAvatarUrl.value = result.value.first.avatarUrl
+                _pairToken.value = result.value.second
+                result.value.first
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                null
+            }
+            is MessengerResult.Err -> null
+        }
+    }
+
+    suspend fun avatarBytes(url: String): ByteArray? = withContext(Dispatchers.IO) {
+        val key = url.trim()
+        if (key.isBlank()) return@withContext null
+        avatarMemory[key]?.let { return@withContext it }
+        val cached = avatarCacheFile(key)
+        if (cached.isFile && cached.length() > 0) {
+            val bytes = runCatching { cached.readBytes() }.getOrNull()
+            if (bytes != null && bytes.isNotEmpty()) {
+                avatarMemory[key] = bytes
+                return@withContext bytes
+            }
+        }
+        when (val result = client.imageBytes(key)) {
+            is MessengerResult.Ok -> {
+                avatarMemory[key] = result.value
+                runCatching { cached.writeBytes(result.value) }
+                result.value
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                null
+            }
+            is MessengerResult.Err -> null
+        }
+    }
+
+    private fun avatarCacheFile(url: String): File {
+        val dir = File(appContext.cacheDir, "messenger_avatars").apply { mkdirs() }
+        return File(dir, "a_${Integer.toHexString(url.hashCode())}.img")
+    }
+
+    suspend fun uploadMyAvatar(uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        val file = MessengerImage.prepare(appContext, uri)
+        if (file == null) {
+            _error.value = MessengerRu.photoBadFormat
+            return@withContext false
+        }
+        val result = client.uploadMyAvatar(file, MessengerImage.mimeType)
+        file.delete()
+        when (result) {
+            is MessengerResult.Ok -> {
+                _myAvatarUrl.value = result.value.avatarUrl
+                refreshChats()
+                refreshContacts()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun deleteMyAvatar(): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.deleteMyAvatar()) {
+            is MessengerResult.Ok -> {
+                _myAvatarUrl.value = ""
+                refreshChats()
+                refreshContacts()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun renameGroup(groupId: String, name: String): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.renameGroup(groupId, name)) {
+            is MessengerResult.Ok -> {
+                _groupRefresh.value = _groupRefresh.value + 1
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun deleteGroup(groupId: String): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.deleteGroup(groupId)) {
+            is MessengerResult.Ok -> {
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun removeMember(groupId: String, userId: String): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.removeMember(groupId, userId)) {
+            is MessengerResult.Ok -> {
+                _groupRefresh.value = _groupRefresh.value + 1
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun loadTopics(groupId: String): List<MessengerTopic> = withContext(Dispatchers.IO) {
+        when (val result = client.topics(groupId)) {
+            is MessengerResult.Ok -> result.value
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                emptyList()
+            }
+            is MessengerResult.Err -> emptyList()
+        }
+    }
+
+    suspend fun createTopic(groupId: String, name: String): MessengerTopic? = withContext(Dispatchers.IO) {
+        when (val result = client.createTopic(groupId, name)) {
+            is MessengerResult.Ok -> {
+                _groupRefresh.value = _groupRefresh.value + 1
+                result.value
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                null
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                null
+            }
+        }
+    }
+
+    suspend fun renameTopic(groupId: String, topicId: String, name: String): Boolean =
+        withContext(Dispatchers.IO) {
+            when (val result = client.renameTopic(groupId, topicId, name)) {
+                is MessengerResult.Ok -> {
+                    _groupRefresh.value = _groupRefresh.value + 1
+                    true
+                }
+                is MessengerResult.Disabled -> {
+                    applyEnabled(false)
+                    false
+                }
+                is MessengerResult.Err -> {
+                    _error.value = result.message.ifBlank { MessengerRu.error }
+                    false
+                }
+            }
+        }
+
+    suspend fun deleteTopic(groupId: String, topicId: String): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.deleteTopic(groupId, topicId)) {
+            is MessengerResult.Ok -> {
+                _groupRefresh.value = _groupRefresh.value + 1
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun uploadGroupAvatar(groupId: String, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        val file = MessengerImage.prepare(appContext, uri)
+        if (file == null) {
+            _error.value = MessengerRu.photoBadFormat
+            return@withContext false
+        }
+        val result = client.uploadGroupAvatar(groupId, file, MessengerImage.mimeType)
+        file.delete()
+        when (result) {
+            is MessengerResult.Ok -> {
+                _groupRefresh.value = _groupRefresh.value + 1
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun deleteGroupAvatar(groupId: String): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.deleteGroupAvatar(groupId)) {
+            is MessengerResult.Ok -> {
+                _groupRefresh.value = _groupRefresh.value + 1
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
     suspend fun rotateGroupToken(groupId: String): String? = withContext(Dispatchers.IO) {
         when (val result = client.groupInvite(groupId, rotate = true)) {
             is MessengerResult.Ok -> result.value
@@ -359,6 +661,7 @@ class MessengerRepository(
                         title = title,
                         peerId = "",
                         groupId = "",
+                        avatarUrl = "",
                         isOwner = false,
                         lastBody = "",
                         lastKind = "text",
@@ -428,6 +731,7 @@ class MessengerRepository(
         title = title,
         peerId = peerId,
         groupId = groupId,
+        avatarUrl = avatarUrl,
         isOwner = isOwner,
         lastBody = lastBody,
         lastKind = lastKind,
@@ -441,6 +745,7 @@ class MessengerRepository(
         title = title,
         peerId = peerId,
         groupId = groupId,
+        avatarUrl = avatarUrl,
         isOwner = isOwner,
         lastBody = lastBody,
         lastKind = lastKind,
@@ -457,7 +762,9 @@ class MessengerRepository(
         body = body,
         voiceDurationMs = voiceDurationMs,
         createdAt = createdAt,
-        mine = mine
+        mine = mine,
+        editedAt = editedAt,
+        deleted = deleted
     )
 
     private fun MessengerMessageRow.toMessage() = MessengerMessage(
@@ -469,6 +776,8 @@ class MessengerRepository(
         body = body,
         voiceDurationMs = voiceDurationMs,
         createdAt = createdAt,
-        mine = mine
+        mine = mine,
+        editedAt = editedAt,
+        deleted = deleted
     )
 }

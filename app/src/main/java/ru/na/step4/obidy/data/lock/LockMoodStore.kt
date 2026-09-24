@@ -66,7 +66,7 @@ class LockMoodStore(context: Context) {
             .put("role", "lock.quote")
             .put("user", USER_PROMPT)
             .put("language", ru.na.step4.obidy.data.i18n.I18n.languageCode())
-            .put("max_tokens", 220)
+            .put("max_tokens", 700)
         return when (val raw = AiHttp.post("/api/v1/chat", payload, readTimeoutMs = 20_000)) {
             is AiHttp.Result.Err -> null
             is AiHttp.Result.Ok -> {
