@@ -68,18 +68,18 @@ object JournalAiClient {
             }
         return when (val raw = AiHttp.post("/api/v1/chat", payload, readTimeoutMs = 180_000)) {
             is AiHttp.Result.Err -> Result.Err(raw.message)
-            is AiHttp.Result.Ok -> parse(raw.code, raw.body)
+            is AiHttp.Result.Ok -> parse(raw.code, raw.body, admin)
         }
     }
 
-    private fun parse(code: Int, raw: String): Result {
+    private fun parse(code: Int, raw: String, admin: Boolean): Result {
         val obj = AiHttp.parseObject(raw)
         if (code in 200..299) {
             val text = obj.optString("text").trim()
             val prompt = obj.optString("prompt").trim()
             return if (text.isBlank()) Result.Err(JournalRu.aiError) else Result.Ok(text, prompt)
         }
-        return Result.Err(AiHttp.errorMessage(obj, JournalRu.aiError))
+        return Result.Err(AiHttp.errorMessage(obj, JournalRu.aiError, raw, admin))
     }
 }
 

@@ -21,6 +21,7 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import config
@@ -53,6 +54,15 @@ try:
 except Exception:
     # Schema is created on first successful DB call from a request.
     pass
+
+
+@app.errorhandler(Exception)
+def _unhandled_error(exc):
+    """Необработанный сбой: отдаём JSON с причиной, чтобы приложение показало её пользователю."""
+    if isinstance(exc, HTTPException):
+        return exc
+    app.logger.exception("Unhandled error on %s", request.path)
+    return jsonify({"error": "server", "detail": f"{type(exc).__name__}: {exc}"}), 500
 
 
 def login_required(view):

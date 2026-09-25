@@ -916,6 +916,16 @@ object SourceBootstrap {
         )
         SourceCatalog.put("messenger.topicNameHint", "Название темы")
         SourceCatalog.put("messenger.topicNotFound", "Тема не найдена.")
+        SourceCatalog.put("messenger.messageActions", "Сообщение")
+        SourceCatalog.put("messenger.messageEdit", "Редактировать")
+        SourceCatalog.put("messenger.messageEditTitle", "Правка сообщения")
+        SourceCatalog.put("messenger.messageDelete", "Удалить сообщение")
+        SourceCatalog.put(
+            "messenger.messageDeleteQuestion",
+            "Удалить сообщение? Оно исчезнет у всех участников."
+        )
+        SourceCatalog.put("messenger.messageEdited", "изменено")
+        SourceCatalog.put("messenger.messageDeleted", "Сообщение удалено")
         SourceCatalog.put("messenger.confirmYes", "Удалить")
         SourceCatalog.put("messenger.confirmNo", "Отмена")
         SourceCatalog.put("messenger.save", "Сохранить")

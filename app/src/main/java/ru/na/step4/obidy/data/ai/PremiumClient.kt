@@ -34,10 +34,7 @@ object PremiumClient {
                     val err = obj.optString("error")
                     val msg = when (err) {
                         "not_configured" -> "Оплата пока не настроена на сервере"
-                        "unauthorized" -> AiHttp.errorMessage(obj)
-                        else -> obj.optString("detail").ifBlank {
-                            AiHttp.errorMessage(obj, "Не удалось создать платёж")
-                        }
+                        else -> AiHttp.errorMessage(obj, "Не удалось создать платёж")
                     }
                     return null to msg
                 }

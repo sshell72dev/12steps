@@ -70,10 +70,30 @@ object AiHttp {
         }
     }
 
-    fun errorMessage(obj: JSONObject, fallback: String = Ru.analysisAiError): String {
+    /**
+     * Текст ошибки для пользователя. Причину от сервера показывает только администратору:
+     * остальным нужна понятная фраза, а не текст сбоя.
+     * Причина берётся из поля "detail", а если ответ не JSON — из самого тела ответа.
+     */
+    fun errorMessage(
+        obj: JSONObject,
+        fallback: String = Ru.analysisAiError,
+        raw: String = "",
+        admin: Boolean = false
+    ): String {
         return when (obj.optString("error")) {
             "unauthorized", "not_configured" -> Ru.analysisAiNotConfigured
-            else -> fallback
+            else -> {
+                val cause = if (admin) obj.optString("detail").trim().ifBlank { plainText(raw) } else ""
+                if (cause.isBlank()) fallback else "$fallback\n$cause"
+            }
         }
+    }
+
+    /** Читаемый текст ответа, когда сервер вернул не JSON (например, HTML-страницу ошибки 500). */
+    private fun plainText(raw: String): String {
+        val text = raw.trim()
+        if (text.isEmpty() || text.startsWith("{")) return ""
+        return text.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim().take(300)
     }
 }

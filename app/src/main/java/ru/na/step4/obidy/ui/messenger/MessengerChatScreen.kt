@@ -34,12 +34,14 @@ import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -94,6 +96,10 @@ fun MessengerChatScreen(
     var recording by remember { mutableStateOf(false) }
     var cancelRecord by remember { mutableStateOf(false) }
     var recordMs by remember { mutableIntStateOf(0) }
+    var menuFor by remember { mutableStateOf<MessengerMessage?>(null) }
+    var editFor by remember { mutableStateOf<MessengerMessage?>(null) }
+    var editDraft by remember { mutableStateOf("") }
+    var deleteFor by remember { mutableStateOf<MessengerMessage?>(null) }
     val context = LocalContext.current
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val listState = rememberLazyListState()
@@ -127,6 +133,80 @@ fun MessengerChatScreen(
         val text = draft
         draft = ""
         viewModel.sendText(chatId, text)
+    }
+
+    menuFor?.let { target ->
+        AlertDialog(
+            onDismissRequest = { menuFor = null },
+            title = { Text(MessengerRu.messageActions) },
+            text = {
+                Column {
+                    if (!target.isVoice) {
+                        TextButton(onClick = {
+                            editDraft = target.body
+                            editFor = target
+                            menuFor = null
+                        }) { Text(MessengerRu.messageEdit, color = Forest) }
+                    }
+                    TextButton(onClick = {
+                        deleteFor = target
+                        menuFor = null
+                    }) { Text(MessengerRu.messageDelete, color = Forest) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { menuFor = null }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
+    }
+    editFor?.let { target ->
+        AlertDialog(
+            onDismissRequest = { editFor = null },
+            title = { Text(MessengerRu.messageEditTitle) },
+            text = {
+                VoiceOutlinedTextField(
+                    value = editDraft,
+                    onValueChange = { editDraft = it },
+                    placeholder = { Text(MessengerRu.messageHint) },
+                    maxLines = 6,
+                    voiceEnabled = false
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = target.id
+                    val text = editDraft
+                    editFor = null
+                    viewModel.editMessage(id, text)
+                }) { Text(MessengerRu.save, color = Forest) }
+            },
+            dismissButton = {
+                TextButton(onClick = { editFor = null }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
+    }
+    deleteFor?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleteFor = null },
+            title = { Text(MessengerRu.messageDelete) },
+            text = { Text(MessengerRu.messageDeleteQuestion) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = target.id
+                    deleteFor = null
+                    viewModel.deleteMessage(id)
+                }) { Text(MessengerRu.confirmYes, color = Forest) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteFor = null }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -189,6 +269,16 @@ fun MessengerChatScreen(
                                 ).isNotBlank()
                             ) {
                                 { onOpenAlert(message) }
+                            } else {
+                                null
+                            },
+                            onLongPress = if (
+                                !alertsChat &&
+                                message.mine &&
+                                !message.deleted &&
+                                !message.isUpdate
+                            ) {
+                                { menuFor = message }
                             } else {
                                 null
                             }
@@ -303,7 +393,8 @@ private fun MessageBubble(
     playing: Boolean,
     showName: Boolean,
     onPlay: () -> Unit,
-    onOpen: (() -> Unit)? = null
+    onOpen: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null
 ) {
     val mine = message.mine
     Row(
@@ -318,6 +409,15 @@ private fun MessageBubble(
                 .then(
                     if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier
                 )
+                .then(
+                    if (onLongPress != null) {
+                        Modifier.pointerInput(message.id) {
+                            detectTapGestures(onLongPress = { onLongPress?.invoke() })
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             if (showName && message.senderName.isNotBlank()) {
@@ -328,7 +428,13 @@ private fun MessageBubble(
                 )
                 Spacer(Modifier.height(2.dp))
             }
-            if (message.isVoice) {
+            if (message.deleted) {
+                Text(
+                    MessengerRu.messageDeleted,
+                    color = if (mine) Sand.copy(alpha = 0.75f) else Forest.copy(alpha = 0.75f),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            } else if (message.isVoice) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onPlay, modifier = Modifier.size(36.dp)) {
                         Icon(
@@ -368,7 +474,11 @@ private fun MessageBubble(
                 )
             }
             Text(
-                formatChatTime(message.createdAt),
+                if (message.isEdited) {
+                    "${MessengerRu.messageEdited} · ${formatChatTime(message.createdAt)}"
+                } else {
+                    formatChatTime(message.createdAt)
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = if (mine) Sand.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.End)

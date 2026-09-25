@@ -526,14 +526,25 @@ def _canonical_prompt_id(role: str) -> str:
     return name if name in PROMPTS_BY_ID else ""
 
 
-def system_for_psych(kind: str) -> str:
+def _with_anketa(text: str, anketa: str) -> str:
+    """Дописать блок анкеты в конец системного промта.
+
+    Пустая анкета — промт уходит без изменений.
+    """
+    block = (anketa or "").strip()
+    if not block:
+        return text
+    return f"{text}\n\n{block}"
+
+
+def system_for_psych(kind: str, anketa: str = "") -> str:
     pid = PSYCH_PROMPT_IDS.get((kind or "").strip(), "")
     if not pid:
-        return PSYCH_BASE
-    return prompt_text(pid)
+        return _with_anketa(PSYCH_BASE, anketa)
+    return _with_anketa(prompt_text(pid), anketa)
 
 
-def system_for_chat(role: str, program: str = "") -> str | None:
+def system_for_chat(role: str, program: str = "", anketa: str = "") -> str | None:
     pid = _canonical_prompt_id(role)
     if not pid:
         return None
@@ -541,4 +552,4 @@ def system_for_chat(role: str, program: str = "") -> str | None:
     prog = (program or "").strip()
     if prog:
         text = f"{text}\nПрограмма выздоровления пользователя: {prog}."
-    return text
+    return _with_anketa(text, anketa)

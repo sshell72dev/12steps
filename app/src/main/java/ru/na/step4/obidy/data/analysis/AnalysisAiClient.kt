@@ -58,7 +58,7 @@ object AnalysisAiClient {
         payload.put("language", language)
         return when (val raw = AiHttp.post("/api/v1/analyze", payload, readTimeoutMs = 180_000)) {
             is AiHttp.Result.Err -> Result.Err(raw.message)
-            is AiHttp.Result.Ok -> parse(raw.code, raw.body)
+            is AiHttp.Result.Ok -> parse(raw.code, raw.body, admin)
         }
     }
 
@@ -70,7 +70,7 @@ object AnalysisAiClient {
         else "$base\n\n$extra"
     }
 
-    private fun parse(code: Int, raw: String): Result {
+    private fun parse(code: Int, raw: String, admin: Boolean): Result {
         val obj = AiHttp.parseObject(raw)
         if (code in 200..299) {
             val text = obj.optString("text").trim()
@@ -85,11 +85,6 @@ object AnalysisAiClient {
                 Result.Ok(clean.ifBlank { text }, personality, prompt)
             }
         }
-        val message = when (obj.optString("error")) {
-            "unauthorized", "not_configured" -> Ru.analysisAiNotConfigured
-            "answers_required", "answers_empty" -> Ru.analysisAiError
-            else -> Ru.analysisAiError
-        }
-        return Result.Err(message)
+        return Result.Err(AiHttp.errorMessage(obj, Ru.analysisAiError, raw, admin))
     }
 }

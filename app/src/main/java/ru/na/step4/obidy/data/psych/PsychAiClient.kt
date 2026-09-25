@@ -58,11 +58,11 @@ class PsychAiClient {
         if (topic != null) payload.put("topic", topic)
         return when (val raw = AiHttp.post("/api/v1/psych", payload, readTimeoutMs = 180_000)) {
             is AiHttp.Result.Err -> Result.Err(raw.message)
-            is AiHttp.Result.Ok -> parse(raw.code, raw.body)
+            is AiHttp.Result.Ok -> parse(raw.code, raw.body, admin)
         }
     }
 
-    private fun parse(code: Int, raw: String): Result {
+    private fun parse(code: Int, raw: String, admin: Boolean): Result {
         val obj = AiHttp.parseObject(raw)
         if (code in 200..299) {
             val text = obj.optString("text").trim()
@@ -94,6 +94,6 @@ class PsychAiClient {
                 prompt = obj.optString("prompt").trim()
             )
         }
-        return Result.Err(AiHttp.errorMessage(obj))
+        return Result.Err(AiHttp.errorMessage(obj, raw = raw, admin = admin))
     }
 }

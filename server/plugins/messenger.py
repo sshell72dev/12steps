@@ -19,6 +19,7 @@ MAX_NAME = 40
 MAX_TEXT = 4000
 MAX_VOICE_BYTES = 1_048_576
 MAX_VOICE_MS = 60_000
+MAX_AVATAR_BYTES = 2_097_152
 SETTING_KEY = "messenger_enabled"
 SYSTEM_USER_ID = "steps12_system"
 SYSTEM_USER_NAME = "Челленджи"
@@ -135,11 +136,14 @@ def init_schema() -> None:
                 voice_path VARCHAR(255) NOT NULL DEFAULT '',
                 voice_duration_ms INT NOT NULL DEFAULT 0,
                 created_at DATETIME NOT NULL,
+                edited_at DATETIME NULL,
+                deleted TINYINT(1) NOT NULL DEFAULT 0,
                 KEY messenger_messages_chat (chat_id, id)
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             """
         )
         _ensure_challenge_schema(cur)
+        _ensure_media_schema(cur)
 
 
 def _has_column(cur, table: str, column: str) -> bool:
@@ -225,6 +229,161 @@ def _ensure_challenge_groups(cur) -> None:
         _ensure_group_chat(cur, group_id)
 
 
+def _ensure_media_schema(cur) -> None:
+    """Поля правки и удаления сообщений, а также темы внутри групп."""
+    if not _has_column(cur, "messenger_messages", "edited_at"):
+        cur.execute("ALTER TABLE messenger_messages ADD COLUMN edited_at DATETIME NULL")
+    if not _has_column(cur, "messenger_messages", "deleted"):
+        cur.execute(
+            "ALTER TABLE messenger_messages ADD COLUMN deleted TINYINT(1) NOT NULL DEFAULT 0"
+        )
+    if not _has_column(cur, "messenger_chats", "topic_id"):
+        cur.execute("ALTER TABLE messenger_chats ADD COLUMN topic_id VARCHAR(64) NULL")
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS messenger_topics (
+            id VARCHAR(64) NOT NULL PRIMARY KEY,
+            group_id VARCHAR(64) NOT NULL,
+            name VARCHAR(80) NOT NULL,
+            created_at DATETIME NOT NULL,
+            KEY messenger_topics_group (group_id, created_at)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        """
+    )
+
+
+def _avatar_file(kind: str, owner_id: str) -> Path:
+    return UPLOAD_DIR / f"avatar_{kind}_{owner_id}"
+
+
+def _avatar_mime(raw: bytes) -> str:
+    if raw[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if raw[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp"
+    return ""
+
+
+def _avatar_url(kind: str, owner_id: str) -> str:
+    """Ссылка на аватар. Версия в адресе — время файла, иначе клиент покажет старую картинку."""
+    if not owner_id:
+        return ""
+    try:
+        stamp = int(_avatar_file(kind, owner_id).stat().st_mtime)
+    except OSError:
+        return ""
+    return f"/api/v1/messenger/avatar/{kind}/{owner_id}?v={stamp}"
+
+
+def _save_avatar(kind: str, owner_id: str, raw: bytes) -> bool:
+    try:
+        _avatar_file(kind, owner_id).write_bytes(raw)
+    except OSError:
+        return False
+    return True
+
+
+def _drop_avatar(kind: str, owner_id: str) -> None:
+    try:
+        _avatar_file(kind, owner_id).unlink()
+    except OSError:
+        pass
+
+
+def _group_row(cur, group_id: str):
+    cur.execute(
+        "SELECT id, name, owner_id, challenge_key FROM messenger_groups WHERE id = %s",
+        (group_id,),
+    )
+    return cur.fetchone()
+
+
+def _is_group_member(cur, group_id: str, user_id: str) -> bool:
+    cur.execute(
+        "SELECT 1 FROM messenger_group_members WHERE group_id = %s AND user_id = %s",
+        (group_id, user_id),
+    )
+    return cur.fetchone() is not None
+
+
+def _drop_chat(cur, chat_id: str) -> None:
+    """Удалить чат вместе с лентой, голосовыми файлами и участниками."""
+    cur.execute(
+        "SELECT id FROM messenger_messages WHERE chat_id = %s AND kind = 'voice'",
+        (chat_id,),
+    )
+    for row in cur.fetchall():
+        _drop_voice_file(int(row["id"]))
+    cur.execute("DELETE FROM messenger_messages WHERE chat_id = %s", (chat_id,))
+    cur.execute("DELETE FROM messenger_chat_members WHERE chat_id = %s", (chat_id,))
+    cur.execute("DELETE FROM messenger_chats WHERE id = %s", (chat_id,))
+
+
+def _ensure_topic_chat(cur, group_id: str, topic_id: str) -> str:
+    cur.execute(
+        "SELECT id FROM messenger_chats WHERE topic_id = %s AND kind = 'topic'",
+        (topic_id,),
+    )
+    row = cur.fetchone()
+    if row:
+        return row["id"]
+    chat_id = _new_id()
+    cur.execute(
+        """
+        INSERT INTO messenger_chats (id, kind, group_id, topic_id, pair_key, created_at, last_message_at)
+        VALUES (%s, 'topic', %s, %s, NULL, %s, NULL)
+        """,
+        (chat_id, group_id, topic_id, db.utc_now()),
+    )
+    return chat_id
+
+
+def _topic_json(
+    cur, topic_id: str, name: str, chat_id: str, me: str, is_default: bool = False
+) -> dict:
+    last_body = ""
+    last_kind = ""
+    last_at = 0
+    unread = 0
+    if chat_id:
+        _add_chat_member(cur, chat_id, me)
+        cur.execute(
+            """
+            SELECT kind, body, UNIX_TIMESTAMP(created_at) AS created_unix
+            FROM messenger_messages
+            WHERE chat_id = %s AND deleted = 0
+            ORDER BY id DESC LIMIT 1
+            """,
+            (chat_id,),
+        )
+        last = cur.fetchone() or {}
+        last_kind = last.get("kind") or ""
+        last_body = last.get("body") or ""
+        last_at = _ms(last, "created_unix")
+        if last_kind == "voice":
+            last_body = "Голосовое сообщение"
+        cur.execute(
+            "SELECT last_read_id FROM messenger_chat_members WHERE chat_id = %s AND user_id = %s",
+            (chat_id, me),
+        )
+        member = cur.fetchone() or {}
+        unread = _unread(cur, chat_id, me, int(member.get("last_read_id") or 0))
+    return {
+        "id": topic_id,
+        "name": name,
+        "chat_id": chat_id,
+        "is_default": is_default,
+        "unread": unread,
+        "last_body": last_body,
+        "last_kind": last_kind,
+        "last_at": last_at,
+    }
+
+
 def _ensure_support_membership(cur, messenger_id: str) -> None:
     """Чат техподдержки доступен каждому: пользователь попадает в него автоматически."""
     if not messenger_id or messenger_id == SYSTEM_USER_ID:
@@ -295,6 +454,7 @@ def _user_json(row: dict) -> dict:
     return {
         "id": row["id"],
         "display_name": row.get("display_name") or "",
+        "avatar_url": _avatar_url("user", row["id"]),
     }
 
 
@@ -436,7 +596,24 @@ def _is_member(cur, chat_id: str, user_id: str) -> bool:
         "SELECT 1 FROM messenger_chat_members WHERE chat_id = %s AND user_id = %s",
         (chat_id, user_id),
     )
-    return cur.fetchone() is not None
+    if cur.fetchone() is not None:
+        return True
+    # Лента темы открыта участникам группы, даже если запись о членстве ещё не создана.
+    cur.execute(
+        "SELECT group_id FROM messenger_chats WHERE id = %s AND kind = 'topic'",
+        (chat_id,),
+    )
+    group_id = (cur.fetchone() or {}).get("group_id") or ""
+    if not group_id:
+        return False
+    cur.execute(
+        "SELECT 1 FROM messenger_group_members WHERE group_id = %s AND user_id = %s",
+        (group_id, user_id),
+    )
+    if cur.fetchone() is None:
+        return False
+    _add_chat_member(cur, chat_id, user_id)
+    return True
 
 
 def _peer_name(cur, chat_id: str, me: str) -> str:
@@ -501,7 +678,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         SELECT id, kind, body, sender_id,
                UNIX_TIMESTAMP(created_at) AS created_unix
         FROM messenger_messages
-        WHERE chat_id = %s
+        WHERE chat_id = %s AND deleted = 0
         ORDER BY id DESC LIMIT 1
         """,
         (chat["id"],),
@@ -518,6 +695,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
     last_kind = last.get("kind") or ""
     if last_kind == "voice":
         preview = "Голосовое сообщение"
+    avatar_url = _avatar_url("user", peer_id) if kind == "direct" else _avatar_url("group", group_id)
     return {
         "id": chat["id"],
         "kind": kind,
@@ -526,6 +704,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         "group_id": group_id,
         "is_owner": is_owner,
         "challenge_key": challenge_key,
+        "avatar_url": avatar_url,
         "last_body": preview,
         "last_kind": last_kind,
         "last_at": last_at,
@@ -536,6 +715,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
 def _message_json(row: dict, me: str, names: dict[str, str]) -> dict:
     sender = row.get("sender_id") or ""
     kind = row["kind"]
+    deleted = bool(int(row.get("deleted") or 0))
     # Сообщения об обновлении шлёт системный пользователь, но в чате
     # техподдержки подписывать их «Челленджи» нельзя.
     sender_name = SUPPORT_GROUP_NAME if kind == "update" else (names.get(sender) or "")
@@ -545,10 +725,12 @@ def _message_json(row: dict, me: str, names: dict[str, str]) -> dict:
         "sender_id": sender,
         "sender_name": sender_name,
         "kind": kind,
-        "body": row.get("body") or "",
-        "voice_duration_ms": int(row.get("voice_duration_ms") or 0),
+        "body": "" if deleted else (row.get("body") or ""),
+        "voice_duration_ms": 0 if deleted else int(row.get("voice_duration_ms") or 0),
         "created_at": _ms(row, "created_unix"),
         "mine": sender == me,
+        "edited_at": _ms(row, "edited_unix"),
+        "deleted": deleted,
     }
 
 
@@ -580,6 +762,26 @@ def _insert_message(cur, chat_id: str, sender_id: str, kind: str, body: str, dur
         (now, chat_id),
     )
     return message_id
+
+
+def _load_message(cur, message_id: int):
+    cur.execute(
+        """
+        SELECT id, chat_id, sender_id, kind, body, voice_duration_ms, deleted,
+               UNIX_TIMESTAMP(created_at) AS created_unix,
+               UNIX_TIMESTAMP(edited_at) AS edited_unix
+        FROM messenger_messages WHERE id = %s
+        """,
+        (message_id,),
+    )
+    return cur.fetchone()
+
+
+def _drop_voice_file(message_id: int) -> None:
+    try:
+        (UPLOAD_DIR / f"{message_id}.m4a").unlink()
+    except OSError:
+        pass
 
 
 def broadcast_support_update(version_name: str, version_code: int) -> dict:
@@ -905,6 +1107,7 @@ def register(app, login_required, api_ok) -> None:
                     "id": row["id"],
                     "display_name": row.get("display_name") or "",
                     "role": row.get("role") or "member",
+                    "avatar_url": _avatar_url("user", row["id"]),
                 }
                 for row in cur.fetchall()
             ]
@@ -921,6 +1124,8 @@ def register(app, login_required, api_ok) -> None:
                     "name": group["name"],
                     "owner_id": group["owner_id"],
                     "is_owner": group["owner_id"] == messenger_id,
+                    "can_manage": group["owner_id"] == messenger_id,
+                    "avatar_url": _avatar_url("group", group_id),
                 },
                 "members": members,
                 "token": token,
@@ -1051,6 +1256,7 @@ def register(app, login_required, api_ok) -> None:
                        UNIX_TIMESTAMP(c.last_message_at) AS last_unix
                 FROM messenger_chats c
                 JOIN messenger_chat_members me ON me.chat_id = c.id AND me.user_id = %s
+                WHERE c.kind <> 'topic'
                 ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
                 """,
                 (messenger_id,),
@@ -1073,8 +1279,9 @@ def register(app, login_required, api_ok) -> None:
                 return jsonify({"error": "forbidden"}), 403
             cur.execute(
                 """
-                SELECT id, chat_id, sender_id, kind, body, voice_duration_ms,
-                       UNIX_TIMESTAMP(created_at) AS created_unix
+                SELECT id, chat_id, sender_id, kind, body, voice_duration_ms, deleted,
+                       UNIX_TIMESTAMP(created_at) AS created_unix,
+                       UNIX_TIMESTAMP(edited_at) AS edited_unix
                 FROM messenger_messages
                 WHERE chat_id = %s AND id > %s
                 ORDER BY id ASC
@@ -1201,5 +1408,351 @@ def register(app, login_required, api_ok) -> None:
                 WHERE chat_id = %s AND user_id = %s
                 """,
                 (last_id, chat_id, messenger_id),
+            )
+        return jsonify({"ok": True})
+
+    def _avatar_response(messenger_id: str, kind: str, owner_id: str):
+        if kind not in ("user", "group") or not _valid_id(owner_id):
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            if not _require_user(cur, messenger_id):
+                return jsonify({"error": "not_registered"}), 404
+            if kind == "group":
+                cur.execute(
+                    "SELECT 1 FROM messenger_group_members WHERE group_id = %s AND user_id = %s",
+                    (owner_id, messenger_id),
+                )
+                if not cur.fetchone():
+                    return jsonify({"error": "forbidden"}), 403
+        path = _avatar_file(kind, owner_id)
+        if not path.is_file():
+            return jsonify({"error": "not_found"}), 404
+        try:
+            with path.open("rb") as fh:
+                head = fh.read(16)
+        except OSError:
+            head = b""
+        return send_file(
+            path,
+            mimetype=_avatar_mime(head) or "application/octet-stream",
+            as_attachment=False,
+        )
+
+    @app.get("/api/v1/messenger/avatar/user/<owner_id>")
+    @guard(need_user=True)
+    def api_messenger_avatar_user(messenger_id: str, owner_id: str):
+        return _avatar_response(messenger_id, "user", owner_id)
+
+    @app.get("/api/v1/messenger/avatar/group/<owner_id>")
+    @guard(need_user=True)
+    def api_messenger_avatar_group(messenger_id: str, owner_id: str):
+        return _avatar_response(messenger_id, "group", owner_id)
+
+    @app.post("/api/v1/messenger/me/avatar")
+    @guard(need_user=True)
+    def api_messenger_upload_my_avatar(messenger_id: str):
+        upload = request.files.get("file")
+        if upload is None:
+            return jsonify({"error": "file_required"}), 400
+        raw = upload.read(MAX_AVATAR_BYTES + 1)
+        if not raw or len(raw) > MAX_AVATAR_BYTES:
+            return jsonify({"error": "file_too_large"}), 400
+        if not _avatar_mime(raw):
+            return jsonify({"error": "bad_image"}), 400
+        with db.cursor() as cur:
+            user = _require_user(cur, messenger_id)
+            if not user:
+                return jsonify({"error": "not_registered"}), 404
+            if not _save_avatar("user", messenger_id, raw):
+                return jsonify({"error": "store_failed"}), 500
+        return jsonify({"user": _user_json(user)})
+
+    @app.delete("/api/v1/messenger/me/avatar")
+    @guard(need_user=True)
+    def api_messenger_delete_my_avatar(messenger_id: str):
+        with db.cursor() as cur:
+            if not _require_user(cur, messenger_id):
+                return jsonify({"error": "not_registered"}), 404
+        _drop_avatar("user", messenger_id)
+        return jsonify({"ok": True})
+
+    @app.post("/api/v1/messenger/groups/<group_id>/avatar")
+    @guard(need_user=True)
+    def api_messenger_upload_group_avatar(messenger_id: str, group_id: str):
+        if not _valid_id(group_id):
+            return jsonify({"error": "not_found"}), 404
+        upload = request.files.get("file")
+        if upload is None:
+            return jsonify({"error": "file_required"}), 400
+        raw = upload.read(MAX_AVATAR_BYTES + 1)
+        if not raw or len(raw) > MAX_AVATAR_BYTES:
+            return jsonify({"error": "file_too_large"}), 400
+        if not _avatar_mime(raw):
+            return jsonify({"error": "bad_image"}), 400
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if group["challenge_key"]:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            if not _save_avatar("group", group_id, raw):
+                return jsonify({"error": "store_failed"}), 500
+        return jsonify({"avatar_url": _avatar_url("group", group_id)})
+
+    @app.delete("/api/v1/messenger/groups/<group_id>/avatar")
+    @guard(need_user=True)
+    def api_messenger_delete_group_avatar(messenger_id: str, group_id: str):
+        if not _valid_id(group_id):
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if group["challenge_key"]:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+        _drop_avatar("group", group_id)
+        return jsonify({"ok": True})
+
+    @app.post("/api/v1/messenger/messages/<int:message_id>/edit")
+    @guard(need_user=True)
+    def api_messenger_edit_message(messenger_id: str, message_id: int):
+        payload = request.get_json(silent=True) or {}
+        body = str(payload.get("body") or "").strip()[:MAX_TEXT]
+        if not body:
+            return jsonify({"error": "empty"}), 400
+        with db.cursor() as cur:
+            cur.execute(
+                "SELECT id, chat_id, sender_id, kind, deleted FROM messenger_messages WHERE id = %s",
+                (message_id,),
+            )
+            row = cur.fetchone()
+            if not row or bool(int(row.get("deleted") or 0)):
+                return jsonify({"error": "not_found"}), 404
+            if row["sender_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            if row["kind"] != "text":
+                return jsonify({"error": "not_editable"}), 400
+            if not _is_member(cur, row["chat_id"], messenger_id):
+                return jsonify({"error": "forbidden"}), 403
+            cur.execute(
+                "UPDATE messenger_messages SET body = %s, edited_at = %s WHERE id = %s",
+                (body, db.utc_now(), message_id),
+            )
+            message = _load_message(cur, message_id)
+            names = _names_for(cur, [messenger_id])
+        return jsonify({"message": _message_json(message, messenger_id, names)})
+
+    @app.delete("/api/v1/messenger/messages/<int:message_id>")
+    @guard(need_user=True)
+    def api_messenger_delete_message(messenger_id: str, message_id: int):
+        with db.cursor() as cur:
+            cur.execute(
+                "SELECT id, chat_id, sender_id, kind, deleted FROM messenger_messages WHERE id = %s",
+                (message_id,),
+            )
+            row = cur.fetchone()
+            if not row or bool(int(row.get("deleted") or 0)):
+                return jsonify({"error": "not_found"}), 404
+            if row["sender_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            if not _is_member(cur, row["chat_id"], messenger_id):
+                return jsonify({"error": "forbidden"}), 403
+            if row["kind"] == "voice":
+                _drop_voice_file(message_id)
+            cur.execute(
+                "UPDATE messenger_messages SET deleted = 1, body = '', voice_path = '' WHERE id = %s",
+                (message_id,),
+            )
+            message = _load_message(cur, message_id)
+            names = _names_for(cur, [messenger_id])
+        return jsonify({"message": _message_json(message, messenger_id, names)})
+
+    @app.post("/api/v1/messenger/groups/<group_id>")
+    @guard(need_user=True)
+    def api_messenger_rename_group(messenger_id: str, group_id: str):
+        if not _valid_id(group_id):
+            return jsonify({"error": "not_found"}), 404
+        payload = request.get_json(silent=True) or {}
+        name = _clean_name(str(payload.get("name") or ""))
+        if not name:
+            return jsonify({"error": "name_required"}), 400
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if group["challenge_key"]:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            cur.execute(
+                "UPDATE messenger_groups SET name = %s WHERE id = %s",
+                (name, group_id),
+            )
+        return jsonify({"group": {"id": group_id, "name": name, "owner_id": messenger_id}})
+
+    @app.delete("/api/v1/messenger/groups/<group_id>")
+    @guard(need_user=True)
+    def api_messenger_delete_group(messenger_id: str, group_id: str):
+        if not _valid_id(group_id):
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if group["challenge_key"]:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            cur.execute("SELECT id FROM messenger_chats WHERE group_id = %s", (group_id,))
+            for chat in cur.fetchall():
+                _drop_chat(cur, chat["id"])
+            cur.execute("DELETE FROM messenger_topics WHERE group_id = %s", (group_id,))
+            cur.execute("DELETE FROM messenger_invites WHERE group_id = %s", (group_id,))
+            cur.execute("DELETE FROM messenger_group_members WHERE group_id = %s", (group_id,))
+            cur.execute("DELETE FROM messenger_groups WHERE id = %s", (group_id,))
+        _drop_avatar("group", group_id)
+        return jsonify({"ok": True})
+
+    @app.delete("/api/v1/messenger/groups/<group_id>/members/<user_id>")
+    @guard(need_user=True)
+    def api_messenger_remove_member(messenger_id: str, group_id: str, user_id: str):
+        if not _valid_id(group_id) or not _valid_id(user_id):
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if group["owner_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            if user_id == group["owner_id"]:
+                return jsonify({"error": "owner_immutable"}), 400
+            cur.execute(
+                "DELETE FROM messenger_group_members WHERE group_id = %s AND user_id = %s",
+                (group_id, user_id),
+            )
+            cur.execute("SELECT id FROM messenger_chats WHERE group_id = %s", (group_id,))
+            for chat in cur.fetchall():
+                cur.execute(
+                    "DELETE FROM messenger_chat_members WHERE chat_id = %s AND user_id = %s",
+                    (chat["id"], user_id),
+                )
+        return jsonify({"ok": True})
+
+    @app.get("/api/v1/messenger/groups/<group_id>/topics")
+    @guard(need_user=True)
+    def api_messenger_topics(messenger_id: str, group_id: str):
+        if not _valid_id(group_id):
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if not _is_group_member(cur, group_id, messenger_id):
+                return jsonify({"error": "forbidden"}), 403
+            general_chat = _ensure_group_chat(cur, group_id)
+            items = [_topic_json(cur, "", "", general_chat, messenger_id, is_default=True)]
+            cur.execute(
+                """
+                SELECT id, name FROM messenger_topics
+                WHERE group_id = %s
+                ORDER BY created_at ASC, id ASC
+                """,
+                (group_id,),
+            )
+            for row in cur.fetchall():
+                chat_id = _ensure_topic_chat(cur, group_id, row["id"])
+                items.append(_topic_json(cur, row["id"], row["name"], chat_id, messenger_id))
+        return jsonify({"topics": items})
+
+    @app.post("/api/v1/messenger/groups/<group_id>/topics")
+    @guard(need_user=True)
+    def api_messenger_create_topic(messenger_id: str, group_id: str):
+        if not _valid_id(group_id):
+            return jsonify({"error": "not_found"}), 404
+        payload = request.get_json(silent=True) or {}
+        name = _clean_name(str(payload.get("name") or ""))
+        if not name:
+            return jsonify({"error": "name_required"}), 400
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if group["challenge_key"]:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            topic_id = _new_id()
+            cur.execute(
+                """
+                INSERT INTO messenger_topics (id, group_id, name, created_at)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (topic_id, group_id, name, db.utc_now()),
+            )
+            chat_id = _ensure_topic_chat(cur, group_id, topic_id)
+            item = _topic_json(cur, topic_id, name, chat_id, messenger_id)
+        return jsonify({"topic": item})
+
+    @app.post("/api/v1/messenger/groups/<group_id>/topics/<topic_id>")
+    @guard(need_user=True)
+    def api_messenger_rename_topic(messenger_id: str, group_id: str, topic_id: str):
+        if not _valid_id(group_id) or not _valid_id(topic_id):
+            return jsonify({"error": "not_found"}), 404
+        payload = request.get_json(silent=True) or {}
+        name = _clean_name(str(payload.get("name") or ""))
+        if not name:
+            return jsonify({"error": "name_required"}), 400
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if group["challenge_key"]:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            cur.execute(
+                "SELECT id FROM messenger_topics WHERE id = %s AND group_id = %s",
+                (topic_id, group_id),
+            )
+            if not cur.fetchone():
+                return jsonify({"error": "topic_not_found"}), 404
+            cur.execute(
+                "UPDATE messenger_topics SET name = %s WHERE id = %s",
+                (name, topic_id),
+            )
+        return jsonify({"topic": {"id": topic_id, "name": name}})
+
+    @app.delete("/api/v1/messenger/groups/<group_id>/topics/<topic_id>")
+    @guard(need_user=True)
+    def api_messenger_delete_topic(messenger_id: str, group_id: str, topic_id: str):
+        if not _valid_id(group_id) or not _valid_id(topic_id):
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            if group["challenge_key"]:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
+            cur.execute(
+                "SELECT id FROM messenger_topics WHERE id = %s AND group_id = %s",
+                (topic_id, group_id),
+            )
+            if not cur.fetchone():
+                return jsonify({"error": "topic_not_found"}), 404
+            cur.execute(
+                "SELECT id FROM messenger_chats WHERE topic_id = %s AND kind = 'topic'",
+                (topic_id,),
+            )
+            for chat in cur.fetchall():
+                _drop_chat(cur, chat["id"])
+            cur.execute(
+                "DELETE FROM messenger_topics WHERE id = %s AND group_id = %s",
+                (topic_id, group_id),
             )
         return jsonify({"ok": True})

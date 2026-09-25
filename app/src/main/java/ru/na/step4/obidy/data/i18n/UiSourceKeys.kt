@@ -893,6 +893,13 @@ object UiSourceKeys {
         "messenger.deleteGroupQuestion",
         "messenger.removeMember",
         "messenger.removeMemberQuestion",
+        "messenger.messageActions",
+        "messenger.messageEdit",
+        "messenger.messageEditTitle",
+        "messenger.messageDelete",
+        "messenger.messageDeleteQuestion",
+        "messenger.messageEdited",
+        "messenger.messageDeleted",
     )
 
     val voicehands: Set<String> = setOf(

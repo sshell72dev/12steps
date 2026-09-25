@@ -126,6 +126,16 @@ object MessengerRu {
         "messenger.removeMemberQuestion",
         "Удалить участника из группы?"
     )
+    val messageActions: String get() = I18n.t("messenger.messageActions", "Сообщение")
+    val messageEdit: String get() = I18n.t("messenger.messageEdit", "Редактировать")
+    val messageEditTitle: String get() = I18n.t("messenger.messageEditTitle", "Правка сообщения")
+    val messageDelete: String get() = I18n.t("messenger.messageDelete", "Удалить сообщение")
+    val messageDeleteQuestion: String get() = I18n.t(
+        "messenger.messageDeleteQuestion",
+        "Удалить сообщение? Оно исчезнет у всех участников."
+    )
+    val messageEdited: String get() = I18n.t("messenger.messageEdited", "изменено")
+    val messageDeleted: String get() = I18n.t("messenger.messageDeleted", "Сообщение удалено")
 
     fun challengeTitle(key: String, fallback: String): String = when (key) {
         "steps" -> challengeSteps
