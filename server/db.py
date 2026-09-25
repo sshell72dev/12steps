@@ -279,6 +279,7 @@ ADMIN_SOURCE_PAGES = {
     "prompts": "Админка · Промты",
     "voice": "Админка · Голос",
     "support": "Админка · Ошибки",
+    "backups": "Админка · Бэкапы",
 }
 
 SUPPORT_FAMILIES = {

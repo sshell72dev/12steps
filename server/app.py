@@ -32,6 +32,7 @@ import translate
 import yookassa
 from plugins import voice as voice_plugin
 from plugins import messenger as messenger_plugin
+from plugins import backups as backups_plugin
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -85,6 +86,7 @@ def _api_ok() -> bool:
 
 voice_plugin.register(app, login_required, _api_ok)
 messenger_plugin.register(app, login_required, _api_ok)
+backups_plugin.register(app, login_required, _api_ok)
 
 
 def _as_bool(value) -> bool:

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Резервные копии · Админка</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --sand-deep: #e6dfd0;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --ok: #2f6b45;
+        --warn: #8a6a1a;
+      }
+      body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #ece8df; color: var(--ink); }
+      .top {
+        background: var(--forest); color: var(--sand); padding: 12px 16px;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      }
+      .top b { font-size: 15px; }
+      .top nav { display: flex; flex-wrap: wrap; gap: 10px; }
+      .top a { color: var(--sand); text-decoration: none; opacity: .88; font-size: 13px; }
+      .top a:hover { opacity: 1; }
+      .top a.active { opacity: 1; font-weight: 700; }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 12px 36px; }
+      .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+      h1 { margin: 0 0 4px; font-size: 18px; color: var(--forest); }
+      .muted { color: var(--muted); font-size: 12px; line-height: 1.4; }
+      .notice, .warn { margin-bottom: 10px; padding: 8px 10px; border-radius: 10px; font-size: 13px; }
+      .notice { background: rgba(47, 107, 69, 0.1); border: 1px solid rgba(47, 107, 69, 0.28); color: var(--ok); }
+      .warn { background: rgba(138, 106, 26, 0.1); border: 1px solid rgba(138, 106, 26, 0.28); color: var(--warn); }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--forest); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+      td.mono { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); }
+      .row-actions { display: flex; gap: 6px; }
+      .btn {
+        display: inline-block; padding: 5px 9px; border-radius: 8px; font-size: 12px; font-weight: 650;
+        text-decoration: none; border: 1px solid var(--line); background: var(--sand-deep); color: var(--forest); cursor: pointer;
+      }
+      .btn.danger { background: #8a3a3a; color: #fff; border-color: #8a3a3a; }
+      form { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <b>Админка 12 шагов</b>
+      <nav>
+        <a href="{{ url_for('settings') }}">ИИ</a>
+        <a href="{{ url_for('notes_admin') }}">Подсказки</a>
+        <a href="{{ url_for('analyses_admin') }}">Самоанализ</a>
+        <a href="{{ url_for('prompts_admin') }}">Промты</a>
+        <a href="{{ url_for('support_admin') }}">Ошибки</a>
+        <a class="active" href="{{ url_for('backups_admin') }}">Бэкапы</a>
+      </nav>
+    </div>
+    <div class="wrap">
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+      {% if warn %}<div class="warn">{{ warn }}</div>{% endif %}
+      {% if not encryption %}
+        <div class="warn">Приём копий выключен: не задан <b>BACKUP_ENCRYPTION_KEY</b> в .env.</div>
+      {% endif %}
+      {% if not mail %}
+        <div class="warn">Вход по коду недоступен: не заданы <b>SMTP_*</b> в .env.</div>
+      {% endif %}
+
+      <div class="card">
+        <h1>Резервные копии пользователей</h1>
+        <p class="muted">
+          На аккаунт хранится один актуальный архив: новая выгрузка заменяет предыдущую.
+          На диске файлы лежат зашифрованными, здесь отдаются уже расшифрованными.
+          Максимальный размер архива — {{ max_mb }} МБ.
+        </p>
+
+        {% if slots %}
+          <table>
+            <thead>
+              <tr>
+                <th>Аккаунт</th>
+                <th>Выгружено</th>
+                <th>Размер</th>
+                <th>Версия приложения</th>
+                <th>Выгрузок</th>
+                <th>Забирали</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in slots %}
+                <tr>
+                  <td>
+                    <b>{{ s.email }}</b>
+                    <div class="muted mono">{{ s.device_id or '—' }}</div>
+                  </td>
+                  <td>{{ s.uploaded_at }}<div class="muted">UTC</div></td>
+                  <td>
+                    {{ (s.archive_size / 1048576)|round(2) }} МБ
+                    <div class="muted">на диске {{ (s.file_size / 1048576)|round(2) }} МБ</div>
+                  </td>
+                  <td>{{ s.app_version or '—' }}</td>
+                  <td>{{ s.upload_count }}</td>
+                  <td>{{ s.downloaded_at or '—' }}</td>
+                  <td>
+                    <div class="row-actions">
+                      <a class="btn" href="{{ url_for('backups_admin_download', slot_id=s.id) }}">Скачать</a>
+                      <form method="post" action="{{ url_for('backups_admin_delete', slot_id=s.id) }}"
+                            onsubmit="return confirm('Удалить копию пользователя {{ s.email }}?');">
+                        <button class="btn danger" type="submit">Удалить</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="muted">Пока никто не выгружал копии.</p>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

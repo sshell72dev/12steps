@@ -42,3 +42,15 @@ DB_PASSWORD = getenv("DB_PASSWORD")
 
 DEEPSEEK_BASE_URL = getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
 DOMAIN = "12stepsapp.luch-rehab.ru"
+
+# Почта для кода подтверждения аккаунта копий.
+SMTP_HOST = getenv("SMTP_HOST")
+SMTP_PORT = int(getenv("SMTP_PORT", "465") or "465")
+SMTP_USER = getenv("SMTP_USER")
+SMTP_PASSWORD = getenv("SMTP_PASSWORD")
+SMTP_FROM = getenv("SMTP_FROM")
+SMTP_SSL = (getenv("SMTP_SSL", "1") or "1").strip().lower() in ("1", "true", "on", "yes")
+
+# Резервные копии: без BACKUP_ENCRYPTION_KEY приём архивов выключен.
+BACKUP_ENCRYPTION_KEY = getenv("BACKUP_ENCRYPTION_KEY")
+MAX_BACKUP_BYTES = int(getenv("MAX_BACKUP_BYTES", str(50 * 1024 * 1024)) or str(50 * 1024 * 1024))

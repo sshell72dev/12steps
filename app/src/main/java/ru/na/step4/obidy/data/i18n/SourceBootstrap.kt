@@ -369,17 +369,17 @@ object SourceBootstrap {
         SourceCatalog.put("backup.title", "Резервная копия")
         SourceCatalog.put(
             "backup.hint",
-            "Копия всех данных сохраняется в один файл. Её можно перенести на новый телефон или загрузить после переустановки приложения. Файл не защищён паролем — храните его в надёжном месте."
+            "Копия всех данных: дневник, обиды, самоанализ, анкета, настройки. Файл можно унести на новый телефон, а на сервере копия обновляется раз в сутки."
         )
         SourceCatalog.put("backup.export", "Сохранить копию в файл")
-        SourceCatalog.put("backup.restore", "Восстановить из копии")
+        SourceCatalog.put("backup.restore", "Восстановить из файла")
         SourceCatalog.put("backup.busy", "Идёт работа с копией, подождите…")
         SourceCatalog.put("backup.savedOk", "Копия сохранена")
         SourceCatalog.put("backup.savedError", "Не удалось сохранить копию")
         SourceCatalog.put("backup.restoreTitle", "Восстановить данные?")
         SourceCatalog.put(
             "backup.restoreBody",
-            "Все данные на этом телефоне будут заменены данными из копии. Отменить это действие нельзя."
+            "Все данные на этом телефоне будут заменены данными из копии. Перед заменой я сохраню текущее состояние, чтобы можно было откатиться."
         )
         SourceCatalog.put("backup.restoreYes", "Восстановить")
         SourceCatalog.put(
@@ -390,6 +390,60 @@ object SourceBootstrap {
             "backup.restoredError",
             "Не удалось восстановить: файл повреждён или это не копия «12 шагов»"
         )
+        SourceCatalog.put("backup.passwordTitle", "Пароль на копию")
+        SourceCatalog.put(
+            "backup.passwordHint",
+            "Пароль шифрует файл. Запомните его: без пароля копию не открыть. Если оставить поле пустым, файл будет без защиты."
+        )
+        SourceCatalog.put("backup.passwordEnter", "Пароль копии")
+        SourceCatalog.put("backup.passwordApply", "Продолжить")
+        SourceCatalog.put("backup.passwordWrong", "Неверный пароль или файл повреждён")
+        SourceCatalog.put("backup.passwordEmpty", "Пустой пароль — файл без защиты")
+        SourceCatalog.put("backup.manifestTitle", "Копия найдена")
+        SourceCatalog.put(
+            "backup.manifestOtherApp",
+            "Это копия другого приложения — восстановление отменено."
+        )
+        SourceCatalog.put(
+            "backup.manifestNewer",
+            "Копия сделана более новой версией приложения. Продолжить на свой риск?"
+        )
+        SourceCatalog.put("backup.sizeLabel", "Размер")
+        SourceCatalog.put("backup.progressLabel", "Записей")
+        SourceCatalog.put(
+            "backup.rollbackSaved",
+            "Текущее состояние сохранено — можно вернуться назад"
+        )
+        SourceCatalog.put("backup.rollbackAction", "Откатить восстановление")
+        SourceCatalog.put(
+            "backup.rollbackDone",
+            "Данные вернулись к состоянию до восстановления"
+        )
+        SourceCatalog.put("backup.rollbackMissing", "Автокопия не найдена")
+        SourceCatalog.put("backup.serverTitle", "Копия на сервере")
+        SourceCatalog.put(
+            "backup.serverHint",
+            "Привяжите почту — приложение раз в сутки кладёт копию на сервер. Её можно вернуть на новом телефоне, даже если приложение удалили."
+        )
+        SourceCatalog.put("backup.serverEmail", "Адрес почты")
+        SourceCatalog.put("backup.serverSendCode", "Получить код")
+        SourceCatalog.put("backup.serverCode", "Код из письма")
+        SourceCatalog.put("backup.serverLogin", "Войти")
+        SourceCatalog.put("backup.serverCodeSent", "Код отправлен на почту")
+        SourceCatalog.put("backup.serverUpload", "Сохранить на сервер")
+        SourceCatalog.put("backup.serverDownload", "Восстановить с сервера")
+        SourceCatalog.put("backup.serverLogout", "Отвязать почту")
+        SourceCatalog.put("backup.serverLastPush", "Последняя выгрузка")
+        SourceCatalog.put("backup.serverNoCopy", "Копий на сервере пока нет")
+        SourceCatalog.put("backup.serverUploaded", "Копия выгружена на сервер")
+        SourceCatalog.put("backup.serverTooLarge", "Копия больше допустимого размера")
+        SourceCatalog.put(
+            "backup.serverNotConfigured",
+            "Сервер не принимает копии: обратитесь в поддержку"
+        )
+        SourceCatalog.put("backup.serverError", "Не удалось связаться с сервером")
+        SourceCatalog.put("backup.serverWrongCode", "Код не подошёл")
+        SourceCatalog.put("backup.serverBadEmail", "Проверьте адрес почты")
         SourceCatalog.put("journal.pickEyebrow", "Навигация")
         SourceCatalog.put("journal.pickTitle", "Выбор Шага")
         SourceCatalog.put(

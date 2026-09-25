@@ -46,3 +46,4 @@ tools/.google_token.json
 tools/google_oauth_client.json
 tools/.vendor/
 server/data/app_version.json
+server/backups/

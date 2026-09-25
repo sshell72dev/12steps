@@ -54,8 +54,7 @@ import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.BuildConfig
 import ru.na.step4.obidy.Step4App
 import ru.na.step4.obidy.data.analysis.AnalysisSettings
-import ru.na.step4.obidy.data.backup.BackupManager
-import ru.na.step4.obidy.data.backup.BackupRu
+import ru.na.step4.obidy.ui.backup.BackupSettingsPanel
 import ru.na.step4.obidy.data.journal.AiLength
 import ru.na.step4.obidy.data.journal.JournalPrefs
 import ru.na.step4.obidy.data.journal.JournalProblems
@@ -151,27 +150,6 @@ fun JournalSettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) viewModel.importFromUri(context, uri)
-    }
-    val backupScope = rememberCoroutineScope()
-    var backupBusy by remember { mutableStateOf(false) }
-    var backupNotice by remember { mutableStateOf<String?>(null) }
-    var pendingRestore by remember { mutableStateOf<Uri?>(null) }
-    val saveBackup = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri ->
-        if (uri != null) {
-            backupScope.launch {
-                backupBusy = true
-                val outcome = BackupManager.export(context, uri)
-                backupBusy = false
-                backupNotice = if (outcome.ok) BackupRu.savedOk else BackupRu.savedError
-            }
-        }
-    }
-    val openBackup = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) pendingRestore = uri
     }
     val rightsLabel = when {
         state.isAdmin -> JournalRu.settingsAdmin
@@ -380,26 +358,7 @@ fun JournalSettingsScreen(
                     VoiceSettingsPanel(plugin = voicePlugin)
                 }
                 VoiceHandsSettingsPanel()
-                Text(BackupRu.title, color = Amber, style = MaterialTheme.typography.labelMedium)
-                Text(
-                    BackupRu.hint,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                JournalButton(
-                    BackupRu.export,
-                    onClick = { saveBackup.launch(BackupManager.suggestedFileName()) },
-                    filled = true
-                )
-                JournalButton(BackupRu.restore, onClick = {
-                    openBackup.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
-                })
-                if (backupBusy) {
-                    Text(BackupRu.busy, color = Forest)
-                }
-                if (!backupNotice.isNullOrBlank()) {
-                    Text(backupNotice.orEmpty(), color = Amber)
-                }
+                BackupSettingsPanel()
                 Text(JournalRu.versionOpen, color = Amber, style = MaterialTheme.typography.labelMedium)
                 JournalButton(
                     "${BuildConfig.APP_VERSION_NAME} · ${JournalRu.versionHistory}",
@@ -412,32 +371,6 @@ fun JournalSettingsScreen(
                 }
             }
         }
-    }
-    pendingRestore?.let { uri ->
-        AlertDialog(
-            onDismissRequest = { pendingRestore = null },
-            title = { Text(BackupRu.restoreTitle) },
-            text = { Text(BackupRu.restoreBody, color = Forest) },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingRestore = null
-                    backupScope.launch {
-                        backupBusy = true
-                        val outcome = BackupManager.restore(context, uri)
-                        backupBusy = false
-                        if (outcome.ok) {
-                            Toast.makeText(context, BackupRu.restoredOk, Toast.LENGTH_LONG).show()
-                            BackupManager.restartApp(context)
-                        } else {
-                            backupNotice = BackupRu.restoredError
-                        }
-                    }
-                }) { Text(BackupRu.restoreYes) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRestore = null }) { Text(Ru.cancel) }
-            }
-        )
     }
     if (askAdminCode) {
         AlertDialog(

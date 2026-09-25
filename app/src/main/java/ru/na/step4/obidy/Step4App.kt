@@ -24,6 +24,8 @@ import ru.na.step4.obidy.data.profile.ProfileStore
 import ru.na.step4.obidy.data.psych.PsychReminderWorker
 import ru.na.step4.obidy.data.psych.PsychStreakStore
 import ru.na.step4.obidy.data.alerts.StreakWarningWorker
+import ru.na.step4.obidy.data.backup.BackupAutoWorker
+import ru.na.step4.obidy.data.backup.BackupServer
 import ru.na.step4.obidy.data.psych.PsychRepository
 import ru.na.step4.obidy.data.psych.PsychSettings
 import ru.na.step4.obidy.data.spiritual.SpiritualRatingStore
@@ -187,6 +189,9 @@ class Step4App : Application() {
         }
         PsychReminderWorker.schedule(this)
         StreakWarningWorker.schedule(this)
+        if (BackupServer.isLinked(this)) {
+            BackupAutoWorker.schedule(this)
+        }
         appScope.launch {
             repository.ensureDefaultCategories()
             notesRepository.sync()
