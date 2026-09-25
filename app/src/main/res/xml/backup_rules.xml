@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Правила системного резервного копирования для Android 11 и ниже (API 30-). -->
+<full-backup-content>
+    <include
+        domain="database"
+        path="." />
+    <include
+        domain="sharedpref"
+        path="." />
+    <include
+        domain="file"
+        path="." />
+    <exclude
+        domain="file"
+        path="i18n" />
+</full-backup-content>

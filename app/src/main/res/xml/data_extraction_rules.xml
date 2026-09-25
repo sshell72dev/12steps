@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Правила резервного копирования и переноса для Android 12+ (API 31+). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include
+            domain="database"
+            path="." />
+        <include
+            domain="sharedpref"
+            path="." />
+        <include
+            domain="file"
+            path="." />
+        <exclude
+            domain="file"
+            path="i18n" />
+    </cloud-backup>
+    <device-transfer>
+        <include
+            domain="database"
+            path="." />
+        <include
+            domain="sharedpref"
+            path="." />
+        <include
+            domain="file"
+            path="." />
+        <exclude
+            domain="file"
+            path="i18n" />
+    </device-transfer>
+</data-extraction-rules>

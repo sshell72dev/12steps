@@ -366,6 +366,30 @@ object SourceBootstrap {
         SourceCatalog.put("journal.versionHistory", "История изменений")
         SourceCatalog.put("journal.versionInstalled", "установлена")
         SourceCatalog.put("journal.versionOpen", "Версия и изменения")
+        SourceCatalog.put("backup.title", "Резервная копия")
+        SourceCatalog.put(
+            "backup.hint",
+            "Копия всех данных сохраняется в один файл. Её можно перенести на новый телефон или загрузить после переустановки приложения. Файл не защищён паролем — храните его в надёжном месте."
+        )
+        SourceCatalog.put("backup.export", "Сохранить копию в файл")
+        SourceCatalog.put("backup.restore", "Восстановить из копии")
+        SourceCatalog.put("backup.busy", "Идёт работа с копией, подождите…")
+        SourceCatalog.put("backup.savedOk", "Копия сохранена")
+        SourceCatalog.put("backup.savedError", "Не удалось сохранить копию")
+        SourceCatalog.put("backup.restoreTitle", "Восстановить данные?")
+        SourceCatalog.put(
+            "backup.restoreBody",
+            "Все данные на этом телефоне будут заменены данными из копии. Отменить это действие нельзя."
+        )
+        SourceCatalog.put("backup.restoreYes", "Восстановить")
+        SourceCatalog.put(
+            "backup.restoredOk",
+            "Данные восстановлены. Приложение перезапускается…"
+        )
+        SourceCatalog.put(
+            "backup.restoredError",
+            "Не удалось восстановить: файл повреждён или это не копия «12 шагов»"
+        )
         SourceCatalog.put("journal.pickEyebrow", "Навигация")
         SourceCatalog.put("journal.pickTitle", "Выбор Шага")
         SourceCatalog.put(
