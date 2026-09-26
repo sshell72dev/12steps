@@ -469,7 +469,7 @@ private fun QuestionEditorList(
                     questionId = question.id,
                     order = index + 1,
                     total = questions.size,
-                    title = question.text,
+                    title = question.text.ifBlank { Ru.analysisNewQuestion },
                     buttonsBadge = buttonsBadge(question),
                     yesNoActive = isYesNo(question),
                     showYesNoHint = question.buttons == QuestionButtons.AUTO,
@@ -703,6 +703,7 @@ private fun QuestionEditorDetails(
             onValueChange = { onChange(question.copy(text = it)) },
             modifier = Modifier.fillMaxWidth(),
             minLines = 2,
+            placeholder = { Text(Ru.analysisNewQuestion) },
             colors = editorFieldColors()
         )
         if (depth < 2) {
@@ -913,7 +914,7 @@ private fun BranchEditorList(
                     branches + AnalysisBranch(
                         id = AnalysisCatalog.newId(),
                         title = Ru.analysisAddBranch,
-                        questions = listOf("Новый вопрос")
+                        questions = listOf("")
                     )
                 )
             },
@@ -966,6 +967,7 @@ private fun CleanDayEditor(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
+                    placeholder = { Text(Ru.analysisNewQuestion) },
                     colors = editorFieldColors()
                 )
                 SideEditor(Ru.analysisIfYes, item.ifYes) { side ->
@@ -981,7 +983,7 @@ private fun CleanDayEditor(
                 onChange(
                     items + CleanDayItem(
                         title = Ru.analysisAddItem,
-                        question = "Новый вопрос",
+                        question = "",
                         ifYes = CleanDaySide(Ru.analysisYes, emptyList()),
                         ifNo = CleanDaySide(Ru.analysisNo, emptyList())
                     )
@@ -1029,6 +1031,7 @@ private fun StringListEditor(
                     },
                     modifier = Modifier.weight(1f),
                     minLines = 2,
+                    placeholder = { Text(Ru.analysisNewQuestion) },
                     colors = editorFieldColors()
                 )
                 IconButton(onClick = { onChange(items.filterIndexed { i, _ -> i != index }) }) {
@@ -1037,7 +1040,7 @@ private fun StringListEditor(
             }
         }
         OutlinedButton(
-            onClick = { onChange(items + "Новый вопрос") },
+            onClick = { onChange(items + "") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         ) { Text(Ru.analysisAddQuestion, color = Forest) }

@@ -421,7 +421,15 @@ fun AnalysisSessionScreen(
 
                             },
 
-                            onChoose = { _, _ -> }
+                            onChoose = { _, _ -> },
+
+                            onFinish = {
+
+                                reflectionViewModel.reset()
+
+                                persistNow(markActive = true)
+
+                            }
 
                         )
 
@@ -744,7 +752,8 @@ internal fun QuestionBody(
     onSubmit: (String) -> Unit,
     onChoose: (String, String) -> Unit,
     initialDraft: String = "",
-    onDraftChange: (String) -> Unit = {}
+    onDraftChange: (String) -> Unit = {},
+    onFinish: (() -> Unit)? = null
 ) {
     var draft by remember(screen.question, screen.progressIndex) { mutableStateOf(initialDraft) }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -855,7 +864,7 @@ internal fun QuestionBody(
 
         val showChoices = screen.choices.isNotEmpty() && !composing
         val showSend = screen.allowText && !screen.hideSend
-        if (showChoices || showSend) {
+        if (showChoices || showSend || onFinish != null) {
             ActionBar {
                 if (showChoices) {
                     screen.choices.forEach { choice ->
@@ -883,6 +892,16 @@ internal fun QuestionBody(
                         Spacer(Modifier.padding(4.dp))
                         Text(Ru.send)
                     }
+                }
+                onFinish?.let { finish ->
+                    OutlinedButton(
+                        onClick = finish,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .focusProperties { canFocus = false },
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text(Ru.analysisReflectionFinish, color = Forest) }
                 }
             }
         }

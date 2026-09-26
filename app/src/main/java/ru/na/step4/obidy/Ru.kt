@@ -245,6 +245,8 @@ object Ru {
     val analysisReflectionExitTitle: String get() = I18n.t("ui.analysisReflectionExitTitle", "\u041f\u0440\u0435\u0440\u0432\u0430\u0442\u044c \u0432\u043e\u043f\u0440\u043e\u0441\u044b \u0434\u043b\u044f \u0440\u0435\u0444\u043b\u0435\u043a\u0441\u0438\u0438?")
     val analysisReflectionExitBody: String get() = I18n.t("ui.analysisReflectionExitBody", "\u0423\u0436\u0435 \u0434\u0430\u043d\u043d\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0442\u0441\u044f. \u041e\u0441\u0442\u0430\u043b\u044c\u043d\u044b\u0435 \u0432\u043e\u043f\u0440\u043e\u0441\u044b \u043c\u043e\u0436\u043d\u043e \u043f\u0440\u043e\u0439\u0442\u0438 \u043f\u043e\u0437\u0436\u0435.")
     val analysisReflectionExitConfirm: String get() = I18n.t("ui.analysisReflectionExitConfirm", "\u041f\u0440\u0435\u0440\u0432\u0430\u0442\u044c")
+    val analysisReflectionFinish: String get() = I18n.t("ui.analysisReflectionFinish", "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c")
+    val analysisNewQuestion: String get() = I18n.t("ui.analysisNewQuestion", "\u041d\u043e\u0432\u044b\u0439 \u0432\u043e\u043f\u0440\u043e\u0441")
     val analysisShare: String get() = I18n.t("ui.analysisShare", "\u041f\u043e\u0434\u0435\u043b\u0438\u0442\u044c\u0441\u044f")
     val analysisToMenu: String get() = I18n.t("ui.analysisToMenu", "\u0412 \u043c\u0435\u043d\u044e")
     val analysisRestart: String get() = I18n.t("ui.analysisRestart", "\u041d\u0430\u0447\u0430\u0442\u044c \u0437\u0430\u043d\u043e\u0432\u043e")

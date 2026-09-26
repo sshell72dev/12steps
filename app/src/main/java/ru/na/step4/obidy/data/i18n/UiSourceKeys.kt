@@ -235,6 +235,8 @@ object UiSourceKeys {
         "ui.analysisReflectionExitTitle",
         "ui.analysisReflectionExitBody",
         "ui.analysisReflectionExitConfirm",
+        "ui.analysisReflectionFinish",
+        "ui.analysisNewQuestion",
         "ui.analysisShare",
         "ui.analysisToMenu",
         "ui.analysisRestart",

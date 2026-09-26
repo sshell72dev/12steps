@@ -179,7 +179,7 @@ object AnalysisCatalog {
             questions = listOf(
                 LinearQuestion(
                     id = "$id-q1",
-                    text = "Новый вопрос",
+                    text = "",
                     buttons = QuestionButtons.NONE
                 )
             ),
@@ -190,7 +190,7 @@ object AnalysisCatalog {
     fun blankQuestion(prefix: String = "q"): LinearQuestion =
         LinearQuestion(
             id = "$prefix-${newId()}",
-            text = "Новый вопрос",
+            text = "",
             buttons = QuestionButtons.NONE
         )
 
