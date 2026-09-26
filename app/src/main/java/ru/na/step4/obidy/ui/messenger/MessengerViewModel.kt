@@ -165,14 +165,18 @@ class MessengerViewModel(
         chatPoll = null
     }
 
-    fun sendText(chatId: String, body: String) {
+    fun sendText(chatId: String, body: String, replyToId: Long = 0L) {
         val text = body.trim()
         if (text.isBlank()) return
-        viewModelScope.launch { repository.sendText(chatId, text) }
+        viewModelScope.launch { repository.sendText(chatId, text, replyToId) }
     }
 
-    fun sendVoice(chatId: String, file: File, durationMs: Int) {
-        viewModelScope.launch { repository.sendVoice(chatId, file, durationMs) }
+    fun sendVoice(chatId: String, file: File, durationMs: Int, replyToId: Long = 0L) {
+        viewModelScope.launch { repository.sendVoice(chatId, file, durationMs, replyToId) }
+    }
+
+    fun forwardMessage(chatId: String, messageId: Long) {
+        viewModelScope.launch { repository.forwardMessage(chatId, messageId) }
     }
 
     fun editMessage(messageId: Long, body: String) {
@@ -183,6 +187,19 @@ class MessengerViewModel(
 
     fun deleteMessage(messageId: Long) {
         viewModelScope.launch { repository.deleteMessage(messageId) }
+    }
+
+    fun pinMessage(chatId: String, messageId: Long) {
+        viewModelScope.launch { repository.pinMessage(chatId, messageId) }
+    }
+
+    /** Пустой emoji снимает реакцию. */
+    fun toggleReaction(messageId: Long, emoji: String) {
+        viewModelScope.launch { repository.setReaction(messageId, emoji) }
+    }
+
+    fun unpinMessage(chatId: String) {
+        viewModelScope.launch { repository.pinMessage(chatId, 0L) }
     }
 
     fun playVoice(message: MessengerMessage) {

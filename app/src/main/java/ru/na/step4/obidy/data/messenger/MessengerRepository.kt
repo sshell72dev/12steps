@@ -48,6 +48,9 @@ class MessengerRepository(
     /** Идентификатор профиля в мессенджере: по нему сервер отличает владельца группы. */
     val myId: String get() = prefs.messengerId
 
+    /** Администратор удаляет в чате любое сообщение — и своё, и чужое, и системное. */
+    val isAdmin: Boolean get() = MessengerHttp.adminCode().isNotBlank()
+
     private val _pairToken = MutableStateFlow("")
     val pairToken: StateFlow<String> = _pairToken.asStateFlow()
 
@@ -56,6 +59,16 @@ class MessengerRepository(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _pinned = MutableStateFlow<MessengerMessage?>(null)
+    private val _pinnedChatId = MutableStateFlow("")
+
+    /**
+     * Закреплённое сообщение чата вместе с его chatId: показывать закреп можно
+     * только для того чата, из которого он получен.
+     */
+    val pinned: StateFlow<MessengerMessage?> = _pinned.asStateFlow()
+    val pinnedChatId: StateFlow<String> = _pinnedChatId.asStateFlow()
 
     val chats: Flow<List<MessengerChat>> = dao.observeChats().map { rows ->
         val mapped = rows.map { it.toChat() }
@@ -135,7 +148,10 @@ class MessengerRepository(
 
     suspend fun refreshChats() = withContext(Dispatchers.IO) {
         when (val result = client.chats()) {
-            is MessengerResult.Ok -> dao.upsertChats(result.value.map { it.toRow() })
+            is MessengerResult.Ok -> dao.syncChats(
+                rows = result.value.map { it.toRow() },
+                keepIds = result.value.map { it.id } + AppAlerts.CHAT_ID
+            )
             is MessengerResult.Disabled -> applyEnabled(false)
             is MessengerResult.Err -> _error.value = result.message.ifBlank { MessengerRu.error }
         }
@@ -204,9 +220,11 @@ class MessengerRepository(
             is MessengerResult.Ok -> {
                 // Полная сверка ленты: так приходят и новые сообщения,
                 // и правки, и удаления.
-                dao.replaceMessages(chatId, result.value.map { it.toRow() })
-                if (result.value.isNotEmpty()) {
-                    client.markRead(chatId, result.value.maxOf { it.id })
+                dao.replaceMessages(chatId, result.value.items.map { it.toRow() })
+                _pinnedChatId.value = chatId
+                _pinned.value = result.value.pinned
+                if (result.value.items.isNotEmpty()) {
+                    client.markRead(chatId, result.value.items.maxOf { it.id })
                 }
             }
             is MessengerResult.Disabled -> applyEnabled(false)
@@ -214,9 +232,9 @@ class MessengerRepository(
         }
     }
 
-    suspend fun sendText(chatId: String, body: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun sendText(chatId: String, body: String, replyToId: Long = 0L): Boolean = withContext(Dispatchers.IO) {
         if (chatId == AppAlerts.CHAT_ID) return@withContext false
-        when (val result = client.sendText(chatId, body)) {
+        when (val result = client.sendText(chatId, body, replyToId)) {
             is MessengerResult.Ok -> {
                 dao.upsertMessages(listOf(result.value.toRow()))
                 refreshChats()
@@ -233,8 +251,33 @@ class MessengerRepository(
         }
     }
 
-    suspend fun sendVoice(chatId: String, file: File, durationMs: Int): Boolean = withContext(Dispatchers.IO) {
-        when (val result = client.sendVoice(chatId, file, durationMs)) {
+    /** Пересылка сообщения в другой чат: сервер копирует его и подписывает автора оригинала. */
+    suspend fun forwardMessage(chatId: String, messageId: Long): Boolean = withContext(Dispatchers.IO) {
+        if (chatId == AppAlerts.CHAT_ID) return@withContext false
+        when (val result = client.forwardMessage(chatId, messageId)) {
+            is MessengerResult.Ok -> {
+                dao.upsertMessages(listOf(result.value.toRow()))
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    suspend fun sendVoice(
+        chatId: String,
+        file: File,
+        durationMs: Int,
+        replyToId: Long = 0L
+    ): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.sendVoice(chatId, file, durationMs, replyToId)) {
             is MessengerResult.Ok -> {
                 dao.upsertMessages(listOf(result.value.toRow()))
                 file.delete()
@@ -274,6 +317,44 @@ class MessengerRepository(
         when (val result = client.deleteMessage(messageId)) {
             is MessengerResult.Ok -> {
                 dao.upsertMessages(listOf(result.value.toRow()))
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    /** Реакция на сообщение: пустой emoji снимает поставленную. */
+    suspend fun setReaction(messageId: Long, emoji: String): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.setReaction(messageId, emoji)) {
+            is MessengerResult.Ok -> {
+                dao.upsertMessages(listOf(result.value.toRow()))
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
+    /** Закрепление сообщения в шапке чата; messageId = 0 снимает закреп. */
+    suspend fun pinMessage(chatId: String, messageId: Long): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.pinMessage(chatId, messageId)) {
+            is MessengerResult.Ok -> {
+                _pinnedChatId.value = chatId
+                _pinned.value = result.value
                 refreshChats()
                 true
             }
@@ -725,6 +806,23 @@ class MessengerRepository(
         return on
     }
 
+    /** Реакции в кэше хранятся строкой: Room не умеет списки без конвертера. */
+    private fun encodeReactions(items: List<MessengerReaction>): String =
+        items.joinToString(";") { "${it.emoji}|${it.count}|${if (it.mine) 1 else 0}" }
+
+    private fun decodeReactions(raw: String): List<MessengerReaction> {
+        if (raw.isBlank()) return emptyList()
+        return raw.split(";").mapNotNull { part ->
+            val bits = part.split("|")
+            if (bits.size < 3 || bits[0].isBlank()) return@mapNotNull null
+            MessengerReaction(
+                emoji = bits[0],
+                count = bits[1].toIntOrNull() ?: 0,
+                mine = bits[2] == "1"
+            )
+        }
+    }
+
     private fun MessengerChat.toRow() = MessengerChatRow(
         id = id,
         kind = kind,
@@ -736,7 +834,11 @@ class MessengerRepository(
         lastBody = lastBody,
         lastKind = lastKind,
         lastAt = lastAt,
-        unread = unread
+        unread = unread,
+        pinnedId = pinnedId,
+        pinnedKind = pinnedKind,
+        pinnedBody = pinnedBody,
+        pinnedSender = pinnedSender
     )
 
     private fun MessengerChatRow.toChat() = MessengerChat(
@@ -750,7 +852,11 @@ class MessengerRepository(
         lastBody = lastBody,
         lastKind = lastKind,
         lastAt = lastAt,
-        unread = unread
+        unread = unread,
+        pinnedId = pinnedId,
+        pinnedKind = pinnedKind,
+        pinnedBody = pinnedBody,
+        pinnedSender = pinnedSender
     )
 
     private fun MessengerMessage.toRow() = MessengerMessageRow(
@@ -764,7 +870,15 @@ class MessengerRepository(
         createdAt = createdAt,
         mine = mine,
         editedAt = editedAt,
-        deleted = deleted
+        deleted = deleted,
+        replyToId = replyToId,
+        replySenderName = replySenderName,
+        replyBody = replyBody,
+        replyKind = replyKind,
+        replyVoiceMs = replyVoiceMs,
+        replyDeleted = replyDeleted,
+        forwardFrom = forwardFrom,
+        reactions = encodeReactions(reactions)
     )
 
     private fun MessengerMessageRow.toMessage() = MessengerMessage(
@@ -778,6 +892,14 @@ class MessengerRepository(
         createdAt = createdAt,
         mine = mine,
         editedAt = editedAt,
-        deleted = deleted
+        deleted = deleted,
+        replyToId = replyToId,
+        replySenderName = replySenderName,
+        replyBody = replyBody,
+        replyKind = replyKind,
+        replyVoiceMs = replyVoiceMs,
+        replyDeleted = replyDeleted,
+        forwardFrom = forwardFrom,
+        reactions = decodeReactions(reactions)
     )
 }

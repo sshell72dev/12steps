@@ -1,6 +1,14 @@
 {
   "releases": [
     {
+      "version": "1.2.6",
+      "versionCode": 67,
+      "date": "2026-09-26",
+      "items": [
+        "Обновление сервера и приложения"
+      ]
+    },
+    {
       "version": "1.2.5",
       "versionCode": 66,
       "date": "2026-09-26",

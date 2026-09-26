@@ -235,7 +235,7 @@ fun MessengerHostScreen(
                     onBack = { nav.popBackStack() },
                     onShowQr = { nav.navigate(MRoutes.QR) },
                     onShowTopics = { nav.navigate(MRoutes.topics(id)) },
-                    onGroupDeleted = { nav.popBackStack() }
+                    onGroupDeleted = { nav.popBackStack(MRoutes.HUB, inclusive = false) }
                 )
             }
             composable(

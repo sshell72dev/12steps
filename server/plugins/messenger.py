@@ -5,6 +5,7 @@ import hmac
 import os
 import re
 import secrets
+import shutil
 import uuid
 from functools import wraps
 from pathlib import Path
@@ -118,6 +119,7 @@ def init_schema() -> None:
                 pair_key VARCHAR(140) NULL,
                 created_at DATETIME NOT NULL,
                 last_message_at DATETIME NULL,
+                pinned_message_id BIGINT NULL,
                 UNIQUE KEY messenger_chats_pair (pair_key),
                 KEY messenger_chats_group (group_id)
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
@@ -147,6 +149,8 @@ def init_schema() -> None:
                 created_at DATETIME NOT NULL,
                 edited_at DATETIME NULL,
                 deleted TINYINT(1) NOT NULL DEFAULT 0,
+                reply_to_id BIGINT NULL,
+                forward_from VARCHAR(64) NOT NULL DEFAULT '',
                 KEY messenger_messages_chat (chat_id, id)
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             """
@@ -246,6 +250,14 @@ def _ensure_media_schema(cur) -> None:
         cur.execute(
             "ALTER TABLE messenger_messages ADD COLUMN deleted TINYINT(1) NOT NULL DEFAULT 0"
         )
+    if not _has_column(cur, "messenger_messages", "reply_to_id"):
+        cur.execute("ALTER TABLE messenger_messages ADD COLUMN reply_to_id BIGINT NULL")
+    if not _has_column(cur, "messenger_messages", "forward_from"):
+        cur.execute(
+            "ALTER TABLE messenger_messages ADD COLUMN forward_from VARCHAR(64) NOT NULL DEFAULT ''"
+        )
+    if not _has_column(cur, "messenger_chats", "pinned_message_id"):
+        cur.execute("ALTER TABLE messenger_chats ADD COLUMN pinned_message_id BIGINT NULL")
     if not _has_column(cur, "messenger_chats", "topic_id"):
         cur.execute("ALTER TABLE messenger_chats ADD COLUMN topic_id VARCHAR(64) NULL")
     cur.execute(
@@ -267,6 +279,19 @@ def _ensure_media_schema(cur) -> None:
         cur.execute(
             "ALTER TABLE messenger_topics ADD INDEX messenger_topics_ticket (ticket_id)"
         )
+    # Одна реакция на пользователя: повторная заменяет предыдущую, а не копится.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS messenger_reactions (
+            message_id BIGINT NOT NULL,
+            user_id VARCHAR(64) NOT NULL,
+            emoji VARCHAR(16) NOT NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY (message_id, user_id),
+            KEY messenger_reactions_message (message_id)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        """
+    )
 
 
 def _avatar_file(kind: str, owner_id: str) -> Path:
@@ -335,6 +360,13 @@ def _drop_chat(cur, chat_id: str) -> None:
     )
     for row in cur.fetchall():
         _drop_voice_file(int(row["id"]))
+    cur.execute(
+        """
+        DELETE FROM messenger_reactions
+        WHERE message_id IN (SELECT id FROM messenger_messages WHERE chat_id = %s)
+        """,
+        (chat_id,),
+    )
     cur.execute("DELETE FROM messenger_messages WHERE chat_id = %s", (chat_id,))
     cur.execute("DELETE FROM messenger_chat_members WHERE chat_id = %s", (chat_id,))
     cur.execute("DELETE FROM messenger_chats WHERE id = %s", (chat_id,))
@@ -803,6 +835,25 @@ def _unread(cur, chat_id: str, me: str, last_read_id: int) -> int:
     return int(row.get("c") or 0)
 
 
+def _pinned_json(cur, chat_id: str, me: str = "") -> dict | None:
+    """Закреплённое сообщение чата: показывается шапкой над лентой."""
+    cur.execute(
+        "SELECT pinned_message_id FROM messenger_chats WHERE id = %s",
+        (chat_id,),
+    )
+    pinned_id = int((cur.fetchone() or {}).get("pinned_message_id") or 0)
+    if not pinned_id:
+        return None
+    row = _load_message(cur, pinned_id)
+    if not row or row.get("chat_id") != chat_id or bool(int(row.get("deleted") or 0)):
+        return None
+    names = _names_for(
+        cur, [row.get("sender_id") or "", row.get("reply_sender_id") or ""]
+    )
+    reactions = _reactions_for(cur, [pinned_id], me)
+    return _message_json(row, me, names, reactions.get(pinned_id))
+
+
 def _chat_json(cur, chat: dict, me: str) -> dict:
     kind = chat["kind"]
     title = ""
@@ -869,26 +920,48 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         "last_kind": last_kind,
         "last_at": last_at,
         "unread": _unread(cur, chat["id"], me, last_read),
+        "pinned": _pinned_json(cur, chat["id"], me),
     }
 
 
-def _message_json(row: dict, me: str, names: dict[str, str]) -> dict:
-    sender = row.get("sender_id") or ""
-    kind = row["kind"]
-    deleted = bool(int(row.get("deleted") or 0))
+def _sender_display(sender: str, kind: str, names: dict[str, str]) -> str:
     # Сообщения об обновлении шлёт системный пользователь, но в чате
     # техподдержки подписывать их «Челленджи» нельзя.
     if kind == "update":
-        sender_name = SUPPORT_GROUP_NAME
-    elif sender == SYSTEM_USER_ID:
-        sender_name = SYSTEM_TEXT_NAME
-    else:
-        sender_name = names.get(sender) or ""
+        return SUPPORT_GROUP_NAME
+    if sender == SYSTEM_USER_ID:
+        return SYSTEM_TEXT_NAME
+    return names.get(sender) or ""
+
+
+def _message_json(
+    row: dict,
+    me: str,
+    names: dict[str, str],
+    reactions: list[dict] | None = None,
+) -> dict:
+    sender = row.get("sender_id") or ""
+    kind = row["kind"]
+    deleted = bool(int(row.get("deleted") or 0))
+    reply_id = int(row.get("reply_to_id") or 0)
+    reply = None
+    if reply_id:
+        reply_deleted = bool(int(row.get("reply_deleted") or 0))
+        reply = {
+            "id": reply_id,
+            "sender_name": _sender_display(
+                row.get("reply_sender_id") or "", row.get("reply_kind") or "text", names
+            ),
+            "kind": row.get("reply_kind") or "text",
+            "body": "" if reply_deleted else (row.get("reply_body") or ""),
+            "voice_duration_ms": 0 if reply_deleted else int(row.get("reply_voice_ms") or 0),
+            "deleted": reply_deleted,
+        }
     return {
         "id": int(row["id"]),
         "chat_id": row["chat_id"],
         "sender_id": sender,
-        "sender_name": sender_name,
+        "sender_name": _sender_display(sender, kind, names),
         "kind": kind,
         "body": "" if deleted else (row.get("body") or ""),
         "voice_duration_ms": 0 if deleted else int(row.get("voice_duration_ms") or 0),
@@ -896,6 +969,9 @@ def _message_json(row: dict, me: str, names: dict[str, str]) -> dict:
         "mine": sender == me,
         "edited_at": _ms(row, "edited_unix"),
         "deleted": deleted,
+        "reply_to": reply,
+        "forward_from": row.get("forward_from") or "",
+        "reactions": reactions or [],
     }
 
 
@@ -911,15 +987,68 @@ def _names_for(cur, user_ids: list[str]) -> dict[str, str]:
     return {row["id"]: row.get("display_name") or "" for row in cur.fetchall()}
 
 
-def _insert_message(cur, chat_id: str, sender_id: str, kind: str, body: str, duration_ms: int = 0) -> int:
+def _reactions_for(cur, message_ids: list[int], me: str) -> dict[int, list[dict]]:
+    """Реакции всей ленты одной выборкой, а не запросом на каждое сообщение."""
+    ids = [int(mid) for mid in set(message_ids) if mid]
+    if not ids:
+        return {}
+    placeholders = ",".join(["%s"] * len(ids))
+    cur.execute(
+        f"""
+        SELECT message_id, emoji, COUNT(*) AS c,
+               MAX(CASE WHEN user_id = %s THEN 1 ELSE 0 END) AS mine
+        FROM messenger_reactions
+        WHERE message_id IN ({placeholders})
+        GROUP BY message_id, emoji
+        ORDER BY MIN(created_at) ASC
+        """,
+        [me] + ids,
+    )
+    grouped: dict[int, list[dict]] = {}
+    for row in cur.fetchall():
+        grouped.setdefault(int(row["message_id"]), []).append(
+            {
+                "emoji": row["emoji"],
+                "count": int(row["c"]),
+                "mine": bool(int(row["mine"] or 0)),
+            }
+        )
+    return grouped
+
+
+# Выборка сообщения вместе с оригиналом, на который отвечают: цитата приходит
+# одним запросом, без отдельного обращения на каждое сообщение ленты.
+MESSAGE_SELECT = """
+    SELECT m.id, m.chat_id, m.sender_id, m.kind, m.body, m.voice_duration_ms, m.deleted,
+           m.reply_to_id, m.forward_from,
+           UNIX_TIMESTAMP(m.created_at) AS created_unix,
+           UNIX_TIMESTAMP(m.edited_at) AS edited_unix,
+           r.sender_id AS reply_sender_id, r.kind AS reply_kind, r.body AS reply_body,
+           r.voice_duration_ms AS reply_voice_ms, r.deleted AS reply_deleted
+    FROM messenger_messages m
+    LEFT JOIN messenger_messages r ON r.id = m.reply_to_id
+"""
+
+
+def _insert_message(
+    cur,
+    chat_id: str,
+    sender_id: str,
+    kind: str,
+    body: str,
+    duration_ms: int = 0,
+    reply_to_id: int = 0,
+    forward_from: str = "",
+) -> int:
     now = db.utc_now()
     cur.execute(
         """
         INSERT INTO messenger_messages
-            (chat_id, sender_id, kind, body, voice_path, voice_duration_ms, created_at)
-        VALUES (%s, %s, %s, %s, '', %s, %s)
+            (chat_id, sender_id, kind, body, voice_path, voice_duration_ms,
+             created_at, reply_to_id, forward_from)
+        VALUES (%s, %s, %s, %s, '', %s, %s, %s, %s)
         """,
-        (chat_id, sender_id, kind, body, duration_ms, now),
+        (chat_id, sender_id, kind, body, duration_ms, now, reply_to_id or None, forward_from),
     )
     message_id = int(cur.lastrowid)
     cur.execute(
@@ -930,16 +1059,41 @@ def _insert_message(cur, chat_id: str, sender_id: str, kind: str, body: str, dur
 
 
 def _load_message(cur, message_id: int):
-    cur.execute(
-        """
-        SELECT id, chat_id, sender_id, kind, body, voice_duration_ms, deleted,
-               UNIX_TIMESTAMP(created_at) AS created_unix,
-               UNIX_TIMESTAMP(edited_at) AS edited_unix
-        FROM messenger_messages WHERE id = %s
-        """,
-        (message_id,),
-    )
+    cur.execute(f"{MESSAGE_SELECT} WHERE m.id = %s", (message_id,))
     return cur.fetchone()
+
+
+def _int_value(raw) -> int:
+    try:
+        return int(raw or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _reply_target(cur, chat_id: str, reply_to_id: int) -> int:
+    """Ответ ссылается только на живое сообщение того же чата."""
+    if not reply_to_id:
+        return 0
+    cur.execute(
+        "SELECT chat_id, deleted FROM messenger_messages WHERE id = %s",
+        (reply_to_id,),
+    )
+    origin = cur.fetchone()
+    if not origin or origin.get("chat_id") != chat_id or bool(int(origin.get("deleted") or 0)):
+        return 0
+    return reply_to_id
+
+
+def _copy_voice(source_id: int, message_id: int) -> bool:
+    """Пересылка голосового копирует файл: запись привязана к своему сообщению."""
+    source = UPLOAD_DIR / f"{source_id}.m4a"
+    if not source.is_file():
+        return False
+    try:
+        shutil.copyfile(source, UPLOAD_DIR / f"{message_id}.m4a")
+    except OSError:
+        return False
+    return True
 
 
 def _drop_voice_file(message_id: int) -> None:
@@ -1448,21 +1602,27 @@ def register(app, login_required, api_ok) -> None:
             if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
             cur.execute(
-                """
-                SELECT id, chat_id, sender_id, kind, body, voice_duration_ms, deleted,
-                       UNIX_TIMESTAMP(created_at) AS created_unix,
-                       UNIX_TIMESTAMP(edited_at) AS edited_unix
-                FROM messenger_messages
-                WHERE chat_id = %s AND id > %s
-                ORDER BY id ASC
+                f"""
+                {MESSAGE_SELECT}
+                WHERE m.chat_id = %s AND m.id > %s
+                ORDER BY m.id ASC
                 LIMIT 200
                 """,
                 (chat_id, after),
             )
             rows = cur.fetchall()
-            names = _names_for(cur, [row["sender_id"] for row in rows])
-            messages = [_message_json(row, messenger_id, names) for row in rows]
-        return jsonify({"messages": messages})
+            names = _names_for(
+                cur,
+                [row["sender_id"] for row in rows]
+                + [row.get("reply_sender_id") or "" for row in rows],
+            )
+            reactions = _reactions_for(cur, [int(row["id"]) for row in rows], messenger_id)
+            messages = [
+                _message_json(row, messenger_id, names, reactions.get(int(row["id"])))
+                for row in rows
+            ]
+            pinned = _pinned_json(cur, chat_id, messenger_id)
+        return jsonify({"messages": messages, "pinned": pinned})
 
     @app.post("/api/v1/messenger/chats/<chat_id>/messages")
     @guard(need_user=True)
@@ -1471,26 +1631,62 @@ def register(app, login_required, api_ok) -> None:
             return jsonify({"error": "not_found"}), 404
         payload = request.get_json(silent=True) or {}
         body = str(payload.get("body") or "").strip()[:MAX_TEXT]
-        if not body:
+        reply_to_id = _int_value(payload.get("reply_to_id"))
+        forward_id = _int_value(payload.get("forward_message_id"))
+        if not body and not forward_id:
             return jsonify({"error": "empty"}), 400
         is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
         ticket_id = 0
         with db.cursor() as cur:
             if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
-            message_id = _insert_message(cur, chat_id, messenger_id, "text", body)
-            ticket_id = _ideas_ticket_for_chat(cur, chat_id)
-            cur.execute(
-                """
-                SELECT id, chat_id, sender_id, kind, body, voice_duration_ms,
-                       UNIX_TIMESTAMP(created_at) AS created_unix
-                FROM messenger_messages WHERE id = %s
-                """,
-                (message_id,),
+            reply_to_id = _reply_target(cur, chat_id, reply_to_id)
+            forward_from = ""
+            kind = "text"
+            duration_ms = 0
+            if forward_id:
+                cur.execute(
+                    """
+                    SELECT chat_id, sender_id, kind, body, voice_duration_ms, deleted
+                    FROM messenger_messages WHERE id = %s
+                    """,
+                    (forward_id,),
+                )
+                source = cur.fetchone()
+                if not source or bool(int(source.get("deleted") or 0)):
+                    return jsonify({"error": "not_found"}), 404
+                if not _is_member(cur, source["chat_id"], messenger_id, admin=is_admin):
+                    return jsonify({"error": "forbidden"}), 403
+                source_kind = source.get("kind") or "text"
+                sender_names = _names_for(cur, [source.get("sender_id") or ""])
+                forward_from = _sender_display(
+                    source.get("sender_id") or "", source_kind, sender_names
+                )
+                if source_kind == "voice":
+                    kind = "voice"
+                    body = ""
+                    duration_ms = int(source.get("voice_duration_ms") or 0)
+                else:
+                    body = (source.get("body") or "")[:MAX_TEXT]
+                    if not body:
+                        return jsonify({"error": "empty"}), 400
+            message_id = _insert_message(
+                cur, chat_id, messenger_id, kind, body, duration_ms, reply_to_id, forward_from
             )
-            row = cur.fetchone()
-            names = _names_for(cur, [messenger_id])
-        if ticket_id:
+            if kind == "voice":
+                if not _copy_voice(forward_id, message_id):
+                    cur.execute("DELETE FROM messenger_messages WHERE id = %s", (message_id,))
+                    return jsonify({"error": "store_failed"}), 500
+                cur.execute(
+                    "UPDATE messenger_messages SET voice_path = %s WHERE id = %s",
+                    (f"uploads/messenger/{message_id}.m4a", message_id),
+                )
+            ticket_id = _ideas_ticket_for_chat(cur, chat_id)
+            row = _load_message(cur, message_id)
+            names = _names_for(
+                cur, [messenger_id, (row or {}).get("reply_sender_id") or ""]
+            )
+        if ticket_id and not forward_id:
             # Переписка в подгруппе «Идеи и Ошибки» продолжает обращение поддержки.
             try:
                 db.add_support_message(ticket_id, "admin" if is_admin else "user", body)
@@ -1514,12 +1710,14 @@ def register(app, login_required, api_ok) -> None:
         except ValueError:
             duration_ms = 0
         duration_ms = max(1, min(duration_ms, MAX_VOICE_MS))
+        reply_to_id = _int_value(request.form.get("reply_to_id"))
         is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
         with db.cursor() as cur:
             if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
+            reply_to_id = _reply_target(cur, chat_id, reply_to_id)
             message_id = _insert_message(
-                cur, chat_id, messenger_id, "voice", "", duration_ms
+                cur, chat_id, messenger_id, "voice", "", duration_ms, reply_to_id
             )
             filename = f"{message_id}.m4a"
             path = UPLOAD_DIR / filename
@@ -1533,16 +1731,10 @@ def register(app, login_required, api_ok) -> None:
                 "UPDATE messenger_messages SET voice_path = %s WHERE id = %s",
                 (rel, message_id),
             )
-            cur.execute(
-                """
-                SELECT id, chat_id, sender_id, kind, body, voice_duration_ms,
-                       UNIX_TIMESTAMP(created_at) AS created_unix
-                FROM messenger_messages WHERE id = %s
-                """,
-                (message_id,),
+            row = _load_message(cur, message_id)
+            names = _names_for(
+                cur, [messenger_id, (row or {}).get("reply_sender_id") or ""]
             )
-            row = cur.fetchone()
-            names = _names_for(cur, [messenger_id])
         return jsonify({"message": _message_json(row, messenger_id, names)})
 
     @app.get("/api/v1/messenger/voice/<int:message_id>")
@@ -1723,12 +1915,65 @@ def register(app, login_required, api_ok) -> None:
                 (body, db.utc_now(), message_id),
             )
             message = _load_message(cur, message_id)
-            names = _names_for(cur, [messenger_id])
-        return jsonify({"message": _message_json(message, messenger_id, names)})
+            names = _names_for(cur, [messenger_id, (message or {}).get("reply_sender_id") or ""])
+            reactions = _reactions_for(cur, [message_id], messenger_id)
+        return jsonify(
+            {"message": _message_json(message, messenger_id, names, reactions.get(message_id))}
+        )
+
+    @app.post("/api/v1/messenger/messages/<int:message_id>/reaction")
+    @guard(need_user=True)
+    def api_messenger_message_reaction(messenger_id: str, message_id: int):
+        """Реакция на сообщение: одна на пользователя, повторный тап её снимает."""
+        payload = request.get_json(silent=True) or {}
+        emoji = str(payload.get("emoji") or "").strip()[:16]
+        is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
+        with db.cursor() as cur:
+            row = _load_message(cur, message_id)
+            if not row or bool(int(row.get("deleted") or 0)):
+                return jsonify({"error": "not_found"}), 404
+            if not _is_member(cur, row["chat_id"], messenger_id, admin=is_admin):
+                return jsonify({"error": "forbidden"}), 403
+            if not emoji:
+                cur.execute(
+                    "DELETE FROM messenger_reactions WHERE message_id = %s AND user_id = %s",
+                    (message_id, messenger_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT emoji FROM messenger_reactions
+                    WHERE message_id = %s AND user_id = %s
+                    LIMIT 1
+                    """,
+                    (message_id, messenger_id),
+                )
+                current = (cur.fetchone() or {}).get("emoji")
+                # Повторный тап по той же реакции снимает её, другая — заменяет.
+                cur.execute(
+                    "DELETE FROM messenger_reactions WHERE message_id = %s AND user_id = %s",
+                    (message_id, messenger_id),
+                )
+                if current != emoji:
+                    cur.execute(
+                        """
+                        INSERT INTO messenger_reactions (message_id, user_id, emoji, created_at)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (message_id, messenger_id, emoji, db.utc_now()),
+                    )
+            names = _names_for(
+                cur, [row.get("sender_id") or "", row.get("reply_sender_id") or ""]
+            )
+            reactions = _reactions_for(cur, [message_id], messenger_id)
+        return jsonify(
+            {"message": _message_json(row, messenger_id, names, reactions.get(message_id))}
+        )
 
     @app.delete("/api/v1/messenger/messages/<int:message_id>")
     @guard(need_user=True)
     def api_messenger_delete_message(messenger_id: str, message_id: int):
+        is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
         with db.cursor() as cur:
             cur.execute(
                 "SELECT id, chat_id, sender_id, kind, deleted FROM messenger_messages WHERE id = %s",
@@ -1737,9 +1982,10 @@ def register(app, login_required, api_ok) -> None:
             row = cur.fetchone()
             if not row or bool(int(row.get("deleted") or 0)):
                 return jsonify({"error": "not_found"}), 404
-            if row["sender_id"] != messenger_id:
+            # Администратор чистит любое сообщение: и своё, и чужое, и системное.
+            if row["sender_id"] != messenger_id and not is_admin:
                 return jsonify({"error": "forbidden"}), 403
-            if not _is_member(cur, row["chat_id"], messenger_id):
+            if not _is_member(cur, row["chat_id"], messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
             if row["kind"] == "voice":
                 _drop_voice_file(message_id)
@@ -1747,9 +1993,47 @@ def register(app, login_required, api_ok) -> None:
                 "UPDATE messenger_messages SET deleted = 1, body = '', voice_path = '' WHERE id = %s",
                 (message_id,),
             )
+            cur.execute("DELETE FROM messenger_reactions WHERE message_id = %s", (message_id,))
+            cur.execute(
+                """
+                UPDATE messenger_chats SET pinned_message_id = NULL
+                WHERE id = %s AND pinned_message_id = %s
+                """,
+                (row["chat_id"], message_id),
+            )
             message = _load_message(cur, message_id)
-            names = _names_for(cur, [messenger_id])
+            names = _names_for(cur, [messenger_id, (message or {}).get("reply_sender_id") or ""])
         return jsonify({"message": _message_json(message, messenger_id, names)})
+
+    @app.post("/api/v1/messenger/chats/<chat_id>/pin")
+    @guard(need_user=True)
+    def api_messenger_pin_message(messenger_id: str, chat_id: str):
+        """Закрепление сообщения в шапке чата: message_id = 0 снимает закреп."""
+        if not _valid_id(chat_id):
+            return jsonify({"error": "not_found"}), 404
+        payload = request.get_json(silent=True) or {}
+        message_id = _int_value(payload.get("message_id"))
+        is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
+        with db.cursor() as cur:
+            cur.execute("SELECT id FROM messenger_chats WHERE id = %s", (chat_id,))
+            if cur.fetchone() is None:
+                return jsonify({"error": "not_found"}), 404
+            if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
+                return jsonify({"error": "forbidden"}), 403
+            if message_id:
+                row = _load_message(cur, message_id)
+                if (
+                    not row
+                    or row.get("chat_id") != chat_id
+                    or bool(int(row.get("deleted") or 0))
+                ):
+                    return jsonify({"error": "not_found"}), 404
+            cur.execute(
+                "UPDATE messenger_chats SET pinned_message_id = %s WHERE id = %s",
+                (message_id or None, chat_id),
+            )
+            pinned = _pinned_json(cur, chat_id, messenger_id)
+        return jsonify({"ok": True, "pinned": pinned})
 
     @app.post("/api/v1/messenger/groups/<group_id>")
     @guard(need_user=True)

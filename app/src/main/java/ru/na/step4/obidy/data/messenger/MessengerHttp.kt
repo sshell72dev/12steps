@@ -47,8 +47,13 @@ internal object MessengerHttp {
         messengerId: String,
         file: File,
         durationMs: Int,
+        replyToId: Long = 0L,
         readTimeoutMs: Int = 60_000
     ): MessengerResult<Response> {
+        val fields = buildMap {
+            put("duration_ms", durationMs.toString())
+            if (replyToId > 0L) put("reply_to_id", replyToId.toString())
+        }
         return postFile(
             path = path,
             messengerId = messengerId,
@@ -56,7 +61,7 @@ internal object MessengerHttp {
             fieldName = "file",
             fileName = "voice.m4a",
             mimeType = "audio/mp4",
-            extraFields = mapOf("duration_ms" to durationMs.toString()),
+            extraFields = fields,
             readTimeoutMs = readTimeoutMs
         )
     }

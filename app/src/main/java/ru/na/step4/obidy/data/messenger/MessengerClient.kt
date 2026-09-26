@@ -74,16 +74,20 @@ class MessengerClient(private val messengerId: () -> String) {
         }
     }
 
-    fun messages(chatId: String, after: Long): MessengerResult<List<MessengerMessage>> {
+    fun messages(chatId: String, after: Long): MessengerResult<MessengerMessages> {
         return map(
             MessengerHttp.get("/api/v1/messenger/chats/$chatId/messages?after=$after", messengerId())
         ) { obj ->
-            parseMessages(obj.optJSONArray("messages"))
+            MessengerMessages(
+                items = parseMessages(obj.optJSONArray("messages")),
+                pinned = obj.optJSONObject("pinned")?.let { parseMessage(it) }
+            )
         }
     }
 
-    fun sendText(chatId: String, body: String): MessengerResult<MessengerMessage> {
+    fun sendText(chatId: String, body: String, replyToId: Long = 0L): MessengerResult<MessengerMessage> {
         val payload = JSONObject().put("body", body)
+        if (replyToId > 0L) payload.put("reply_to_id", replyToId)
         return map(
             MessengerHttp.post("/api/v1/messenger/chats/$chatId/messages", messengerId(), payload)
         ) { obj ->
@@ -91,9 +95,30 @@ class MessengerClient(private val messengerId: () -> String) {
         }
     }
 
-    fun sendVoice(chatId: String, file: File, durationMs: Int): MessengerResult<MessengerMessage> {
+    /** Пересылка: сервер копирует текст и подписывает автора оригинала, слать body не нужно. */
+    fun forwardMessage(chatId: String, messageId: Long): MessengerResult<MessengerMessage> {
+        val payload = JSONObject().put("forward_message_id", messageId)
         return map(
-            MessengerHttp.postMultipart("/api/v1/messenger/chats/$chatId/voice", messengerId(), file, durationMs)
+            MessengerHttp.post("/api/v1/messenger/chats/$chatId/messages", messengerId(), payload)
+        ) { obj ->
+            parseMessage(obj.optJSONObject("message"))
+        }
+    }
+
+    fun sendVoice(
+        chatId: String,
+        file: File,
+        durationMs: Int,
+        replyToId: Long = 0L
+    ): MessengerResult<MessengerMessage> {
+        return map(
+            MessengerHttp.postMultipart(
+                "/api/v1/messenger/chats/$chatId/voice",
+                messengerId(),
+                file,
+                durationMs,
+                replyToId
+            )
         ) { obj ->
             parseMessage(obj.optJSONObject("message"))
         }
@@ -116,6 +141,28 @@ class MessengerClient(private val messengerId: () -> String) {
     fun deleteMessage(messageId: Long): MessengerResult<MessengerMessage> {
         return map(
             MessengerHttp.delete("/api/v1/messenger/messages/$messageId", messengerId())
+        ) { obj -> parseMessage(obj.optJSONObject("message")) }
+    }
+
+    /** messageId = 0 снимает закреп. */
+    fun pinMessage(chatId: String, messageId: Long): MessengerResult<MessengerMessage?> {
+        val payload = JSONObject().put("message_id", messageId)
+        return map(
+            MessengerHttp.post("/api/v1/messenger/chats/$chatId/pin", messengerId(), payload)
+        ) { obj ->
+            obj.optJSONObject("pinned")?.let { parseMessage(it) }
+        }
+    }
+
+    /** Пустой emoji снимает реакцию; повтор той же реакции тоже её снимает. */
+    fun setReaction(messageId: Long, emoji: String): MessengerResult<MessengerMessage> {
+        val payload = JSONObject().put("emoji", emoji)
+        return map(
+            MessengerHttp.post(
+                "/api/v1/messenger/messages/$messageId/reaction",
+                messengerId(),
+                payload
+            )
         ) { obj -> parseMessage(obj.optJSONObject("message")) }
     }
 
@@ -393,6 +440,7 @@ class MessengerClient(private val messengerId: () -> String) {
         return buildList {
             for (i in 0 until arr.length()) {
                 val row = arr.optJSONObject(i) ?: continue
+                val pinned = row.optJSONObject("pinned")
                 add(
                     MessengerChat(
                         id = row.optString("id"),
@@ -405,7 +453,11 @@ class MessengerClient(private val messengerId: () -> String) {
                         lastBody = row.optString("last_body"),
                         lastKind = row.optString("last_kind"),
                         lastAt = row.optLong("last_at"),
-                        unread = row.optInt("unread")
+                        unread = row.optInt("unread"),
+                        pinnedId = pinned?.optLong("id") ?: 0L,
+                        pinnedKind = pinned?.optString("kind").orEmpty(),
+                        pinnedBody = pinned?.optString("body").orEmpty(),
+                        pinnedSender = pinned?.optString("sender_name").orEmpty()
                     )
                 )
             }
@@ -424,6 +476,7 @@ class MessengerClient(private val messengerId: () -> String) {
 
     private fun parseMessage(obj: JSONObject?): MessengerMessage {
         val row = obj ?: JSONObject()
+        val reply = row.optJSONObject("reply_to")
         return MessengerMessage(
             id = row.optLong("id"),
             chatId = row.optString("chat_id"),
@@ -435,7 +488,31 @@ class MessengerClient(private val messengerId: () -> String) {
             createdAt = row.optLong("created_at"),
             mine = row.optBoolean("mine"),
             editedAt = row.optLong("edited_at"),
-            deleted = row.optBoolean("deleted")
+            deleted = row.optBoolean("deleted"),
+            replyToId = reply?.optLong("id") ?: 0L,
+            replySenderName = reply?.optString("sender_name").orEmpty(),
+            replyBody = reply?.optString("body").orEmpty(),
+            replyKind = reply?.optString("kind").orEmpty(),
+            replyVoiceMs = reply?.optInt("voice_duration_ms") ?: 0,
+            replyDeleted = reply?.optBoolean("deleted") ?: false,
+            forwardFrom = row.optString("forward_from"),
+            reactions = parseReactions(row.optJSONArray("reactions"))
         )
+    }
+
+    private fun parseReactions(arr: JSONArray?): List<MessengerReaction> {
+        if (arr == null) return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val row = arr.optJSONObject(i) ?: continue
+                add(
+                    MessengerReaction(
+                        emoji = row.optString("emoji"),
+                        count = row.optInt("count"),
+                        mine = row.optBoolean("mine")
+                    )
+                )
+            }
+        }
     }
 }

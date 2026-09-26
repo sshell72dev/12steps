@@ -1,10 +1,14 @@
 package ru.na.step4.obidy.ui.messenger
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -16,10 +20,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -60,6 +66,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -99,7 +106,17 @@ fun MessengerChatScreen(
     var menuFor by remember { mutableStateOf<MessengerMessage?>(null) }
     var editFor by remember { mutableStateOf<MessengerMessage?>(null) }
     var editDraft by remember { mutableStateOf("") }
-    var deleteFor by remember { mutableStateOf<MessengerMessage?>(null) }
+    var deleteIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    var replyTo by remember { mutableStateOf<MessengerMessage?>(null) }
+    var forwardIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    var selecting by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val myName by viewModel.repository.displayName.collectAsStateWithLifecycle()
+    val chats by viewModel.repository.chats.collectAsStateWithLifecycle(emptyList())
+    val pinnedMessage by viewModel.repository.pinned.collectAsStateWithLifecycle()
+    val pinnedChatId by viewModel.repository.pinnedChatId.collectAsStateWithLifecycle()
+    val pinned = pinnedMessage.takeIf { pinnedChatId == chatId }
+    val isAdmin = viewModel.repository.isAdmin
     val context = LocalContext.current
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val listState = rememberLazyListState()
@@ -129,10 +146,38 @@ fun MessengerChatScreen(
             PackageManager.PERMISSION_GRANTED
     }
 
+    /** Текст строки «ответ на…»: у голосового и удалённого сообщения своего текста нет. */
+    fun draftPreview(message: MessengerMessage): String = when {
+        message.isVoice -> MessengerRu.voiceMessage
+        message.deleted -> MessengerRu.messageDeleted
+        else -> message.body
+    }
+
+    /** Копировать нечего у голосовых и удалённых сообщений — они в текст не попадают. */
+    fun copyTexts(ids: List<Long>) {
+        val text = messages
+            .filter { it.id in ids && !it.deleted && !it.isVoice && it.body.isNotBlank() }
+            .joinToString("\n\n") { it.body }
+        if (text.isBlank()) return
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        clipboard?.setPrimaryClip(ClipData.newPlainText(MessengerRu.title, text))
+    }
+
+    fun toggleSelection(id: Long) {
+        selected = if (id in selected) selected - id else selected + id
+    }
+
+    fun clearSelection() {
+        selecting = false
+        selected = emptySet()
+    }
+
     fun sendDraft() {
         val text = draft
+        val replyId = replyTo?.id ?: 0L
         draft = ""
-        viewModel.sendText(chatId, text)
+        replyTo = null
+        viewModel.sendText(chatId, text, replyId)
     }
 
     menuFor?.let { target ->
@@ -141,17 +186,87 @@ fun MessengerChatScreen(
             title = { Text(MessengerRu.messageActions) },
             text = {
                 Column {
-                    if (!target.isVoice) {
+                    if (!target.deleted) {
+                        Text(
+                            MessengerRu.messageReaction,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            REACTION_EMOJIS.forEach { emoji ->
+                                val active = target.reactions.any { it.mine && it.emoji == emoji }
+                                Text(
+                                    emoji,
+                                    fontSize = 24.sp,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            menuFor = null
+                                            viewModel.toggleReaction(
+                                                target.id,
+                                                if (active) "" else emoji
+                                            )
+                                        }
+                                        .padding(6.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        TextButton(onClick = {
+                            replyTo = target
+                            menuFor = null
+                        }) { Text(MessengerRu.messageReply, color = Forest) }
+                        TextButton(onClick = {
+                            forwardIds = listOf(target.id)
+                            menuFor = null
+                        }) { Text(MessengerRu.messageForward, color = Forest) }
+                        if (!target.isVoice) {
+                            TextButton(onClick = {
+                                copyTexts(listOf(target.id))
+                                menuFor = null
+                            }) { Text(MessengerRu.messageCopy, color = Forest) }
+                        }
+                        TextButton(onClick = {
+                            val unpin = pinned?.id == target.id
+                            menuFor = null
+                            if (unpin) {
+                                viewModel.unpinMessage(chatId)
+                            } else {
+                                viewModel.pinMessage(chatId, target.id)
+                            }
+                        }) {
+                            Text(
+                                if (pinned?.id == target.id) {
+                                    MessengerRu.messageUnpin
+                                } else {
+                                    MessengerRu.messagePin
+                                },
+                                color = Forest
+                            )
+                        }
+                    }
+                    TextButton(onClick = {
+                        selecting = true
+                        selected = setOf(target.id)
+                        menuFor = null
+                    }) { Text(MessengerRu.messageSelect, color = Forest) }
+                    if (target.mine && !target.deleted && !target.isVoice) {
                         TextButton(onClick = {
                             editDraft = target.body
                             editFor = target
                             menuFor = null
                         }) { Text(MessengerRu.messageEdit, color = Forest) }
                     }
-                    TextButton(onClick = {
-                        deleteFor = target
-                        menuFor = null
-                    }) { Text(MessengerRu.messageDelete, color = Forest) }
+                    // Удалять чужие и системные сообщения разрешено администратору.
+                    if (!target.deleted && (target.mine || isAdmin)) {
+                        TextButton(onClick = {
+                            deleteIds = listOf(target.id)
+                            menuFor = null
+                        }) { Text(MessengerRu.messageDelete, color = Forest) }
+                    }
                 }
             },
             confirmButton = {
@@ -189,20 +304,58 @@ fun MessengerChatScreen(
             }
         )
     }
-    deleteFor?.let { target ->
+    if (deleteIds.isNotEmpty()) {
         AlertDialog(
-            onDismissRequest = { deleteFor = null },
+            onDismissRequest = { deleteIds = emptyList() },
             title = { Text(MessengerRu.messageDelete) },
             text = { Text(MessengerRu.messageDeleteQuestion) },
             confirmButton = {
                 TextButton(onClick = {
-                    val id = target.id
-                    deleteFor = null
-                    viewModel.deleteMessage(id)
+                    val ids = deleteIds
+                    deleteIds = emptyList()
+                    clearSelection()
+                    ids.forEach { viewModel.deleteMessage(it) }
                 }) { Text(MessengerRu.confirmYes, color = Forest) }
             },
             dismissButton = {
-                TextButton(onClick = { deleteFor = null }) {
+                TextButton(onClick = { deleteIds = emptyList() }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
+    }
+    if (forwardIds.isNotEmpty()) {
+        val ids = forwardIds
+        val targets = chats.filter { it.id != AppAlerts.CHAT_ID }
+        AlertDialog(
+            onDismissRequest = { forwardIds = emptyList() },
+            title = { Text(MessengerRu.messageForwardTitle) },
+            text = {
+                if (targets.isEmpty()) {
+                    Text(MessengerRu.messageForwardEmpty)
+                } else {
+                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                        items(targets, key = { it.id }) { target ->
+                            TextButton(
+                                onClick = {
+                                    forwardIds = emptyList()
+                                    clearSelection()
+                                    ids.forEach { viewModel.forwardMessage(target.id, it) }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    target.title.ifBlank { MessengerRu.title },
+                                    color = Forest,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { forwardIds = emptyList() }) {
                     Text(MessengerRu.confirmNo, color = Forest)
                 }
             }
@@ -245,6 +398,36 @@ fun MessengerChatScreen(
         Box(Modifier.imeScaffoldContent(padding)) {
             AtmosphereBackground(Modifier.fillMaxSize())
             Column(Modifier.fillMaxSize()) {
+                pinned?.takeIf { !alertsChat }?.let { pinnedItem ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(SandDeep)
+                            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                MessengerRu.messagePinnedTitle,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Forest
+                            )
+                            Text(
+                                if (pinnedItem.isVoice) {
+                                    MessengerRu.voiceMessage
+                                } else {
+                                    pinnedItem.body
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2
+                            )
+                        }
+                        IconButton(onClick = { viewModel.unpinMessage(chatId) }) {
+                            Icon(Icons.Outlined.Close, MessengerRu.messageUnpin, tint = Forest)
+                        }
+                    }
+                }
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     state = listState,
@@ -260,7 +443,9 @@ fun MessengerChatScreen(
                             message = message,
                             playing = playingId == message.id,
                             showName = (groupId.isNotBlank() || alertsChat) && !message.mine,
+                            selected = selecting && message.id in selected,
                             onPlay = { viewModel.playVoice(message) },
+                            onReaction = { emoji -> viewModel.toggleReaction(message.id, emoji) },
                             onOpen = if (alertsChat &&
                                 AppAlerts.resolveTarget(
                                     message.senderId,
@@ -272,12 +457,16 @@ fun MessengerChatScreen(
                             } else {
                                 null
                             },
-                            onLongPress = if (
-                                !alertsChat &&
-                                message.mine &&
-                                !message.deleted &&
-                                !message.isUpdate
-                            ) {
+                            onTap = when {
+                                selecting -> {
+                                    { toggleSelection(message.id) }
+                                }
+                                !alertsChat && !message.deleted -> {
+                                    { menuFor = message }
+                                }
+                                else -> null
+                            },
+                            onLongPress = if (!alertsChat && !message.deleted) {
                                 { menuFor = message }
                             } else {
                                 null
@@ -295,7 +484,34 @@ fun MessengerChatScreen(
                         }
                     }
                 }
-                if (!alertsChat) {
+                if (!alertsChat && selecting) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Sand.copy(alpha = 0.96f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "${MessengerRu.messageSelected}: ${selected.size}",
+                            modifier = Modifier.weight(1f),
+                            color = Forest
+                        )
+                        TextButton(onClick = { forwardIds = selected.toList() }) {
+                            Text(MessengerRu.messageForward, color = Forest)
+                        }
+                        TextButton(onClick = { copyTexts(selected.toList()) }) {
+                            Text(MessengerRu.messageCopy, color = Forest)
+                        }
+                        TextButton(onClick = { deleteIds = selected.toList() }) {
+                            Text(MessengerRu.messageDelete, color = Forest)
+                        }
+                        TextButton(onClick = { clearSelection() }) {
+                            Text(MessengerRu.messageSelectCancel, color = Forest)
+                        }
+                    }
+                }
+                if (!alertsChat && !selecting) {
                 if (recording) {
                     Row(
                         Modifier
@@ -311,6 +527,33 @@ fun MessengerChatScreen(
                         )
                         IconButton(onClick = { cancelRecord = true }) {
                             Icon(Icons.Outlined.Close, MessengerRu.cancelRecord, tint = Forest)
+                        }
+                    }
+                }
+                replyTo?.let { target ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(SandDeep)
+                            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "${MessengerRu.messageReplyTo}: " +
+                                    if (target.mine) myName else target.senderName,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Forest
+                            )
+                            Text(
+                                draftPreview(target),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                        IconButton(onClick = { replyTo = null }) {
+                            Icon(Icons.Outlined.Close, MessengerRu.messageReplyCancel, tint = Forest)
                         }
                     }
                 }
@@ -353,7 +596,9 @@ fun MessengerChatScreen(
                                             val drop = cancelRecord
                                             val result = viewModel.repository.voiceRecorder.stop(delete = drop)
                                             if (result != null) {
-                                                viewModel.sendVoice(chatId, result.first, result.second)
+                                                val replyId = replyTo?.id ?: 0L
+                                                replyTo = null
+                                                viewModel.sendVoice(chatId, result.first, result.second, replyId)
                                             }
                                         }
                                     )
@@ -374,6 +619,9 @@ fun MessengerChatScreen(
     }
 }
 
+/** Быстрые реакции: как в мессенджерах, всегда под рукой в меню сообщения. */
+private val REACTION_EMOJIS = listOf("👍", "❤️", "🔥", "😂", "👏", "🙏")
+
 @Composable
 private fun DayLabel(text: String) {
     if (text.isBlank()) return
@@ -393,7 +641,10 @@ private fun MessageBubble(
     playing: Boolean,
     showName: Boolean,
     onPlay: () -> Unit,
+    selected: Boolean = false,
+    onReaction: (String) -> Unit = {},
     onOpen: (() -> Unit)? = null,
+    onTap: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null
 ) {
     val mine = message.mine
@@ -407,7 +658,22 @@ private fun MessageBubble(
                 .clip(RoundedCornerShape(16.dp))
                 .background(if (mine) Forest else SandDeep)
                 .then(
-                    if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier
+                    if (selected) {
+                        Modifier.border(
+                            2.dp,
+                            if (mine) Sand else Forest,
+                            RoundedCornerShape(16.dp)
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .then(
+                    when {
+                        onOpen != null -> Modifier.clickable(onClick = onOpen)
+                        onTap != null -> Modifier.clickable(onClick = onTap)
+                        else -> Modifier
+                    }
                 )
                 .then(
                     if (onLongPress != null) {
@@ -427,6 +693,38 @@ private fun MessageBubble(
                     color = if (mine) Sand.copy(alpha = 0.85f) else Forest
                 )
                 Spacer(Modifier.height(2.dp))
+            }
+            if (message.isForwarded) {
+                Text(
+                    "${MessengerRu.messageForwardFrom} ${message.forwardFrom}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (mine) Sand.copy(alpha = 0.85f) else Forest
+                )
+                Spacer(Modifier.height(2.dp))
+            }
+            if (message.isReply && !message.deleted) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (mine) Sand.copy(alpha = 0.18f) else Forest.copy(alpha = 0.12f)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        message.replySenderName.ifBlank { MessengerRu.messageReplyTo },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (mine) Sand else Forest
+                    )
+                    Text(
+                        message.replyPreview(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (mine) Sand.copy(alpha = 0.85f) else Forest.copy(alpha = 0.85f),
+                        maxLines = 2
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
             }
             if (message.deleted) {
                 Text(
@@ -472,6 +770,34 @@ private fun MessageBubble(
                         }
                         .padding(vertical = 10.dp)
                 )
+            }
+            if (message.hasReactions) {
+                Row(
+                    Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    message.reactions.forEach { reaction ->
+                        val highlight = if (reaction.mine) {
+                            if (mine) Sand.copy(alpha = 0.3f) else Forest.copy(alpha = 0.18f)
+                        } else if (mine) {
+                            Sand.copy(alpha = 0.12f)
+                        } else {
+                            Forest.copy(alpha = 0.08f)
+                        }
+                        Text(
+                            "${reaction.emoji} ${reaction.count}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (mine) Sand else Forest,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(highlight)
+                                .clickable {
+                                    onReaction(if (reaction.mine) "" else reaction.emoji)
+                                }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
             Text(
                 if (message.isEdited) {

@@ -136,6 +136,24 @@ object MessengerRu {
     )
     val messageEdited: String get() = I18n.t("messenger.messageEdited", "изменено")
     val messageDeleted: String get() = I18n.t("messenger.messageDeleted", "Сообщение удалено")
+    val messageReply: String get() = I18n.t("messenger.messageReply", "Ответить")
+    val messageForward: String get() = I18n.t("messenger.messageForward", "Переслать")
+    val messageReplyTo: String get() = I18n.t("messenger.messageReplyTo", "Ответ")
+    val messageForwardFrom: String get() = I18n.t("messenger.messageForwardFrom", "Переслано от")
+    val messageForwardTitle: String get() = I18n.t("messenger.messageForwardTitle", "Переслать в чат")
+    val messageForwardEmpty: String get() = I18n.t(
+        "messenger.messageForwardEmpty",
+        "Пока нет других чатов, куда можно переслать сообщение."
+    )
+    val messageReplyCancel: String get() = I18n.t("messenger.messageReplyCancel", "Не отвечать")
+    val messageCopy: String get() = I18n.t("messenger.messageCopy", "Скопировать текст")
+    val messagePin: String get() = I18n.t("messenger.messagePin", "Закрепить")
+    val messageUnpin: String get() = I18n.t("messenger.messageUnpin", "Открепить")
+    val messageSelect: String get() = I18n.t("messenger.messageSelect", "Выбрать")
+    val messageSelected: String get() = I18n.t("messenger.messageSelected", "Выбрано")
+    val messageSelectCancel: String get() = I18n.t("messenger.messageSelectCancel", "Отмена")
+    val messagePinnedTitle: String get() = I18n.t("messenger.messagePinnedTitle", "Закреплённое сообщение")
+    val messageReaction: String get() = I18n.t("messenger.messageReaction", "Реакция")
 
     fun challengeTitle(key: String, fallback: String): String = when (key) {
         "steps" -> challengeSteps

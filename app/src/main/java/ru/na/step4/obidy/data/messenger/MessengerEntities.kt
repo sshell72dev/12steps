@@ -21,7 +21,11 @@ data class MessengerChatRow(
     val lastBody: String,
     val lastKind: String,
     val lastAt: Long,
-    val unread: Int
+    val unread: Int,
+    val pinnedId: Long = 0L,
+    val pinnedKind: String = "",
+    val pinnedBody: String = "",
+    val pinnedSender: String = ""
 )
 
 @Entity(tableName = "messages")
@@ -36,7 +40,15 @@ data class MessengerMessageRow(
     val createdAt: Long,
     val mine: Boolean,
     val editedAt: Long = 0L,
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
+    val replyToId: Long = 0L,
+    val replySenderName: String = "",
+    val replyBody: String = "",
+    val replyKind: String = "",
+    val replyVoiceMs: Int = 0,
+    val replyDeleted: Boolean = false,
+    val forwardFrom: String = "",
+    val reactions: String = ""
 )
 
 @Entity(tableName = "contacts")
@@ -76,6 +88,30 @@ interface MessengerDao {
     suspend fun replaceMessages(chatId: String, rows: List<MessengerMessageRow>) {
         clearMessages(chatId)
         upsertMessages(rows)
+    }
+
+    @Query("SELECT id FROM chats")
+    suspend fun chatIds(): List<String>
+
+    @Query("DELETE FROM chats WHERE id IN (:ids)")
+    suspend fun deleteChats(ids: List<String>)
+
+    @Query("DELETE FROM messages WHERE chatId IN (:ids)")
+    suspend fun clearMessagesFor(ids: List<String>)
+
+    /**
+     * Полная сверка списка: чаты, которых больше нет на сервере (удалённая группа,
+     * выход из группы, исключение участника), уходят из кэша вместе с лентой.
+     */
+    @Transaction
+    suspend fun syncChats(rows: List<MessengerChatRow>, keepIds: List<String>) {
+        upsertChats(rows)
+        val keep = keepIds.toSet()
+        val stale = chatIds().filterNot { it in keep }
+        if (stale.isNotEmpty()) {
+            deleteChats(stale)
+            clearMessagesFor(stale)
+        }
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
