@@ -35,6 +35,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import ru.na.step4.obidy.data.analysis.AnalysisCatalogSync
 import ru.na.step4.obidy.data.journal.JournalPrefs
+import ru.na.step4.obidy.data.profile.PersonalityAiClient
 import ru.na.step4.obidy.data.analysis.SessionScreen
 import ru.na.step4.obidy.data.spiritual.SpiritualSource
 
@@ -475,15 +476,40 @@ class AnalysisAiReviewViewModel(application: Application) : AndroidViewModel(app
                     val eventId = "analysis-" + (title.hashCode().toString() + "-" + answers.size)
                     val parsed = ru.na.step4.obidy.data.profile.PersonalityPortrait.parse(result.text)
                     val visible = spiritual.consumeAiText(eventId, parsed.first)
-                    val portrait = result.personality ?: parsed.second
-                    if (profile.personalityCollectEnabled && !portrait.isNullOrBlank()) {
-                        profile.personality = portrait
-                    }
                     cache.put(title, answers, reviewLength, visible)
+                    refreshPersonality(title, answers, visible)
                     AiReviewUi.Ready(visible, fromCache = false, prompt = result.prompt)
                 }
                 is AnalysisAiClient.Result.Err -> AiReviewUi.Error(result.message)
             }
+        }
+    }
+
+    /**
+     * Портрет «Моя личность» обновляется отдельным запросом — после оценки самоанализа.
+     */
+    private suspend fun refreshPersonality(title: String, answers: List<QaPair>, review: String) {
+        if (!profile.personalityEnabled) return
+        val app = getApplication<Step4App>()
+        withContext(Dispatchers.IO) {
+            PersonalityAiClient.updateAndSave(
+                profile = profile,
+                material = buildString {
+                    appendLine("САМОАНАЛИЗ: $title")
+                    appendLine()
+                    appendLine("ОТВЕТЫ:")
+                    answers.forEachIndexed { index, pair ->
+                        appendLine("Вопрос ${index + 1}: ${pair.question}")
+                        appendLine("Ответ: ${pair.answer}")
+                    }
+                    appendLine()
+                    appendLine("РАЗБОР АССИСТЕНТА:")
+                    appendLine(review)
+                },
+                source = PersonalityAiClient.Source.ANALYSIS,
+                premium = premiumActive(),
+                admin = app.journalPrefs.isAdmin
+            )
         }
     }
 

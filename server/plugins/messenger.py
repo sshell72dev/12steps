@@ -1,6 +1,7 @@
 """Experimental messenger: QR pairing, groups, text and voice. Isolated plugin."""
 from __future__ import annotations
 
+import hmac
 import os
 import re
 import secrets
@@ -26,12 +27,20 @@ SYSTEM_USER_NAME = "Челленджи"
 SUPPORT_KEY = "support"
 SUPPORT_GROUP_ID = "challenge_support"
 SUPPORT_GROUP_NAME = "Техподдержка"
+IDEAS_KEY = "ideas"
+IDEAS_GROUP_ID = "challenge_ideas"
+IDEAS_GROUP_NAME = "Идеи и Ошибки"
+SYSTEM_TEXT_NAME = "Администратор"
+TOPIC_NAME_WORDS = 2
 CHALLENGES = (
     ("steps", "challenge_steps", "Челлендж шагов"),
     ("analysis", "challenge_analysis", "Челлендж самоанализов"),
     (SUPPORT_KEY, SUPPORT_GROUP_ID, SUPPORT_GROUP_NAME),
+    (IDEAS_KEY, IDEAS_GROUP_ID, IDEAS_GROUP_NAME),
 )
 CHALLENGE_KEYS = {item[0] for item in CHALLENGES}
+# Группа обращений не выдаётся карточкой «Подключиться»: в неё попадают автоматически.
+HIDDEN_CHALLENGE_KEYS = {IDEAS_KEY}
 
 
 def is_enabled() -> bool:
@@ -250,6 +259,14 @@ def _ensure_media_schema(cur) -> None:
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
         """
     )
+    if not _has_column(cur, "messenger_topics", "author_id"):
+        cur.execute("ALTER TABLE messenger_topics ADD COLUMN author_id VARCHAR(64) NULL")
+    if not _has_column(cur, "messenger_topics", "ticket_id"):
+        cur.execute("ALTER TABLE messenger_topics ADD COLUMN ticket_id BIGINT NULL")
+    if not _has_index(cur, "messenger_topics", "messenger_topics_ticket"):
+        cur.execute(
+            "ALTER TABLE messenger_topics ADD INDEX messenger_topics_ticket (ticket_id)"
+        )
 
 
 def _avatar_file(kind: str, owner_id: str) -> Path:
@@ -397,6 +414,133 @@ def _ensure_support_membership(cur, messenger_id: str) -> None:
     )
     chat_id = _ensure_group_chat(cur, SUPPORT_GROUP_ID)
     _add_chat_member(cur, chat_id, messenger_id)
+
+
+def _topic_name_from_body(body: str) -> str:
+    """Название подгруппы — первые два слова обращения."""
+    words = [word for word in (body or "").split() if word]
+    if not words:
+        return ""
+    return _clean_name(" ".join(words[:TOPIC_NAME_WORDS]))
+
+
+def _admin_ok(raw: str) -> bool:
+    """Код администратора приложения: владелец видит все обращения."""
+    expected = str(db.get_setting("admin_app_code", "") or "").strip().upper()
+    got = (raw or "").strip().upper()
+    if not expected or not got:
+        return False
+    return hmac.compare_digest(got, expected)
+
+
+def _ensure_ideas_membership(cur, messenger_id: str) -> None:
+    """Группа обращений «Идеи и Ошибки» открыта каждому: в ней только его подгруппы."""
+    if not messenger_id or messenger_id == SYSTEM_USER_ID:
+        return
+    cur.execute(
+        """
+        INSERT IGNORE INTO messenger_group_members (group_id, user_id, role, created_at)
+        VALUES (%s, %s, 'member', %s)
+        """,
+        (IDEAS_GROUP_ID, messenger_id, db.utc_now()),
+    )
+    chat_id = _ensure_group_chat(cur, IDEAS_GROUP_ID)
+    _add_chat_member(cur, chat_id, messenger_id)
+
+
+def _ideas_ticket_for_chat(cur, chat_id: str) -> int:
+    """Номер обращения, к которому привязана подгруппа (0 — это не подгруппа обращений)."""
+    cur.execute(
+        """
+        SELECT t.ticket_id AS ticket_id
+        FROM messenger_chats c
+        JOIN messenger_topics t ON t.id = c.topic_id
+        WHERE c.id = %s AND c.kind = 'topic'
+        """,
+        (chat_id,),
+    )
+    row = cur.fetchone() or {}
+    try:
+        return int(row.get("ticket_id") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def attach_support_ticket(ticket: dict, messenger_id: str) -> dict:
+    """Обращение из поддержки становится подгруппой «Идеи и Ошибки»."""
+    try:
+        if not is_enabled():
+            return {}
+        ticket_id = int(ticket.get("id") or 0)
+        if not ticket_id:
+            return {}
+        body = str(ticket.get("preview") or "").strip()
+        if not body:
+            for message in ticket.get("messages") or []:
+                if str(message.get("author") or "") == "user":
+                    body = str(message.get("body") or "").strip()
+                    break
+        if not body:
+            return {}
+        author_id = messenger_id if _valid_id(messenger_id) else ""
+        name = _topic_name_from_body(body) or IDEAS_GROUP_NAME
+        with db.cursor() as cur:
+            _ensure_challenge_groups(cur)
+            # Клиент мессенджера мог ещё не заводить профиль — создаём его из обращения.
+            if author_id:
+                cur.execute("SELECT id FROM messenger_users WHERE id = %s", (author_id,))
+                if not cur.fetchone():
+                    now = db.utc_now()
+                    cur.execute(
+                        """
+                        INSERT INTO messenger_users (id, display_name, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (
+                            author_id,
+                            _clean_name(str(ticket.get("user_name") or "")) or "Пользователь",
+                            now,
+                            now,
+                        ),
+                    )
+            cur.execute("SELECT id FROM messenger_topics WHERE ticket_id = %s", (ticket_id,))
+            if cur.fetchone():
+                return {}
+            topic_id = _new_id()
+            cur.execute(
+                """
+                INSERT INTO messenger_topics (id, group_id, name, created_at, author_id, ticket_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (topic_id, IDEAS_GROUP_ID, name, db.utc_now(), author_id, ticket_id),
+            )
+            chat_id = _ensure_topic_chat(cur, IDEAS_GROUP_ID, topic_id)
+            sender = author_id or SYSTEM_USER_ID
+            if author_id:
+                _add_chat_member(cur, chat_id, author_id)
+            # Первым сообщением подгруппы идёт сам вопрос от имени пользователя.
+            _insert_message(cur, chat_id, sender, "text", body)
+        return {"topic_id": topic_id, "chat_id": chat_id}
+    except Exception:
+        return {}
+
+
+def push_support_reply(ticket_id: int, body: str) -> dict:
+    """Ответ администратора из поддержки дублируется в подгруппу обращения."""
+    try:
+        text = (body or "").strip()
+        if not text or not is_enabled():
+            return {}
+        with db.cursor() as cur:
+            cur.execute("SELECT id FROM messenger_topics WHERE ticket_id = %s", (int(ticket_id),))
+            row = cur.fetchone()
+            if not row:
+                return {}
+            chat_id = _ensure_topic_chat(cur, IDEAS_GROUP_ID, row["id"])
+            message_id = _insert_message(cur, chat_id, SYSTEM_USER_ID, "text", text)
+        return {"chat_id": chat_id, "message_id": message_id}
+    except Exception:
+        return {}
 
 
 def _challenge_json(cur, key: str, group_id: str, name: str, messenger_id: str) -> dict:
@@ -591,7 +735,14 @@ def _add_chat_member(cur, chat_id: str, user_id: str) -> None:
     )
 
 
-def _is_member(cur, chat_id: str, user_id: str) -> bool:
+def _ideas_topic_author(cur, topic_id: str) -> str:
+    cur.execute("SELECT author_id FROM messenger_topics WHERE id = %s", (topic_id,))
+    return str((cur.fetchone() or {}).get("author_id") or "")
+
+
+def _is_member(cur, chat_id: str, user_id: str, admin: bool = False) -> bool:
+    if admin:
+        return True
     cur.execute(
         "SELECT 1 FROM messenger_chat_members WHERE chat_id = %s AND user_id = %s",
         (chat_id, user_id),
@@ -600,12 +751,21 @@ def _is_member(cur, chat_id: str, user_id: str) -> bool:
         return True
     # Лента темы открыта участникам группы, даже если запись о членстве ещё не создана.
     cur.execute(
-        "SELECT group_id FROM messenger_chats WHERE id = %s AND kind = 'topic'",
+        "SELECT group_id, topic_id FROM messenger_chats WHERE id = %s AND kind = 'topic'",
         (chat_id,),
     )
-    group_id = (cur.fetchone() or {}).get("group_id") or ""
+    chat = cur.fetchone() or {}
+    group_id = chat.get("group_id") or ""
     if not group_id:
         return False
+    cur.execute("SELECT challenge_key FROM messenger_groups WHERE id = %s", (group_id,))
+    challenge_key = str((cur.fetchone() or {}).get("challenge_key") or "")
+    if challenge_key == IDEAS_KEY:
+        # Переписку по обращению видит только его автор (и администратор через admin=True).
+        if _ideas_topic_author(cur, str(chat.get("topic_id") or "")) != user_id:
+            return False
+        _add_chat_member(cur, chat_id, user_id)
+        return True
     cur.execute(
         "SELECT 1 FROM messenger_group_members WHERE group_id = %s AND user_id = %s",
         (group_id, user_id),
@@ -718,7 +878,12 @@ def _message_json(row: dict, me: str, names: dict[str, str]) -> dict:
     deleted = bool(int(row.get("deleted") or 0))
     # Сообщения об обновлении шлёт системный пользователь, но в чате
     # техподдержки подписывать их «Челленджи» нельзя.
-    sender_name = SUPPORT_GROUP_NAME if kind == "update" else (names.get(sender) or "")
+    if kind == "update":
+        sender_name = SUPPORT_GROUP_NAME
+    elif sender == SYSTEM_USER_ID:
+        sender_name = SYSTEM_TEXT_NAME
+    else:
+        sender_name = names.get(sender) or ""
     return {
         "id": int(row["id"]),
         "chat_id": row["chat_id"],
@@ -1200,8 +1365,11 @@ def register(app, login_required, api_ok) -> None:
                 return jsonify({"error": "not_registered"}), 404
             _ensure_challenge_groups(cur)
             _ensure_support_membership(cur, messenger_id)
+            _ensure_ideas_membership(cur, messenger_id)
             items = []
             for key, group_id, name in CHALLENGES:
+                if key in HIDDEN_CHALLENGE_KEYS:
+                    continue
                 items.append(_challenge_json(cur, key, group_id, name, messenger_id))
         return jsonify({"challenges": items})
 
@@ -1250,6 +1418,7 @@ def register(app, login_required, api_ok) -> None:
                 return jsonify({"error": "not_registered"}), 404
             _ensure_challenge_groups(cur)
             _ensure_support_membership(cur, messenger_id)
+            _ensure_ideas_membership(cur, messenger_id)
             cur.execute(
                 """
                 SELECT c.id, c.kind, c.group_id, c.pair_key,
@@ -1274,8 +1443,9 @@ def register(app, login_required, api_ok) -> None:
             after = int(request.args.get("after") or 0)
         except ValueError:
             after = 0
+        is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
         with db.cursor() as cur:
-            if not _is_member(cur, chat_id, messenger_id):
+            if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
             cur.execute(
                 """
@@ -1303,10 +1473,13 @@ def register(app, login_required, api_ok) -> None:
         body = str(payload.get("body") or "").strip()[:MAX_TEXT]
         if not body:
             return jsonify({"error": "empty"}), 400
+        is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
+        ticket_id = 0
         with db.cursor() as cur:
-            if not _is_member(cur, chat_id, messenger_id):
+            if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
             message_id = _insert_message(cur, chat_id, messenger_id, "text", body)
+            ticket_id = _ideas_ticket_for_chat(cur, chat_id)
             cur.execute(
                 """
                 SELECT id, chat_id, sender_id, kind, body, voice_duration_ms,
@@ -1317,6 +1490,12 @@ def register(app, login_required, api_ok) -> None:
             )
             row = cur.fetchone()
             names = _names_for(cur, [messenger_id])
+        if ticket_id:
+            # Переписка в подгруппе «Идеи и Ошибки» продолжает обращение поддержки.
+            try:
+                db.add_support_message(ticket_id, "admin" if is_admin else "user", body)
+            except ValueError:
+                pass
         return jsonify({"message": _message_json(row, messenger_id, names)})
 
     @app.post("/api/v1/messenger/chats/<chat_id>/voice")
@@ -1335,8 +1514,9 @@ def register(app, login_required, api_ok) -> None:
         except ValueError:
             duration_ms = 0
         duration_ms = max(1, min(duration_ms, MAX_VOICE_MS))
+        is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
         with db.cursor() as cur:
-            if not _is_member(cur, chat_id, messenger_id):
+            if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
             message_id = _insert_message(
                 cur, chat_id, messenger_id, "voice", "", duration_ms
@@ -1651,22 +1831,34 @@ def register(app, login_required, api_ok) -> None:
             group = _group_row(cur, group_id)
             if not group:
                 return jsonify({"error": "not_found"}), 404
+            is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
+            is_ideas = (group.get("challenge_key") or "") == IDEAS_KEY
+            if is_ideas:
+                _ensure_ideas_membership(cur, messenger_id)
             if not _is_group_member(cur, group_id, messenger_id):
                 return jsonify({"error": "forbidden"}), 403
-            general_chat = _ensure_group_chat(cur, group_id)
-            items = [_topic_json(cur, "", "", general_chat, messenger_id, is_default=True)]
+            items = []
+            if not is_ideas:
+                general_chat = _ensure_group_chat(cur, group_id)
+                items.append(_topic_json(cur, "", "", general_chat, messenger_id, is_default=True))
             cur.execute(
                 """
-                SELECT id, name FROM messenger_topics
+                SELECT id, name, author_id FROM messenger_topics
                 WHERE group_id = %s
                 ORDER BY created_at ASC, id ASC
                 """,
                 (group_id,),
             )
             for row in cur.fetchall():
+                author_id = str(row.get("author_id") or "")
+                if is_ideas and not is_admin and author_id != messenger_id:
+                    continue
                 chat_id = _ensure_topic_chat(cur, group_id, row["id"])
-                items.append(_topic_json(cur, row["id"], row["name"], chat_id, messenger_id))
-        return jsonify({"topics": items})
+                item = _topic_json(cur, row["id"], row["name"], chat_id, messenger_id)
+                if is_ideas:
+                    item["author_name"] = _names_for(cur, [author_id]).get(author_id, "")
+                items.append(item)
+        return jsonify({"topics": items, "is_admin": is_admin})
 
     @app.post("/api/v1/messenger/groups/<group_id>/topics")
     @guard(need_user=True)

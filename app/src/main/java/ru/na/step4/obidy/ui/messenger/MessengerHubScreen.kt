@@ -270,6 +270,16 @@ internal fun formatChatTime(ms: Long): String {
     }
 }
 
+/**
+ * Время сообщения внутри ленты: дата уже стоит в разделителе дня, поэтому
+ * у сообщения всегда показываем часы и минуты — иначе у всех сообщений
+ * одного дня подряд стояла бы одна и та же дата.
+ */
+internal fun formatMessageTime(ms: Long): String {
+    if (ms <= 0) return ""
+    return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
+}
+
 internal fun formatDayLabel(ms: Long): String {
     if (ms <= 0) return ""
     val cal = Calendar.getInstance()

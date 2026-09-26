@@ -31,6 +31,7 @@ import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.life.LifeBoardPrompts
 import ru.na.step4.obidy.data.life.LifeBoardStore
 import ru.na.step4.obidy.data.messenger.MessengerChallengeShare
+import ru.na.step4.obidy.data.profile.PersonalityAiClient
 import ru.na.step4.obidy.data.activity.ActivityLog
 
 data class SituationEditUiState(
@@ -294,6 +295,9 @@ class SituationEditViewModel(
                     )
                 }
             }
+            if (fullMode && result is JournalAiClient.Result.Ok && result.text.isNotBlank()) {
+                refreshPersonality(snap, target, result.text.trim())
+            }
         }
     }
 
@@ -478,15 +482,33 @@ class SituationEditViewModel(
         }
     }
 
+    /**
+     * Портрет «Моя личность» — отдельный запрос после полного разбора обиды.
+     * В материал уходит только разбор ассистента, без текста самой ситуации.
+     */
+    private suspend fun refreshPersonality(snap: SituationEditUiState, target: String, review: String) {
+        if (!prefs.personalityEnabled) return
+        withContext(Dispatchers.IO) {
+            PersonalityAiClient.updateAndSave(
+                profile = prefs.profile,
+                material = buildString {
+                    appendLine("РАЗБОР РАБОТЫ ПО ОБИДЕ (4 шаг): ${snap.title.ifBlank { target }}")
+                    appendLine()
+                    appendLine(review)
+                },
+                source = PersonalityAiClient.Source.INVENTORY,
+                premium = prefs.isPro || prefs.isAdmin,
+                admin = prefs.isAdmin
+            )
+        }
+    }
+
     /** Работа по IP завершается сохранением — отмечаем её в «Челлендже шагов». */
     private suspend fun shareInventoryChallenge() {
         if (challengeShared) return
         val share = challenges ?: return
-        val snapshot = form.value
-        val name = snapshot.title.trim().ifBlank { snapshot.target.trim() }
-        if (name.isBlank()) return
         challengeShared = true
-        share.shareInventory(name)
+        share.shareInventory()
     }
 
     fun save(onSaved: () -> Unit) = saveThen { onSaved() }

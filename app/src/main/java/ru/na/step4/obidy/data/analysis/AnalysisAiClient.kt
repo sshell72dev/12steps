@@ -45,12 +45,12 @@ object AnalysisAiClient {
             )
         profile?.let {
             payload.put("questionnaire", questionnaireWithGoals(it, goals))
+            // Портрет уходит в промпт только как контекст: обновляет его отдельный запрос.
             payload.put(
                 "personality",
-                if (it.personalityCollectEnabled) it.personality else it.personalityForAi().orEmpty()
+                if (it.personalityEnabled) it.personality else it.personalityForAi().orEmpty()
             )
             payload.put("name", it.name)
-            payload.put("collect_personality", it.personalityCollectEnabled)
         }
         val language = ru.na.step4.obidy.data.i18n.I18n.languageCode()
             .ifBlank { profile?.languageCode.orEmpty() }

@@ -6,7 +6,7 @@ import ru.na.step4.obidy.data.streak.DailyStreakStore
 
 /** Daily journal streak: one bump per calendar day when a point is written. */
 class JournalStreakStore(context: Context) {
-    private val inner = DailyStreakStore(context, PREFS)
+    private val inner = DailyStreakStore(context, PREFS, GRACE_DAYS)
     val days: StateFlow<Int> get() = inner.days
 
     fun recordCompletion(): Int = inner.recordCompletion()
@@ -21,5 +21,8 @@ class JournalStreakStore(context: Context) {
 
     companion object {
         private const val PREFS = "journal_streak"
+
+        /** Серия шагов живёт два дня: один пропущенный день её не обнуляет. */
+        private const val GRACE_DAYS = 2
     }
 }

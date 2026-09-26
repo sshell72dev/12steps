@@ -54,7 +54,7 @@ object MessengerRu {
     val challengeAnalysis: String get() = I18n.t("messenger.challengeAnalysis", "Челлендж самоанализов")
     val challengeStepsBody: String get() = I18n.t(
         "messenger.challengeStepsBody",
-        "После записи в точку дневника или работы по IP в группу уходит ударный режим, название и рейтинг духовной деятельности."
+        "После записи в точку дневника в группу уходит ударный режим, название и рейтинг духовной деятельности, а после работы по IP — отметка о проработке обиды и рейтинг."
     )
     val challengeAnalysisBody: String get() = I18n.t(
         "messenger.challengeAnalysisBody",
@@ -63,7 +63,7 @@ object MessengerRu {
     val challengeJoin: String get() = I18n.t("messenger.challengeJoin", "Подключиться")
     val challengePoint: String get() = I18n.t("messenger.challengePoint", "Точка")
     val challengeAnalysisLabel: String get() = I18n.t("messenger.challengeAnalysisLabel", "Самоанализ")
-    val challengeInventoryLabel: String get() = I18n.t("messenger.challengeInventoryLabel", "Работа по IP")
+    val challengeInventoryDone: String get() = I18n.t("messenger.challengeInventoryDone", "Проработка обиды")
     val challengeMembers: String get() = I18n.t("messenger.challengeMembers", "участников")
     val groupInfo: String get() = I18n.t("messenger.groupInfo", "О группе")
     val topicsTitle: String get() = I18n.t("messenger.topicsTitle", "Темы")

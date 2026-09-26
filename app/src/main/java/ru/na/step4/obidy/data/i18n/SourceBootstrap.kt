@@ -968,7 +968,7 @@ object SourceBootstrap {
         SourceCatalog.put("messenger.challengeAnalysis", "Челлендж самоанализов")
         SourceCatalog.put(
             "messenger.challengeStepsBody",
-            "После записи в точку дневника или работы по IP в группу уходит ударный режим, название и рейтинг духовной деятельности."
+            "После записи в точку дневника в группу уходит ударный режим, название и рейтинг духовной деятельности, а после работы по IP — отметка о проработке обиды и рейтинг."
         )
         SourceCatalog.put(
             "messenger.challengeAnalysisBody",
@@ -977,7 +977,7 @@ object SourceBootstrap {
         SourceCatalog.put("messenger.challengeJoin", "Подключиться")
         SourceCatalog.put("messenger.challengePoint", "Точка")
         SourceCatalog.put("messenger.challengeAnalysisLabel", "Самоанализ")
-        SourceCatalog.put("messenger.challengeInventoryLabel", "Работа по IP")
+        SourceCatalog.put("messenger.challengeInventoryDone", "Проработка обиды")
         SourceCatalog.put("messenger.challengeMembers", "участников")
         SourceCatalog.put("messenger.groupInfo", "О группе")
         SourceCatalog.put("messenger.topicsTitle", "Темы")

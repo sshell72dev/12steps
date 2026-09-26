@@ -10,10 +10,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import ru.na.step4.obidy.Ru
 
 /**
- * Calendar-day streak. Completing today keeps it through the end of tomorrow;
- * missing that extra day resets the count to zero.
+ * Calendar-day streak. Completing today keeps it alive through the end of the next
+ * [graceDays] day(s); missing that whole window resets the count to zero.
  */
-class DailyStreakStore(context: Context, prefsName: String) {
+class DailyStreakStore(
+    context: Context,
+    prefsName: String,
+    private val graceDays: Int = 1
+) {
     private val prefs = context.applicationContext.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
     private val _days = MutableStateFlow(effectiveDays())
     val days: StateFlow<Int> = _days.asStateFlow()
@@ -24,7 +28,8 @@ class DailyStreakStore(context: Context, prefsName: String) {
         val count = prefs.getInt(KEY_COUNT, 0)
         val next = when {
             last == today -> count.coerceAtLeast(1)
-            last == today.minusDays(1) -> (count + 1).coerceAtLeast(1)
+            last != null && !last.isBefore(today.minusDays(graceDays.toLong())) ->
+                (count + 1).coerceAtLeast(1)
             else -> 1
         }
         prefs.edit()
@@ -48,7 +53,7 @@ class DailyStreakStore(context: Context, prefsName: String) {
         refresh()
         if (_days.value <= 0) return false
         val last = lastDay() ?: return false
-        val lastAliveDay = last.plusDays(1)
+        val lastAliveDay = last.plusDays(graceDays.toLong())
         if (now.toLocalDate() != lastAliveDay) return false
         if (now.toLocalTime() < WARN_FROM) return false
         return prefs.getString(KEY_WARNED, "") != lastAliveDay.toString()
@@ -63,7 +68,7 @@ class DailyStreakStore(context: Context, prefsName: String) {
         val count = prefs.getInt(KEY_COUNT, 0)
         if (count <= 0) return 0
         val today = LocalDate.now()
-        return if (last == today || last == today.minusDays(1)) count else 0
+        return if (!last.isBefore(today.minusDays(graceDays.toLong()))) count else 0
     }
 
     private fun lastDay(): LocalDate? =

@@ -140,7 +140,14 @@ class Step4App : Application() {
         lifeBoard = LifeBoardStore(this)
         notesRepository = ru.na.step4.obidy.data.notes.NotesRepository(this, journalPrefs)
         spiritualRating = SpiritualRatingStore(this)
-        supportRepository = SupportRepository(journalPrefs, spiritualRating, lifeBoard)
+        val messengerPrefs = ru.na.step4.obidy.data.messenger.MessengerPrefs(this)
+        supportRepository = SupportRepository(journalPrefs, spiritualRating, lifeBoard) {
+            messengerPrefs.messengerId
+        }
+        // Администратор видит в «Идеях и Ошибках» обращения всех пользователей.
+        ru.na.step4.obidy.data.messenger.MessengerHttp.adminCode = {
+            if (journalPrefs.isAdmin) journalPrefs.adminCode else ""
+        }
         psychRepository = PsychRepository(db.psychDao())
         psychSettings = PsychSettings(this, profileStore)
         psychSettings.goalsProvider = { lifeBoard.goalsPromptBlock().orEmpty() }

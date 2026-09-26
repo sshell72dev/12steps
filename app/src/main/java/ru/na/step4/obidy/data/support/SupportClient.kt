@@ -17,7 +17,8 @@ object SupportClient {
         screenRoute: String,
         body: String,
         belonging: String = SupportBelonging.SCREEN,
-        kind: String = SupportKind.BUG
+        kind: String = SupportKind.BUG,
+        messengerId: String = ""
     ): SupportTicket? {
         val payload = JSONObject()
             .put("user_id", userId)
@@ -27,6 +28,8 @@ object SupportClient {
             .put("body", body)
             .put("belonging", belonging)
             .put("kind", kind)
+        // По этому идентификатору обращение становится подгруппой «Идеи и Ошибки».
+        if (messengerId.isNotBlank()) payload.put("messenger_id", messengerId)
         return when (val raw = AiHttp.post("/api/v1/support", payload, 20_000)) {
             is AiHttp.Result.Err -> null
             is AiHttp.Result.Ok -> {

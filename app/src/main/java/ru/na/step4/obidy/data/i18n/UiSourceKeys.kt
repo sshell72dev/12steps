@@ -904,7 +904,7 @@ object UiSourceKeys {
         "messenger.challengeJoin",
         "messenger.challengePoint",
         "messenger.challengeAnalysisLabel",
-        "messenger.challengeInventoryLabel",
+        "messenger.challengeInventoryDone",
         "messenger.challengeMembers",
         "messenger.groupInfo",
         "messenger.topicsTitle",

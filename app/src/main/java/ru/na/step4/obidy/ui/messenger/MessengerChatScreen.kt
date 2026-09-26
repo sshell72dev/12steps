@@ -475,9 +475,9 @@ private fun MessageBubble(
             }
             Text(
                 if (message.isEdited) {
-                    "${MessengerRu.messageEdited} · ${formatChatTime(message.createdAt)}"
+                    "${MessengerRu.messageEdited} · ${formatMessageTime(message.createdAt)}"
                 } else {
-                    formatChatTime(message.createdAt)
+                    formatMessageTime(message.createdAt)
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = if (mine) Sand.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,

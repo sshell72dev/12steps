@@ -36,22 +36,23 @@ class MessengerChallengeShare(
         }
     }
 
-    /** Работа по IP (обиды) отмечается в «Челлендже шагов» — как и запись в дневник. */
-    suspend fun shareInventory(situationTitle: String) {
+    /** Работа по IP (обиды) отмечается в «Челлендже шагов» — без текста самой ситуации. */
+    suspend fun shareInventory() {
         runCatching {
-            val name = situationTitle.trim()
-            if (name.isBlank()) return
             val streak = journalStreak.label() ?: Ru.analysisStreak
             messenger.shareChallenge(
                 MessengerChallengeKeys.STEPS,
-                format(streak, MessengerRu.challengeInventoryLabel, name)
+                formatNote(streak, MessengerRu.challengeInventoryDone)
             )
         }
     }
 
-    private fun format(streakLabel: String, subjectLabel: String, subjectName: String): String {
+    private fun format(streakLabel: String, subjectLabel: String, subjectName: String): String =
+        formatNote(streakLabel, "$subjectLabel: $subjectName")
+
+    private fun formatNote(streakLabel: String, note: String): String {
         val snap = spiritual.snapshot.value
         val rating = "${SpiritualRu.abbr}: ${snap.totalScore} · ${SpiritualRu.day} ${snap.dayScore} · ${snap.dayLabel}"
-        return "$streakLabel\n$subjectLabel: $subjectName\n$rating"
+        return "$streakLabel\n$note\n$rating"
     }
 }

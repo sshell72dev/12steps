@@ -28,6 +28,7 @@ import ru.na.step4.obidy.data.psych.PsychSituation
 import ru.na.step4.obidy.data.psych.PsychTeaserStore
 import ru.na.step4.obidy.data.psych.PsychTopic
 import ru.na.step4.obidy.data.psych.PsychTopicStory
+import ru.na.step4.obidy.data.profile.PersonalityAiClient
 import ru.na.step4.obidy.data.spiritual.SpiritualRatingStore
 import ru.na.step4.obidy.data.spiritual.SpiritualSource
 
@@ -1248,7 +1249,7 @@ class PsychViewModel(
                 }
                     is PsychAiClient.Result.Ok -> {
                     if (!cacheUsable) repository.putCache(key, kind, ok.text, ok.prompt)
-                    ok.personality?.let { if (settings.personalityCollectEnabled) settings.myPersonality = it }
+                    refreshPersonality(kind, situation.text, answers, ok.text)
                     var quotaLine: String? = null
                     var upsell: String? = null
                     if (counts) {
@@ -1280,6 +1281,43 @@ class PsychViewModel(
     }
 
     private fun displayText(kind: String, text: String): String = text
+
+    /**
+     * Портрет «Моя личность» обновляется отдельным запросом — после разбора ситуации.
+     * Материалом идёт сама ситуация, диалог и готовый ответ ассистента.
+     */
+    private suspend fun refreshPersonality(
+        kind: String,
+        situation: String,
+        answers: List<PsychQa>,
+        response: String
+    ) {
+        if (kind != "analyze" && kind != "recommend" && kind != "assistant") return
+        if (!settings.profile.personalityEnabled) return
+        withContext(Dispatchers.IO) {
+            PersonalityAiClient.updateAndSave(
+                profile = settings.profile,
+                material = buildString {
+                    appendLine("СИТУАЦИЯ:")
+                    appendLine(situation)
+                    if (answers.isNotEmpty()) {
+                        appendLine()
+                        appendLine("ВОПРОСЫ И ОТВЕТЫ:")
+                        answers.forEachIndexed { index, qa ->
+                            appendLine("Вопрос ${index + 1}: ${qa.question}")
+                            appendLine("Ответ: ${qa.answer}")
+                        }
+                    }
+                    appendLine()
+                    appendLine("РАЗБОР АССИСТЕНТА:")
+                    appendLine(response)
+                },
+                source = PersonalityAiClient.Source.PSYCH,
+                premium = settings.isPro,
+                admin = isAdmin
+            )
+        }
+    }
 
     private fun revealPendingFull() {
         val page = _ui.value.page

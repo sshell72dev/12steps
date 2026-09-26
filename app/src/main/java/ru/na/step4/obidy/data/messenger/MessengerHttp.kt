@@ -10,6 +10,12 @@ import ru.na.step4.obidy.BuildConfig
 internal object MessengerHttp {
     data class Response(val code: Int, val body: String)
 
+    /**
+     * Код администратора приложения: с ним сервер отдаёт все обращения группы
+     * «Идеи и Ошибки», обычному пользователю — только его подгруппы.
+     */
+    var adminCode: () -> String = { "" }
+
     fun get(path: String, messengerId: String, readTimeoutMs: Int = 20_000): MessengerResult<Response> {
         return request("GET", path, messengerId, null, null, readTimeoutMs)
     }
@@ -112,6 +118,8 @@ internal object MessengerHttp {
             setRequestProperty("Accept", "application/json")
             setRequestProperty("X-Api-Token", token)
             if (messengerId.isNotBlank()) setRequestProperty("X-Messenger-Id", messengerId)
+            val admin = adminCode().trim()
+            if (admin.isNotBlank()) setRequestProperty("X-Admin-Code", admin)
             when {
                 multipart != null -> setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
                 payload != null -> setRequestProperty("Content-Type", "application/json; charset=utf-8")

@@ -50,13 +50,15 @@ class ProfileStore(context: Context) {
         get() = current.personality
         set(value) = update { copy(personality = value.trim()) }
 
+    /** Одна кнопка в анкете: портрет и учитывается в промптах, и обновляется отдельным запросом. */
     var personalityEnabled: Boolean
-        get() = false // «Моя личность» временно выключена до доработки
-        set(value) = update { copy(personalityEnabled = value) }
+        get() = current.personalityEnabled
+        set(value) = update { copy(personalityEnabled = value, personalityCollectEnabled = value) }
 
+    /** Псевдоним [personalityEnabled]: портрет включается и выключается целиком. */
     var personalityCollectEnabled: Boolean
-        get() = false // «Моя личность» временно выключена до доработки
-        set(value) = update { copy(personalityCollectEnabled = value) }
+        get() = current.personalityEnabled
+        set(value) = update { copy(personalityEnabled = value, personalityCollectEnabled = value) }
 
     var languageCode: String
         get() = current.languageCode

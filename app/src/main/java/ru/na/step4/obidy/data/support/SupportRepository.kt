@@ -13,7 +13,9 @@ import ru.na.step4.obidy.data.spiritual.SpiritualSource
 class SupportRepository(
     private val prefs: JournalPrefs,
     private val spiritual: SpiritualRatingStore? = null,
-    private val lifeBoard: LifeBoardStore? = null
+    private val lifeBoard: LifeBoardStore? = null,
+    /** Идентификатор профиля мессенджера: по нему обращение становится подгруппой «Идеи и Ошибки». */
+    private val messengerId: () -> String = { "" }
 ) {
     private val _unread = MutableStateFlow(0)
     val unread: StateFlow<Int> = _unread.asStateFlow()
@@ -50,7 +52,8 @@ class SupportRepository(
                 scopedRoute,
                 text,
                 belonging = belonging,
-                kind = kind
+                kind = kind,
+                messengerId = messengerId()
             )
         }
         if (SupportKind.normalize(kind) == SupportKind.IDEA) {
