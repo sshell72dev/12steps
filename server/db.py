@@ -280,6 +280,7 @@ ADMIN_SOURCE_PAGES = {
     "voice": "Админка · Голос",
     "support": "Админка · Ошибки",
     "backups": "Админка · Бэкапы",
+    "settings_admin": "Админка · Настройки",
 }
 
 SUPPORT_FAMILIES = {
@@ -441,6 +442,14 @@ def set_setting(key: str, value: str) -> None:
             """,
             (key, value, utc_now()),
         )
+
+
+def delete_setting(key: str) -> None:
+    """Удаляет переопределение: значение снова берётся из .env."""
+    if not key:
+        return
+    with cursor() as cur:
+        cur.execute("DELETE FROM app_settings WHERE `key` = %s", (key,))
 
 
 def all_settings() -> dict[str, str]:

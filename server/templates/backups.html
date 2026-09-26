@@ -55,16 +55,23 @@
         <a href="{{ url_for('prompts_admin') }}">Промты</a>
         <a href="{{ url_for('support_admin') }}">Ошибки</a>
         <a class="active" href="{{ url_for('backups_admin') }}">Бэкапы</a>
+        <a href="{{ url_for('settings_admin') }}">Настройки</a>
       </nav>
     </div>
     <div class="wrap">
       {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
       {% if warn %}<div class="warn">{{ warn }}</div>{% endif %}
       {% if not encryption %}
-        <div class="warn">Приём копий выключен: не задан <b>BACKUP_ENCRYPTION_KEY</b> в .env.</div>
+        <div class="warn">
+          Приём копий выключен: не задан ключ шифрования.
+          Задайте его в <a href="{{ url_for('settings_admin') }}">Настройках</a>.
+        </div>
       {% endif %}
       {% if not mail %}
-        <div class="warn">Вход по коду недоступен: не заданы <b>SMTP_*</b> в .env.</div>
+        <div class="warn">
+          Вход по коду недоступен: не настроена почта.
+          Заполните её в <a href="{{ url_for('settings_admin') }}">Настройках</a>.
+        </div>
       {% endif %}
 
       <div class="card">

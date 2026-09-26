@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Настройки · Админка</title>
+    <style>
+      :root {
+        --forest: #1b2e24;
+        --sand: #f3efe6;
+        --sand-deep: #e6dfd0;
+        --ink: #1a1f1c;
+        --muted: #5b635c;
+        --line: rgba(27, 46, 36, 0.14);
+        --ok: #2f6b45;
+        --warn: #8a6a1a;
+      }
+      body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #ece8df; color: var(--ink); }
+      .top {
+        background: var(--forest); color: var(--sand); padding: 12px 16px;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      }
+      .top b { font-size: 15px; }
+      .top nav { display: flex; flex-wrap: wrap; gap: 10px; }
+      .top a { color: var(--sand); text-decoration: none; opacity: .88; font-size: 13px; }
+      .top a:hover { opacity: 1; }
+      .top a.active { opacity: 1; font-weight: 700; }
+      .ghost {
+        background: transparent; color: var(--sand);
+        border: 1px solid rgba(243, 239, 230, 0.28); border-radius: 8px;
+        padding: 6px 10px; cursor: pointer; font-size: 13px;
+      }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 16px 12px 36px; }
+      .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+      h1 { margin: 0 0 4px; font-size: 18px; color: var(--forest); }
+      h2 { margin: 0 0 4px; font-size: 16px; color: var(--forest); }
+      .muted { color: var(--muted); font-size: 12px; line-height: 1.45; }
+      .notice, .warn { margin-bottom: 10px; padding: 8px 10px; border-radius: 10px; font-size: 13px; }
+      .notice { background: rgba(47, 107, 69, 0.1); border: 1px solid rgba(47, 107, 69, 0.28); color: var(--ok); }
+      .warn { background: rgba(138, 106, 26, 0.1); border: 1px solid rgba(138, 106, 26, 0.28); color: var(--warn); }
+      label { display: block; margin-top: 12px; font-size: 13px; font-weight: 650; color: var(--forest); }
+      input[type="text"], input[type="number"], input[type="password"] {
+        width: 100%; box-sizing: border-box; margin-top: 5px; padding: 9px 10px;
+        border-radius: 9px; border: 1px solid var(--line); background: #fbfaf7; font-size: 14px;
+      }
+      .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; font-weight: 650; color: var(--forest); }
+      .check input { width: auto; margin: 0; }
+      .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+      button {
+        padding: 9px 14px; border: 0; border-radius: 9px;
+        background: var(--forest); color: var(--sand); font-weight: 650; cursor: pointer; font-size: 13px;
+      }
+      .secondary { background: var(--sand-deep); color: var(--forest); }
+      .danger { background: #8a3a3a; color: #fff; }
+      .src { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 6px 5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--forest); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+      td.mono { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); }
+      form { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <b>Админка 12 шагов</b>
+      <nav>
+        <a href="{{ url_for('settings') }}">ИИ</a>
+        <a href="{{ url_for('notes_admin') }}">Подсказки</a>
+        <a href="{{ url_for('analyses_admin') }}">Самоанализ</a>
+        <a href="{{ url_for('prompts_admin') }}">Промты</a>
+        <a href="{{ url_for('voice_settings') }}">Голос</a>
+        <a href="{{ url_for('support_admin') }}">Ошибки</a>
+        <a href="{{ url_for('backups_admin') }}">Бэкапы</a>
+        <a class="active" href="{{ url_for('settings_admin') }}">Настройки</a>
+      </nav>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="ghost" type="submit">Выйти</button>
+      </form>
+    </div>
+    <div class="wrap">
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+      {% if warn %}<div class="warn">{{ warn }}</div>{% endif %}
+
+      <div class="card">
+        <h2>Почта для кодов входа</h2>
+        <p class="muted">
+          Через неё приходит код подтверждения, когда пользователь привязывает почту
+          для копий на сервере. Значения отсюда важнее того, что прописано в <code>.env</code>.
+        </p>
+        <form method="post">
+          <input type="hidden" name="action" value="save_mail" />
+          <label for="smtp_host">SMTP-сервер
+            <span class="src">{{ 'задано в админке' if from_admin.SMTP_HOST else 'из .env' }}</span>
+          </label>
+          <input id="smtp_host" name="smtp_host" type="text" value="{{ smtp_host }}" placeholder="smtp.yandex.ru" />
+
+          <label for="smtp_port">Порт
+            <span class="src">{{ 'задано в админке' if from_admin.SMTP_PORT else 'из .env' }}</span>
+          </label>
+          <input id="smtp_port" name="smtp_port" type="number" min="1" max="65535" value="{{ smtp_port }}" />
+
+          <div class="check">
+            <input type="checkbox" id="smtp_ssl" name="smtp_ssl" value="1" {% if smtp_ssl %}checked{% endif %} />
+            <label for="smtp_ssl" style="margin:0;">SSL (порт 465). Снять — STARTTLS (обычно 587)</label>
+          </div>
+
+          <label for="smtp_user">Логин
+            <span class="src">{{ 'задано в админке' if from_admin.SMTP_USER else 'из .env' }}</span>
+          </label>
+          <input id="smtp_user" name="smtp_user" type="text" value="{{ smtp_user }}" autocomplete="off" />
+
+          <label for="smtp_password">Пароль
+            <span class="src">{{ 'задан в админке' if from_admin.SMTP_PASSWORD else 'из .env' }}</span>
+          </label>
+          <input
+            id="smtp_password"
+            name="smtp_password"
+            type="password"
+            autocomplete="off"
+            value=""
+            placeholder="{% if smtp_password_set %}Сохранён — введите новый, чтобы заменить{% else %}Пароль приложения{% endif %}"
+          />
+
+          <label for="smtp_from">От кого (From)</label>
+          <input id="smtp_from" name="smtp_from" type="text" value="{{ smtp_from }}" placeholder="noreply@ваш-домен" />
+          <div class="muted" style="margin-top:6px;">Пусто — подставится логин или noreply@{{ readonly.domain }}.</div>
+
+          <div class="actions">
+            <button type="submit">Сохранить почту</button>
+          </div>
+        </form>
+
+        <form method="post" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px;">
+          <input type="hidden" name="action" value="test_mail" />
+          <label for="test_email">Проверка: отправить письмо на адрес</label>
+          <input id="test_email" name="test_email" type="text" value="{{ smtp_from or smtp_user }}" placeholder="вы@пример.ру" />
+          <div class="actions">
+            <button class="secondary" type="submit">Отправить тестовое письмо</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Резервные копии</h2>
+        <p class="muted">
+          Отслеживание размера и частоты выгрузок. Ключ шифрования — то, чем закрыты архивы на диске.
+        </p>
+        <form method="post">
+          <input type="hidden" name="action" value="save_backup" />
+
+          <label for="max_backup_mb">Максимальный размер архива, МБ
+            <span class="src">{{ 'задано в админке' if from_admin.MAX_BACKUP_BYTES else 'из .env' }}</span>
+          </label>
+          <input id="max_backup_mb" name="max_backup_mb" type="number" min="1" max="500" value="{{ max_backup_mb }}" />
+
+          <label for="cooldown_min">Минимум минут между выгрузками
+            <span class="src">{{ 'задано в админке' if from_admin.BACKUP_UPLOAD_COOLDOWN_SEC else 'из .env' }}</span>
+          </label>
+          <input id="cooldown_min" name="cooldown_min" type="number" min="0" max="10080" value="{{ cooldown_min }}" />
+          <div class="muted" style="margin-top:6px;">Защита от частых выгрузок. 0 — без ограничения.</div>
+
+          <label for="code_ttl_min">Срок жизни кода из письма, минут
+            <span class="src">{{ 'задано в админке' if from_admin.BACKUP_CODE_TTL_MIN else 'из .env' }}</span>
+          </label>
+          <input id="code_ttl_min" name="code_ttl_min" type="number" min="1" max="1440" value="{{ code_ttl_min }}" />
+
+          <label for="session_days">Срок сессии устройства, дней
+            <span class="src">{{ 'задано в админке' if from_admin.BACKUP_SESSION_TTL_DAYS else 'из .env' }}</span>
+          </label>
+          <input id="session_days" name="session_days" type="number" min="1" max="3650" value="{{ session_days }}" />
+          <div class="muted" style="margin-top:6px;">После этого срока приложение попросит новый код.</div>
+
+          <label for="backup_key">Ключ шифрования архивов
+            <span class="src">{{ 'задан в админке' if from_admin.BACKUP_ENCRYPTION_KEY else 'из .env' }}</span>
+          </label>
+          <input
+            id="backup_key"
+            name="backup_key"
+            type="password"
+            autocomplete="off"
+            value=""
+            placeholder="{% if backup_key_set %}Задан — введите новый, чтобы заменить{% else %}Не задан: приём копий выключен{% endif %}"
+          />
+
+          <div class="actions">
+            <button type="submit">Сохранить параметры копий</button>
+          </div>
+        </form>
+
+        <form method="post" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px;">
+          <input type="hidden" name="action" value="gen_backup_key" />
+          <div class="check">
+            <input type="checkbox" id="confirm_key" name="confirm_key" value="1" />
+            <label for="confirm_key" style="margin:0;">
+              Понимаю: уже выгруженные копии перестанут расшифровываться
+            </label>
+          </div>
+          <div class="actions">
+            <button class="danger" type="submit">Сгенерировать новый ключ</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Сброс к значениям из <code>.env</code></h2>
+        <p class="muted">
+          Почта и параметры копий, изменённые здесь, хранятся в базе и важнее файла <code>.env</code>.
+          Эта кнопка удаляет такие переопределения — снова начнут действовать значения из файла.
+        </p>
+        <form method="post" onsubmit="return confirm('Вернуть почту и параметры копий к значениям из .env?');">
+          <input type="hidden" name="action" value="reset_env" />
+          <div class="actions">
+            <button class="secondary" type="submit">Сбросить к .env</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Служебные значения</h2>
+        <p class="muted">
+          Меняются только в <code>.env</code> на сервере: они нужны раньше, чем запустится админка,
+          поэтому показаны здесь для справки.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Параметр</th><th>Значение</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Домен</td><td class="mono">{{ readonly.domain }}</td></tr>
+            <tr><td>Логин администратора</td><td class="mono">{{ readonly.admin_username }}</td></tr>
+            <tr>
+              <td>Пароль администратора</td>
+              <td class="mono">{{ 'задан в .env' if readonly.admin_password_set else 'не задан — вход в админку открыт' }}</td>
+            </tr>
+            <tr>
+              <td>Секретный ключ сессий</td>
+              <td class="mono">{{ 'свой (задан)' if readonly.secret_key_custom else 'по умолчанию — задайте SECRET_KEY' }}</td>
+            </tr>
+            <tr>
+              <td>Токен API приложения</td>
+              <td class="mono">{{ 'задан' if readonly.api_token_set else 'не задан — приложение не сможет звать API' }}</td>
+            </tr>
+            <tr><td>База данных</td><td class="mono">{{ readonly.db_user }}@{{ readonly.db_host }}:{{ readonly.db_port }}/{{ readonly.db_name }}</td></tr>
+            <tr><td>Адрес DeepSeek</td><td class="mono">{{ readonly.deepseek_url }}</td></tr>
+            <tr>
+              <td>Ключ DeepSeek</td>
+              <td class="mono">{{ 'задан' if readonly.deepseek_key_set else 'не задан — ИИ-функции не работают' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="muted" style="margin-top:8px;">
+          Остальные настройки ИИ, Premium и ЮKassa — в разделе <a href="{{ url_for('settings') }}">ИИ</a>.
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

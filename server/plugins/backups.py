@@ -1,8 +1,11 @@
 """Резервные копии данных приложения: аккаунт по почте, приём и отдача архива.
 
-Архив приходит по HTTPS и шифруется на сервере (AES-256-GCM, ключ BACKUP_ENCRYPTION_KEY),
-поэтому на диске хостинга данные не лежат открытым текстом.
+Архив приходит по HTTPS и шифруется на сервере (AES-256-GCM), поэтому на диске
+хостинга данные не лежат открытым текстом.
 На аккаунт хранится ОДИН слот: новая выгрузка заменяет предыдущий файл атомарно.
+
+Настройки (почта, ключ шифрования, лимиты) задаются в админке — раздел «Настройки»
+на странице /admin/settings; значения из .env используются как значения по умолчанию.
 """
 from __future__ import annotations
 
@@ -27,10 +30,85 @@ EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,120}\.[A-Za-z]{2,10}$")
 MAGIC = b"STB1"
 IV_LEN = 12
 TAG_LEN = 16
-CODE_TTL_MIN = 15
-SESSION_TTL_DAYS = 180
-UPLOAD_COOLDOWN_SEC = 600
 MAX_CODE_ATTEMPTS = 5
+
+# Срок жизни кода, срок сессии, интервал между выгрузками и лимит размера архива
+# задаются в админке и читаются через config.backup_*() на каждом запросе.
+
+MAIL_FIELDS = (
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_SSL",
+    "SMTP_USER",
+    "SMTP_PASSWORD",
+    "SMTP_FROM",
+)
+
+BACKUP_FIELDS = (
+    "BACKUP_ENCRYPTION_KEY",
+    "MAX_BACKUP_BYTES",
+    "BACKUP_UPLOAD_COOLDOWN_SEC",
+    "BACKUP_CODE_TTL_MIN",
+    "BACKUP_SESSION_TTL_DAYS",
+)
+
+MANAGED_SETTINGS = MAIL_FIELDS + BACKUP_FIELDS
+
+
+def save_managed_settings(form) -> tuple[str, str]:
+    """Сохраняет почту или параметры копий из формы админки. Возвращает (notice, warn)."""
+    action = (form.get("action") or "").strip()
+
+    def put(name: str, value: str) -> None:
+        db.set_setting(config.setting_key(name), value)
+
+    if action == "save_mail":
+        host = (form.get("smtp_host") or "").strip()
+        port_raw = (form.get("smtp_port") or "").strip()
+        user = (form.get("smtp_user") or "").strip()
+        password = (form.get("smtp_password") or "").strip()
+        sender = (form.get("smtp_from") or "").strip()
+        try:
+            port = int(port_raw or config.DEFAULT_SMTP_PORT)
+        except ValueError:
+            return "", "Порт должен быть числом."
+        if not 1 <= port <= 65535:
+            return "", "Порт: число от 1 до 65535."
+        put("SMTP_HOST", host)
+        put("SMTP_PORT", str(port))
+        put("SMTP_SSL", "1" if form.get("smtp_ssl") else "0")
+        put("SMTP_USER", user)
+        put("SMTP_FROM", sender)
+        if password:
+            put("SMTP_PASSWORD", password)
+        return "Настройки почты сохранены.", ""
+
+    if action == "save_backup":
+        key = (form.get("backup_key") or "").strip()
+        try:
+            max_mb = int(float((form.get("max_backup_mb") or "").strip()))
+            cooldown_min = int(float((form.get("cooldown_min") or "").strip()))
+            ttl_min = int(float((form.get("code_ttl_min") or "").strip()))
+            session_days = int(float((form.get("session_days") or "").strip()))
+        except ValueError:
+            return "", "Все значения должны быть числами."
+        if not 1 <= max_mb <= 500:
+            return "", "Лимит архива: от 1 до 500 МБ."
+        if not 0 <= cooldown_min <= 10080:
+            return "", "Интервал между выгрузками: от 0 до 10080 минут."
+        if not 1 <= ttl_min <= 1440:
+            return "", "Срок жизни кода: от 1 до 1440 минут."
+        if not 1 <= session_days <= 3650:
+            return "", "Срок сессии: от 1 до 3650 дней."
+        put("MAX_BACKUP_BYTES", str(max_mb * 1024 * 1024))
+        put("BACKUP_UPLOAD_COOLDOWN_SEC", str(cooldown_min * 60))
+        put("BACKUP_CODE_TTL_MIN", str(ttl_min))
+        put("BACKUP_SESSION_TTL_DAYS", str(session_days))
+        if key:
+            put("BACKUP_ENCRYPTION_KEY", key)
+        return "Параметры копий сохранены.", ""
+
+    return "", ""
 
 
 def _now() -> str:
@@ -52,8 +130,8 @@ def _hash(text: str) -> str:
 
 
 def _secret_key() -> bytes:
-    """Ключ шифрования: 32 байта из BACKUP_ENCRYPTION_KEY (любая строка)."""
-    raw = (config.BACKUP_ENCRYPTION_KEY or "").strip()
+    """Ключ шифрования: 32 байта из настройки BACKUP_ENCRYPTION_KEY (любая строка)."""
+    raw = (config.backup_encryption_key() or "").strip()
     return hashlib.sha256(raw.encode("utf-8")).digest() if raw else b""
 
 
@@ -80,38 +158,57 @@ def decrypt_blob(blob: bytes) -> bytes:
     return _aesgcm().decrypt(iv, blob[len(MAGIC) + IV_LEN:], MAGIC)
 
 
-def send_code(email: str, code: str) -> bool:
-    """Отправка кода подтверждения. Без SMTP_* в .env возвращает False."""
-    host = (config.SMTP_HOST or "").strip()
+def mail_configured() -> bool:
+    """Настроена ли почта: без адреса SMTP-сервера код не отправить."""
+    return bool((config.smtp_host() or "").strip())
+
+
+def send_mail(to: str, subject: str, body: str) -> bool:
+    """Отправка письма текущими настройками почты. False — не настроено или ошибка."""
+    host = (config.smtp_host() or "").strip()
     if not host:
         return False
+    user = (config.smtp_user() or "").strip()
+    port = config.smtp_port()
     msg = EmailMessage()
-    msg["Subject"] = "Код для резервной копии 12 шагов"
-    msg["From"] = config.SMTP_FROM or config.SMTP_USER or f"noreply@{config.DOMAIN}"
-    msg["To"] = email
-    msg.set_content(
-        "Код подтверждения: {code}\n\n"
-        "Он действует {ttl} минут. Введите его в приложении, чтобы включить "
-        "сохранение копий на сервер.\n\n"
-        "Если вы не запрашивали код, просто проигнорируйте письмо.".format(
-            code=code, ttl=CODE_TTL_MIN
-        )
-    )
+    msg["Subject"] = subject
+    msg["From"] = (config.smtp_from() or user or f"noreply@{config.DOMAIN}").strip()
+    msg["To"] = to
+    msg.set_content(body)
     try:
-        if config.SMTP_SSL:
-            with smtplib.SMTP_SSL(host, config.SMTP_PORT, timeout=20) as server:
-                if config.SMTP_USER:
-                    server.login(config.SMTP_USER, config.SMTP_PASSWORD)
+        if config.smtp_ssl():
+            with smtplib.SMTP_SSL(host, port, timeout=20) as server:
+                if user:
+                    server.login(user, config.smtp_password())
                 server.send_message(msg)
         else:
-            with smtplib.SMTP(host, config.SMTP_PORT, timeout=20) as server:
+            with smtplib.SMTP(host, port, timeout=20) as server:
                 server.starttls()
-                if config.SMTP_USER:
-                    server.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                if user:
+                    server.login(user, config.smtp_password())
                 server.send_message(msg)
     except Exception:
         return False
     return True
+
+
+def send_code(email: str, code: str) -> bool:
+    """Код подтверждения аккаунта копий."""
+    return send_mail(
+        email,
+        "Код для резервной копии 12 шагов",
+        "Код подтверждения: {code}\n\n"
+        "Он действует {ttl} минут. Введите его в приложении, чтобы включить "
+        "сохранение копий на сервер.\n\n"
+        "Если вы не запрашивали код, просто проигнорируйте письмо.".format(
+            code=code, ttl=config.backup_code_ttl_min()
+        ),
+    )
+
+
+def refresh_max_content_length(app) -> None:
+    """Лимит тела запроса: текущий лимит архива плюс запас на заголовки."""
+    app.config["MAX_CONTENT_LENGTH"] = config.max_backup_bytes() + 1024 * 1024
 
 
 def init_schema() -> None:
@@ -190,9 +287,9 @@ def upsert_account(email: str) -> int:
 
 
 def set_login_code(email: str, code: str) -> None:
-    expires = (datetime.now(timezone.utc) + timedelta(minutes=CODE_TTL_MIN)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    expires = (
+        datetime.now(timezone.utc) + timedelta(minutes=config.backup_code_ttl_min())
+    ).strftime("%Y-%m-%d %H:%M:%S")
     account_id = upsert_account(email)
     with db.cursor() as cur:
         cur.execute(
@@ -232,9 +329,9 @@ def verify_login_code(email: str, code: str) -> int | None:
 
 def create_session(account_id: int, device_id: str) -> str:
     token = secrets.token_urlsafe(32)
-    expires = (datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    expires = (
+        datetime.now(timezone.utc) + timedelta(days=config.backup_session_ttl_days())
+    ).strftime("%Y-%m-%d %H:%M:%S")
     with db.cursor() as cur:
         cur.execute(
             """INSERT INTO backup_sessions (token_hash, account_id, device_id, created_at, expires_at)
@@ -377,6 +474,39 @@ def _fail(code: str, status: int, **extra):
     return jsonify(payload), status
 
 
+def settings_context() -> dict:
+    """Значения для страницы настроек: из админки либо, если не задано, из .env."""
+    overrides = set(db.all_settings().keys())
+    return {
+        "smtp_host": config.smtp_host(),
+        "smtp_port": config.smtp_port(),
+        "smtp_ssl": config.smtp_ssl(),
+        "smtp_user": config.smtp_user(),
+        "smtp_password_set": bool(config.smtp_password()),
+        "smtp_from": config.smtp_from(),
+        "backup_key_set": bool(config.backup_encryption_key()),
+        "max_backup_mb": config.max_backup_bytes() // (1024 * 1024),
+        "cooldown_min": config.backup_upload_cooldown_sec() // 60,
+        "code_ttl_min": config.backup_code_ttl_min(),
+        "session_days": config.backup_session_ttl_days(),
+        # Какие поля заданы в админке, а какие берутся из .env.
+        "from_admin": {name: config.setting_key(name) in overrides for name in MANAGED_SETTINGS},
+        "readonly": {
+            "domain": config.DOMAIN,
+            "admin_username": config.ADMIN_USERNAME,
+            "admin_password_set": bool(config.ADMIN_PASSWORD),
+            "db_host": config.DB_HOST,
+            "db_port": config.DB_PORT,
+            "db_name": config.DB_NAME,
+            "db_user": config.DB_USER,
+            "api_token_set": bool(config.API_TOKEN),
+            "secret_key_custom": config.SECRET_KEY != "dev-secret-change-me",
+            "deepseek_url": config.DEEPSEEK_BASE_URL,
+            "deepseek_key_set": bool(db.get_setting("deepseek_api_key", "")),
+        },
+    }
+
+
 def register(app, login_required, api_ok) -> None:
     """Подключение плагина к приложению Flask (как у messenger и voice)."""
     try:
@@ -384,7 +514,7 @@ def register(app, login_required, api_ok) -> None:
     except Exception:
         app.logger.exception("backup: не удалось создать схему")
 
-    app.config.setdefault("MAX_CONTENT_LENGTH", int(config.MAX_BACKUP_BYTES) + 1024 * 1024)
+    refresh_max_content_length(app)
 
     def _account():
         info = account_by_token(request.headers.get("X-Backup-Token") or "")
@@ -410,7 +540,7 @@ def register(app, login_required, api_ok) -> None:
             return _fail("server", 500)
         if not send_code(email, code):
             return _fail("mail", 503)
-        return jsonify({"ok": True, "ttl_minutes": CODE_TTL_MIN})
+        return jsonify({"ok": True, "ttl_minutes": config.backup_code_ttl_min()})
 
     @app.post("/api/v1/backup/login")
     def api_backup_login():
@@ -465,14 +595,16 @@ def register(app, login_required, api_ok) -> None:
         payload = request.get_data(cache=False)
         if not payload:
             return _fail("empty", 400)
-        if len(payload) > int(config.MAX_BACKUP_BYTES):
-            return _fail("too_large", 413, limit=int(config.MAX_BACKUP_BYTES))
+        limit = config.max_backup_bytes()
+        if len(payload) > limit:
+            return _fail("too_large", 413, limit=limit)
+        cooldown = config.backup_upload_cooldown_sec()
         slot = get_slot(info["account_id"])
         uploaded = _parse((slot or {}).get("uploaded_at"))
-        if slot and uploaded:
+        if slot and uploaded and cooldown > 0:
             elapsed = (datetime.now(timezone.utc) - uploaded).total_seconds()
-            if elapsed < UPLOAD_COOLDOWN_SEC:
-                return _fail("cooldown", 429, retry_after=UPLOAD_COOLDOWN_SEC)
+            if elapsed < cooldown:
+                return _fail("cooldown", 429, retry_after=int(cooldown - elapsed))
         try:
             saved = save_slot(
                 info["account_id"],
@@ -517,8 +649,8 @@ def register(app, login_required, api_ok) -> None:
             "backups.html",
             slots=list_slots(),
             encryption=encryption_ready(),
-            mail=bool((config.SMTP_HOST or "").strip()),
-            max_mb=int(config.MAX_BACKUP_BYTES) // (1024 * 1024),
+            mail=mail_configured(),
+            max_mb=config.max_backup_bytes() // (1024 * 1024),
             notice="Файл удалён." if request.args.get("deleted") else "",
             warn=request.args.get("problem") or "",
         )
@@ -548,3 +680,48 @@ def register(app, login_required, api_ok) -> None:
         if slot:
             delete_slot(int(slot["account_id"]), str(slot.get("file_name") or "current.zip.enc"))
         return redirect(url_for("backups_admin", deleted=1))
+
+    @app.route("/admin/settings", methods=["GET", "POST"])
+    @login_required
+    def settings_admin():
+        """Все настройки сервера в одном месте: правки хранятся в app_settings."""
+        notice = ""
+        warn = ""
+        if request.method == "POST":
+            action = (request.form.get("action") or "").strip()
+            if action == "test_mail":
+                target = (
+                    (request.form.get("test_email") or "").strip()
+                    or config.smtp_from()
+                    or config.smtp_user()
+                )
+                if not target:
+                    warn = "Укажите адрес для проверки."
+                elif not mail_configured():
+                    warn = "Сначала сохраните адрес SMTP-сервера."
+                elif send_mail(
+                    target,
+                    "Проверка почты · 12 шагов",
+                    "Это тестовое письмо из админки. Если оно пришло, вход по коду работает.",
+                ):
+                    notice = f"Письмо отправлено на {target}."
+                else:
+                    warn = "Отправить не удалось: проверьте сервер, порт, логин и пароль."
+            elif action == "gen_backup_key":
+                if request.form.get("confirm_key"):
+                    db.set_setting(
+                        config.setting_key("BACKUP_ENCRYPTION_KEY"), secrets.token_hex(32)
+                    )
+                    notice = "Создан новый ключ шифрования. Ранее выгруженные копии больше не расшифруются."
+                else:
+                    warn = "Ключ меняется только с подтверждением: старые копии станут нечитаемыми."
+            elif action == "reset_env":
+                for name in MANAGED_SETTINGS:
+                    db.delete_setting(config.setting_key(name))
+                refresh_max_content_length(app)
+                notice = "Значения из админки сброшены — снова используются настройки из .env."
+            else:
+                notice, warn = save_managed_settings(request.form)
+                if notice:
+                    refresh_max_content_length(app)
+        return render_template("admin_settings.html", notice=notice, warn=warn, **settings_context())
