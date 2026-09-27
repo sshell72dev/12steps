@@ -189,6 +189,7 @@ class MessengerRepository(
                 if (result.value.chatId.isNotBlank()) {
                     prefs.putChallengeChat(key, result.value.chatId)
                 }
+                result.value.topics.forEach { topic -> prefs.putChallengeChat(topic.key, topic.chatId) }
                 refreshChats()
                 refreshChallenges()
                 result.value
@@ -382,6 +383,7 @@ class MessengerRepository(
     suspend fun join(token: String): MessengerResult<MessengerJoinResult> = withContext(Dispatchers.IO) {
         when (val result = client.join(token)) {
             is MessengerResult.Ok -> {
+                result.value.topics.forEach { topic -> prefs.putChallengeChat(topic.key, topic.chatId) }
                 refreshChats()
                 refreshContacts()
                 result
@@ -588,14 +590,14 @@ class MessengerRepository(
         }
     }
 
-    suspend fun loadTopics(groupId: String): List<MessengerTopic> = withContext(Dispatchers.IO) {
+    suspend fun loadTopics(groupId: String): MessengerTopics = withContext(Dispatchers.IO) {
         when (val result = client.topics(groupId)) {
             is MessengerResult.Ok -> result.value
             is MessengerResult.Disabled -> {
                 applyEnabled(false)
-                emptyList()
+                MessengerTopics()
             }
-            is MessengerResult.Err -> emptyList()
+            is MessengerResult.Err -> MessengerTopics()
         }
     }
 

@@ -70,7 +70,7 @@ fun MessengerTopicsScreen(
     var renameDraft by remember { mutableStateOf("") }
     var topicToRename by remember { mutableStateOf<MessengerTopic?>(null) }
     var topicToDelete by remember { mutableStateOf<MessengerTopic?>(null) }
-    val canManage = info?.canManage == true
+    val canCreate by viewModel.topicsCanCreate.collectAsStateWithLifecycle()
 
     LaunchedEffect(groupId, refresh) {
         viewModel.loadGroup(groupId)
@@ -126,7 +126,7 @@ fun MessengerTopicsScreen(
             )
         },
         floatingActionButton = {
-            if (canManage) {
+            if (canCreate) {
                 FloatingActionButton(
                     onClick = {
                         createDraft = ""
@@ -170,7 +170,7 @@ fun MessengerTopicsScreen(
                         TopicRow(
                             topic = topic,
                             title = if (topic.isGeneral) MessengerRu.topicGeneral else topic.name,
-                            canManage = canManage && !topic.isGeneral,
+                            canManage = topic.canManage,
                             onOpen = { openTopic(topic) },
                             onRename = {
                                 renameDraft = topic.name

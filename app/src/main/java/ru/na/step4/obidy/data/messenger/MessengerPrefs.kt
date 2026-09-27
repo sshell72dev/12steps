@@ -33,12 +33,20 @@ class MessengerPrefs(context: Context) {
     fun putChallenges(items: List<MessengerChallenge>) {
         if (items.isEmpty()) return
         val editor = prefs.edit()
-        val known = items.map { it.key }.toMutableSet()
-        known += listOf(MessengerChallengeKeys.STEPS, MessengerChallengeKeys.ANALYSIS)
-        known.forEach { key ->
-            val item = items.find { it.key == key }
-            if (item != null && item.joined && item.chatId.isNotBlank()) {
-                editor.putString(challengeKey(key), item.chatId)
+        // Публикации челленджей уходят в подгруппы группы «Челленджи»:
+        // оттуда и берём ленты шагов и самоанализа.
+        val hubTopics = items.firstOrNull { it.key == MessengerChallengeKeys.HUB }
+            ?.takeIf { it.joined }
+            ?.topics
+            ?.associate { it.key to it.chatId }
+            .orEmpty()
+        listOf(MessengerChallengeKeys.STEPS, MessengerChallengeKeys.ANALYSIS).forEach { key ->
+            val direct = items.firstOrNull { it.key == key }
+            val chatId = hubTopics[key].orEmpty().ifBlank {
+                if (direct?.joined == true) direct.chatId else ""
+            }
+            if (chatId.isNotBlank()) {
+                editor.putString(challengeKey(key), chatId)
             } else {
                 editor.remove(challengeKey(key))
             }

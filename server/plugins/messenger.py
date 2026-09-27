@@ -33,9 +33,17 @@ IDEAS_GROUP_ID = "challenge_ideas"
 IDEAS_GROUP_NAME = "Идеи и Ошибки"
 SYSTEM_TEXT_NAME = "Администратор"
 TOPIC_NAME_WORDS = 2
-CHALLENGES = (
+# Все челленджи живут в одной группе, а сами челленджи — её подгруппы.
+HUB_KEY = "hub"
+HUB_GROUP_ID = "challenge_hub"
+HUB_GROUP_NAME = "Челленджи"
+CHALLENGE_TOPICS = (
     ("steps", "challenge_steps", "Челлендж шагов"),
     ("analysis", "challenge_analysis", "Челлендж самоанализов"),
+)
+TOPIC_KEY_BY_ID = {item[1]: item[0] for item in CHALLENGE_TOPICS}
+CHALLENGES = (
+    (HUB_KEY, HUB_GROUP_ID, HUB_GROUP_NAME),
     (SUPPORT_KEY, SUPPORT_GROUP_ID, SUPPORT_GROUP_NAME),
     (IDEAS_KEY, IDEAS_GROUP_ID, IDEAS_GROUP_NAME),
 )
@@ -155,8 +163,8 @@ def init_schema() -> None:
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             """
         )
-        _ensure_challenge_schema(cur)
         _ensure_media_schema(cur)
+        _ensure_challenge_schema(cur)
 
 
 def _has_column(cur, table: str, column: str) -> bool:
@@ -240,6 +248,75 @@ def _ensure_challenge_groups(cur) -> None:
                 (group_id, SYSTEM_USER_ID, now),
             )
         _ensure_group_chat(cur, group_id)
+    _ensure_challenge_topics(cur)
+
+
+def _ensure_challenge_topics(cur) -> None:
+    """Челленджи шагов и самоанализа — подгруппы внутри группы «Челленджи».
+
+    Раньше каждый из них был отдельной группой: переносим участников, а лента
+    прежней группы становится лентой подгруппы, чтобы история не потерялась.
+    """
+    for key, topic_id, name in CHALLENGE_TOPICS:
+        cur.execute(
+            "SELECT id FROM messenger_groups WHERE challenge_key = %s AND id <> %s",
+            (key, HUB_GROUP_ID),
+        )
+        old = cur.fetchone()
+        if old:
+            old_group_id = old["id"]
+            cur.execute(
+                """
+                INSERT IGNORE INTO messenger_group_members (group_id, user_id, role, created_at)
+                SELECT %s, user_id, 'member', created_at FROM messenger_group_members
+                WHERE group_id = %s AND user_id <> %s
+                """,
+                (HUB_GROUP_ID, old_group_id, SYSTEM_USER_ID),
+            )
+            _adopt_group_chat_as_topic(cur, old_group_id, topic_id)
+            # Старые QR челленджей не ломаем: приглашение ведёт в общую группу «Челленджи».
+            cur.execute(
+                "UPDATE messenger_invites SET group_id = %s WHERE group_id = %s",
+                (HUB_GROUP_ID, old_group_id),
+            )
+            cur.execute(
+                "DELETE FROM messenger_group_members WHERE group_id = %s", (old_group_id,)
+            )
+            cur.execute("DELETE FROM messenger_groups WHERE id = %s", (old_group_id,))
+        cur.execute("SELECT id FROM messenger_topics WHERE id = %s", (topic_id,))
+        if not cur.fetchone():
+            cur.execute(
+                """
+                INSERT INTO messenger_topics (id, group_id, name, created_at, author_id)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (topic_id, HUB_GROUP_ID, name, db.utc_now(), SYSTEM_USER_ID),
+            )
+        _ensure_topic_chat(cur, HUB_GROUP_ID, topic_id)
+
+
+def _adopt_group_chat_as_topic(cur, old_group_id: str, topic_id: str) -> None:
+    """Лента бывшей отдельной группы челленджа становится лентой подгруппы."""
+    cur.execute(
+        "SELECT id FROM messenger_chats WHERE topic_id = %s AND kind = 'topic'",
+        (topic_id,),
+    )
+    if cur.fetchone():
+        return
+    cur.execute(
+        "SELECT id FROM messenger_chats WHERE group_id = %s AND kind = 'group'",
+        (old_group_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return
+    cur.execute(
+        """
+        UPDATE messenger_chats SET kind = 'topic', group_id = %s, topic_id = %s
+        WHERE id = %s
+        """,
+        (HUB_GROUP_ID, topic_id, row["id"]),
+    )
 
 
 def _ensure_media_schema(cur) -> None:
@@ -593,6 +670,9 @@ def _challenge_json(cur, key: str, group_id: str, name: str, messenger_id: str) 
     if joined:
         chat_id = _ensure_group_chat(cur, group_id)
         _add_chat_member(cur, chat_id, messenger_id)
+    topics = []
+    if key == HUB_KEY:
+        topics = _challenge_topics_json(cur, group_id, messenger_id, joined)
     return {
         "key": key,
         "name": name,
@@ -600,7 +680,20 @@ def _challenge_json(cur, key: str, group_id: str, name: str, messenger_id: str) 
         "chat_id": chat_id,
         "joined": joined,
         "members": members,
+        "topics": topics,
     }
+
+
+def _challenge_topics_json(cur, group_id: str, messenger_id: str, joined: bool) -> list[dict]:
+    """Подгруппы челленджей: без подключения к группе лента подгруппы недоступна."""
+    items = []
+    for topic_key, topic_id, topic_name in CHALLENGE_TOPICS:
+        topic_chat_id = ""
+        if joined:
+            topic_chat_id = _ensure_topic_chat(cur, group_id, topic_id)
+            _add_chat_member(cur, topic_chat_id, messenger_id)
+        items.append({"key": topic_key, "name": topic_name, "chat_id": topic_chat_id})
+    return items
 
 
 def _new_id() -> str:
@@ -1286,7 +1379,10 @@ def register(app, login_required, api_ok) -> None:
             group_id = invite.get("group_id") or ""
             if not group_id:
                 return jsonify({"error": "invite_not_found"}), 404
-            cur.execute("SELECT id, name FROM messenger_groups WHERE id = %s", (group_id,))
+            cur.execute(
+                "SELECT id, name, challenge_key FROM messenger_groups WHERE id = %s",
+                (group_id,),
+            )
             group = cur.fetchone()
             if not group:
                 return jsonify({"error": "not_found"}), 404
@@ -1300,6 +1396,14 @@ def register(app, login_required, api_ok) -> None:
             )
             chat_id = _ensure_group_chat(cur, group_id)
             _add_chat_member(cur, chat_id, messenger_id)
+            topics = []
+            if group.get("challenge_key") == HUB_KEY:
+                for topic_key, topic_id, topic_name in CHALLENGE_TOPICS:
+                    topic_chat = _ensure_topic_chat(cur, group_id, topic_id)
+                    _add_chat_member(cur, topic_chat, messenger_id)
+                    topics.append(
+                        {"key": topic_key, "name": topic_name, "chat_id": topic_chat}
+                    )
             return jsonify(
                 {
                     "ok": True,
@@ -1307,6 +1411,8 @@ def register(app, login_required, api_ok) -> None:
                     "chat_id": chat_id,
                     "group_id": group_id,
                     "title": group.get("name") or "",
+                    "key": group.get("challenge_key") or "",
+                    "topics": topics,
                 }
             )
 
@@ -1552,6 +1658,9 @@ def register(app, login_required, api_ok) -> None:
             )
             chat_id = _ensure_group_chat(cur, group_id)
             _add_chat_member(cur, chat_id, messenger_id)
+            topics = []
+            if key == HUB_KEY:
+                topics = _challenge_topics_json(cur, group_id, messenger_id, True)
         return jsonify(
             {
                 "ok": True,
@@ -1560,6 +1669,7 @@ def register(app, login_required, api_ok) -> None:
                 "chat_id": chat_id,
                 "group_id": group_id,
                 "title": name,
+                "topics": topics,
             }
         )
 
@@ -2122,6 +2232,16 @@ def register(app, login_required, api_ok) -> None:
             if not _is_group_member(cur, group_id, messenger_id):
                 return jsonify({"error": "forbidden"}), 403
             items = []
+            challenge_key = group.get("challenge_key") or ""
+            is_hub = challenge_key == HUB_KEY
+            # В группе челленджей свои подгруппы заводит любой участник,
+            # в обычной группе — только её создатель.
+            can_create = False
+            if not is_ideas:
+                if is_hub:
+                    can_create = _is_group_member(cur, group_id, messenger_id)
+                else:
+                    can_create = not challenge_key and group.get("owner_id") == messenger_id
             if not is_ideas:
                 general_chat = _ensure_group_chat(cur, group_id)
                 items.append(_topic_json(cur, "", "", general_chat, messenger_id, is_default=True))
@@ -2141,8 +2261,13 @@ def register(app, login_required, api_ok) -> None:
                 item = _topic_json(cur, row["id"], row["name"], chat_id, messenger_id)
                 if is_ideas:
                     item["author_name"] = _names_for(cur, [author_id]).get(author_id, "")
+                item["key"] = TOPIC_KEY_BY_ID.get(row["id"], "")
+                item["can_manage"] = (not is_ideas) and (
+                    group.get("owner_id") == messenger_id
+                    or (author_id == messenger_id and author_id not in ("", SYSTEM_USER_ID))
+                )
                 items.append(item)
-        return jsonify({"topics": items, "is_admin": is_admin})
+        return jsonify({"topics": items, "is_admin": is_admin, "can_create": can_create})
 
     @app.post("/api/v1/messenger/groups/<group_id>/topics")
     @guard(need_user=True)
@@ -2157,17 +2282,21 @@ def register(app, login_required, api_ok) -> None:
             group = _group_row(cur, group_id)
             if not group:
                 return jsonify({"error": "not_found"}), 404
-            if group["challenge_key"]:
+            challenge_key = group["challenge_key"] or ""
+            if challenge_key and challenge_key != HUB_KEY:
                 return jsonify({"error": "challenge_locked"}), 403
-            if group["owner_id"] != messenger_id:
+            if challenge_key == HUB_KEY:
+                if not _is_group_member(cur, group_id, messenger_id):
+                    return jsonify({"error": "forbidden"}), 403
+            elif group["owner_id"] != messenger_id:
                 return jsonify({"error": "forbidden"}), 403
             topic_id = _new_id()
             cur.execute(
                 """
-                INSERT INTO messenger_topics (id, group_id, name, created_at)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO messenger_topics (id, group_id, name, created_at, author_id)
+                VALUES (%s, %s, %s, %s, %s)
                 """,
-                (topic_id, group_id, name, db.utc_now()),
+                (topic_id, group_id, name, db.utc_now(), messenger_id),
             )
             chat_id = _ensure_topic_chat(cur, group_id, topic_id)
             item = _topic_json(cur, topic_id, name, chat_id, messenger_id)
@@ -2186,16 +2315,21 @@ def register(app, login_required, api_ok) -> None:
             group = _group_row(cur, group_id)
             if not group:
                 return jsonify({"error": "not_found"}), 404
-            if group["challenge_key"]:
+            challenge_key = group["challenge_key"] or ""
+            if challenge_key and challenge_key != HUB_KEY:
                 return jsonify({"error": "challenge_locked"}), 403
-            if group["owner_id"] != messenger_id:
-                return jsonify({"error": "forbidden"}), 403
             cur.execute(
-                "SELECT id FROM messenger_topics WHERE id = %s AND group_id = %s",
+                "SELECT id, author_id FROM messenger_topics WHERE id = %s AND group_id = %s",
                 (topic_id, group_id),
             )
-            if not cur.fetchone():
+            topic = cur.fetchone()
+            if not topic:
                 return jsonify({"error": "topic_not_found"}), 404
+            author_id = str(topic.get("author_id") or "")
+            if author_id == SYSTEM_USER_ID:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id and author_id != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
             cur.execute(
                 "UPDATE messenger_topics SET name = %s WHERE id = %s",
                 (name, topic_id),
@@ -2211,16 +2345,21 @@ def register(app, login_required, api_ok) -> None:
             group = _group_row(cur, group_id)
             if not group:
                 return jsonify({"error": "not_found"}), 404
-            if group["challenge_key"]:
+            challenge_key = group["challenge_key"] or ""
+            if challenge_key and challenge_key != HUB_KEY:
                 return jsonify({"error": "challenge_locked"}), 403
-            if group["owner_id"] != messenger_id:
-                return jsonify({"error": "forbidden"}), 403
             cur.execute(
-                "SELECT id FROM messenger_topics WHERE id = %s AND group_id = %s",
+                "SELECT id, author_id FROM messenger_topics WHERE id = %s AND group_id = %s",
                 (topic_id, group_id),
             )
-            if not cur.fetchone():
+            topic = cur.fetchone()
+            if not topic:
                 return jsonify({"error": "topic_not_found"}), 404
+            author_id = str(topic.get("author_id") or "")
+            if author_id == SYSTEM_USER_ID:
+                return jsonify({"error": "challenge_locked"}), 403
+            if group["owner_id"] != messenger_id and author_id != messenger_id:
+                return jsonify({"error": "forbidden"}), 403
             cur.execute(
                 "SELECT id FROM messenger_chats WHERE topic_id = %s AND kind = 'topic'",
                 (topic_id,),

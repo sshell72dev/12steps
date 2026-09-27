@@ -58,7 +58,11 @@ object MessengerRu {
     )
     val challengeAnalysisBody: String get() = I18n.t(
         "messenger.challengeAnalysisBody",
-        "После прохождения самоанализа в группу уходит ударный режим, название самоанализа и рейтинг духовной деятельности."
+        "После прохождения самоанализа в подгруппу уходит ударный режим, название самоанализа и рейтинг духовной деятельности."
+    )
+    val challengeHubBody: String get() = I18n.t(
+        "messenger.challengeHubBody",
+        "Все челленджи живут в одной группе. «Челлендж шагов» и «Челлендж самоанализов» — её подгруппы, а свою подгруппу можно завести внутри группы."
     )
     val challengeJoin: String get() = I18n.t("messenger.challengeJoin", "Подключиться")
     val challengePoint: String get() = I18n.t("messenger.challengePoint", "Точка")
@@ -158,12 +162,14 @@ object MessengerRu {
     fun challengeTitle(key: String, fallback: String): String = when (key) {
         "steps" -> challengeSteps
         "analysis" -> challengeAnalysis
+        "hub" -> challenges
         else -> fallback.ifBlank { challenges }
     }
 
     fun challengeBody(key: String): String = when (key) {
         "steps" -> challengeStepsBody
         "analysis" -> challengeAnalysisBody
+        "hub" -> challengeHubBody
         else -> ""
     }
 }

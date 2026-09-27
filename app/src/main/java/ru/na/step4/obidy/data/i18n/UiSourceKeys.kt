@@ -901,6 +901,7 @@ object UiSourceKeys {
         "messenger.challengeAnalysis",
         "messenger.challengeStepsBody",
         "messenger.challengeAnalysisBody",
+        "messenger.challengeHubBody",
         "messenger.challengeJoin",
         "messenger.challengePoint",
         "messenger.challengeAnalysisLabel",

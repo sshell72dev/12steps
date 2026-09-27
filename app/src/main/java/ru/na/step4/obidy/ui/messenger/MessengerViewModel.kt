@@ -69,6 +69,9 @@ class MessengerViewModel(
     private val _topics = MutableStateFlow<List<MessengerTopic>>(emptyList())
     val topics: StateFlow<List<MessengerTopic>> = _topics.asStateFlow()
 
+    private val _topicsCanCreate = MutableStateFlow(false)
+    val topicsCanCreate: StateFlow<Boolean> = _topicsCanCreate.asStateFlow()
+
     private val _challenges = MutableStateFlow<List<MessengerChallenge>>(emptyList())
     val challenges: StateFlow<List<MessengerChallenge>> = _challenges.asStateFlow()
 
@@ -294,7 +297,11 @@ class MessengerViewModel(
     }
 
     fun loadTopics(groupId: String) {
-        viewModelScope.launch { _topics.value = repository.loadTopics(groupId) }
+        viewModelScope.launch {
+            val topics = repository.loadTopics(groupId)
+            _topics.value = topics.items
+            _topicsCanCreate.value = topics.canCreate
+        }
     }
 
     fun createTopic(groupId: String, name: String) {

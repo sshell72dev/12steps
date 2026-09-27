@@ -57,7 +57,8 @@ class MessengerClient(private val messengerId: () -> String) {
                 chatId = obj.optString("chat_id"),
                 title = obj.optString("title"),
                 groupId = obj.optString("group_id"),
-                challengeKey = obj.optString("key")
+                challengeKey = obj.optString("key"),
+                topics = parseChallengeTopics(obj.optJSONArray("topics"))
             )
         }
     }
@@ -196,7 +197,8 @@ class MessengerClient(private val messengerId: () -> String) {
                 chatId = obj.optString("chat_id"),
                 title = obj.optString("title"),
                 groupId = obj.optString("group_id"),
-                challengeKey = obj.optString("key").ifBlank { key }
+                challengeKey = obj.optString("key").ifBlank { key },
+                topics = parseChallengeTopics(obj.optJSONArray("topics"))
             )
         }
     }
@@ -293,10 +295,15 @@ class MessengerClient(private val messengerId: () -> String) {
         ) { }
     }
 
-    fun topics(groupId: String): MessengerResult<List<MessengerTopic>> {
+    fun topics(groupId: String): MessengerResult<MessengerTopics> {
         return map(
             MessengerHttp.get("/api/v1/messenger/groups/$groupId/topics", messengerId())
-        ) { obj -> parseTopics(obj.optJSONArray("topics")) }
+        ) { obj ->
+            MessengerTopics(
+                items = parseTopics(obj.optJSONArray("topics")),
+                canCreate = obj.optBoolean("can_create")
+            )
+        }
     }
 
     fun createTopic(groupId: String, name: String): MessengerResult<MessengerTopic> {
@@ -380,7 +387,26 @@ class MessengerClient(private val messengerId: () -> String) {
                         groupId = row.optString("group_id"),
                         chatId = row.optString("chat_id"),
                         joined = row.optBoolean("joined"),
-                        members = row.optInt("members")
+                        members = row.optInt("members"),
+                        topics = parseChallengeTopics(row.optJSONArray("topics"))
+                    )
+                )
+            }
+        }
+    }
+
+    private fun parseChallengeTopics(arr: JSONArray?): List<MessengerChallengeTopic> {
+        if (arr == null) return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val row = arr.optJSONObject(i) ?: continue
+                val key = row.optString("key")
+                if (key.isBlank()) continue
+                add(
+                    MessengerChallengeTopic(
+                        key = key,
+                        name = row.optString("name"),
+                        chatId = row.optString("chat_id")
                     )
                 )
             }
@@ -431,7 +457,9 @@ class MessengerClient(private val messengerId: () -> String) {
             unread = row.optInt("unread"),
             lastBody = row.optString("last_body"),
             lastKind = row.optString("last_kind"),
-            lastAt = row.optLong("last_at")
+            lastAt = row.optLong("last_at"),
+            key = row.optString("key"),
+            canManage = row.optBoolean("can_manage")
         )
     }
 

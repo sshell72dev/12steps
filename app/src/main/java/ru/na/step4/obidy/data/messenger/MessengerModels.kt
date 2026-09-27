@@ -121,7 +121,17 @@ data class MessengerTopic(
     val unread: Int = 0,
     val lastBody: String = "",
     val lastKind: String = "",
-    val lastAt: Long = 0L
+    val lastAt: Long = 0L,
+    /** Ключ встроенной подгруппы челленджей: steps или analysis. */
+    val key: String = "",
+    /** Подгруппу можно переименовать или удалить — она создана самим участником. */
+    val canManage: Boolean = false
+)
+
+/** Подгруппы группы и право завести свою. */
+data class MessengerTopics(
+    val items: List<MessengerTopic> = emptyList(),
+    val canCreate: Boolean = false
 )
 
 data class MessengerJoinResult(
@@ -129,14 +139,23 @@ data class MessengerJoinResult(
     val chatId: String,
     val title: String = "",
     val groupId: String = "",
-    val challengeKey: String = ""
+    val challengeKey: String = "",
+    val topics: List<MessengerChallengeTopic> = emptyList()
 )
 
 object MessengerChallengeKeys {
     const val STEPS = "steps"
     const val ANALYSIS = "analysis"
     const val SUPPORT = "support"
+    const val HUB = "hub"
 }
+
+/** Подгруппа челленджей внутри группы: своя лента и свой ключ публикации. */
+data class MessengerChallengeTopic(
+    val key: String,
+    val name: String,
+    val chatId: String = ""
+)
 
 data class MessengerChallenge(
     val key: String,
@@ -144,7 +163,8 @@ data class MessengerChallenge(
     val groupId: String = "",
     val chatId: String = "",
     val joined: Boolean = false,
-    val members: Int = 0
+    val members: Int = 0,
+    val topics: List<MessengerChallengeTopic> = emptyList()
 )
 
 sealed class MessengerResult<out T> {
