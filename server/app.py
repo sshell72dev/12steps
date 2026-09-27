@@ -691,6 +691,95 @@ def api_analyze():
     return jsonify(result)
 
 
+BOOK_FIX_SYSTEM = (
+    "Ты — корректор книги. Исправляешь орфографию, пунктуацию, согласование слов, "
+    "опечатки и явные повторы. Смысл, факты, стиль и порядок автора сохраняешь: "
+    "переписывать фразы заново и сокращать текст нельзя. "
+    "Одно исправление — минимальный непрерывный фрагмент текста. "
+    "Ответ — только JSON указанного вида, без пояснений и без markdown:\n"
+    '{"edits": [{"old": "<фрагмент точно как в тексте>", '
+    '"new": "<тот же фрагмент с исправлением>", '
+    '"reason": "<коротко: что исправлено>"}]}\n'
+    "Поле old должно буквально встречаться в тексте. Не более 80 исправлений. "
+    'Если исправлять нечего, верни {"edits": []}.'
+)
+
+BOOK_FIX_MAX_CHARS = 20000
+
+
+def _extract_json_object(raw: str) -> dict:
+    """Достаёт первый JSON-объект из ответа модели (может быть обёрнут в текст или ```)."""
+    text = (raw or "").strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return {}
+    try:
+        parsed = json.loads(text[start:end + 1])
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+@app.post("/api/v1/book/fix")
+def api_book_fix():
+    if not _api_ok():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "text_required"}), 400
+    if len(text) > BOOK_FIX_MAX_CHARS:
+        return jsonify({"error": "text_too_long", "limit": BOOK_FIX_MAX_CHARS}), 400
+
+    api_key = db.get_setting("deepseek_api_key", "")
+    if not api_key:
+        return jsonify({"error": "not_configured"}), 503
+    model = _model_for_user(_payload_premium(payload))
+    language = psych.resolve_response_language(
+        str(payload.get("language") or payload.get("language_code") or "ru"),
+        text,
+    )
+    user_prompt = (
+        f"Язык текста: {language}.\n"
+        "Проверь текст как редактор и верни только JSON со списком исправлений.\n\n"
+        f"ТЕКСТ:\n{text}"
+    )
+    try:
+        raw = _deepseek_chat(
+            api_key,
+            model,
+            [
+                {"role": "system", "content": BOOK_FIX_SYSTEM},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=4000,
+            timeout=180,
+        )
+    except Exception as exc:
+        return jsonify({"error": "upstream", "detail": str(exc)}), 502
+
+    data = _extract_json_object(raw)
+    edits = []
+    seen = set()
+    for item in data.get("edits") or []:
+        if not isinstance(item, dict):
+            continue
+        old = str(item.get("old") or "")
+        new = str(item.get("new") or "")
+        # Правка бесполезна, если фрагмент не найден в тексте или ничего не меняет.
+        if not old or old == new or old not in text or old in seen:
+            continue
+        seen.add(old)
+        edits.append({
+            "old": old,
+            "new": new,
+            "reason": str(item.get("reason") or "").strip(),
+        })
+    return jsonify({"ok": True, "edits": edits, "model": model})
+
+
 @app.post("/api/v1/psych")
 def api_psych():
     if not _api_ok():

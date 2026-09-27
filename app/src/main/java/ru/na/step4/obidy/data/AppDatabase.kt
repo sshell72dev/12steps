@@ -8,6 +8,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import ru.na.step4.obidy.data.analysis.AnalysisDao
 import ru.na.step4.obidy.data.analysis.AnalysisRecord
+import ru.na.step4.obidy.data.book.BookChapterEntity
+import ru.na.step4.obidy.data.book.BookDao
+import ru.na.step4.obidy.data.book.BookEntity
 import ru.na.step4.obidy.data.psych.PsychAiCache
 import ru.na.step4.obidy.data.psych.PsychAiUsage
 import ru.na.step4.obidy.data.psych.PsychAnswer
@@ -32,9 +35,11 @@ import ru.na.step4.obidy.data.psych.PsychTopic
         PsychSituationTopic::class,
         PsychAiCache::class,
         PsychAiUsage::class,
-        ru.na.step4.obidy.data.activity.ActivityEvent::class
+        ru.na.step4.obidy.data.activity.ActivityEvent::class,
+        BookEntity::class,
+        BookChapterEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -43,6 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun situationDao(): SituationDao
     abstract fun analysisDao(): AnalysisDao
     abstract fun psychDao(): PsychDao
+    abstract fun bookDao(): BookDao
     abstract fun activityDao(): ru.na.step4.obidy.data.activity.ActivityDao
 
     companion object {
@@ -430,6 +436,38 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS books (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS book_chapters (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        bookId INTEGER NOT NULL,
+                        title TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        sortOrder INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(bookId) REFERENCES books(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_book_chapters_bookId ON book_chapters(bookId)"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -445,7 +483,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
-                        MIGRATION_8_9
+                        MIGRATION_8_9,
+                        MIGRATION_9_10
                     )
                     .build()
                     .also { instance = it }

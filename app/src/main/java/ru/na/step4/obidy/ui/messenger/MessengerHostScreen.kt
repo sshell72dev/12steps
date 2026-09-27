@@ -28,17 +28,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ru.na.step4.obidy.MainActivity
+import ru.na.step4.obidy.Step4App
 import ru.na.step4.obidy.data.alerts.AppAlerts
 import ru.na.step4.obidy.data.messenger.MessengerInvite
 import ru.na.step4.obidy.data.messenger.MessengerResult
 import ru.na.step4.obidy.data.messenger.MessengerRu
 import ru.na.step4.obidy.ui.AppNavIcon
+import ru.na.step4.obidy.ui.book.BookChapterNewScreen
+import ru.na.step4.obidy.ui.book.BookChaptersScreen
+import ru.na.step4.obidy.ui.book.BookListScreen
+import ru.na.step4.obidy.ui.book.BookScreen
+import ru.na.step4.obidy.ui.book.BookViewModel
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.journal.JournalButton
@@ -56,9 +63,16 @@ private object MRoutes {
     const val GROUP = "group/{id}"
     const val TOPICS = "group/{id}/topics"
     const val PROFILE = "profile"
+    const val BOOK = "book"
+    const val BOOK_OPEN = "book/{id}"
+    const val BOOK_CHAPTERS = "book/{id}/chapters"
+    const val BOOK_CHAPTER_NEW = "book/{id}/chapter/new"
     fun chat(id: String) = "chat/$id"
     fun group(id: String) = "group/$id"
     fun topics(id: String) = "group/$id/topics"
+    fun book(id: Long) = "book/$id"
+    fun bookChapters(id: Long) = "book/$id/chapters"
+    fun bookChapterNew(id: Long) = "book/$id/chapter/new"
 }
 
 @Composable
@@ -74,6 +88,11 @@ fun MessengerHostScreen(
     val nav = rememberNavController()
     val context = LocalContext.current
     val alertsTick = (context as? MainActivity)?.alertsOpenTick ?: 0
+
+    val app = context.applicationContext as Step4App
+    val bookViewModel: BookViewModel = viewModel(
+        factory = BookViewModel.factory(app.bookRepository)
+    )
 
     LaunchedEffect(error) {
         val text = error ?: return@LaunchedEffect
@@ -136,6 +155,7 @@ fun MessengerHostScreen(
                     onScan = { nav.navigate(MRoutes.SCAN) },
                     onNewGroup = { nav.navigate(MRoutes.GROUP_NEW) },
                     onProfile = { nav.navigate(MRoutes.PROFILE) },
+                    onBook = { nav.navigate(MRoutes.BOOK) },
                     onJoinChallenge = { key ->
                         viewModel.joinChallenge(key) { created ->
                             if (created != null && created.chatId.isNotBlank()) {
@@ -263,6 +283,53 @@ fun MessengerHostScreen(
                 MessengerProfileScreen(
                     viewModel = viewModel,
                     onBack = { nav.popBackStack() }
+                )
+            }
+            composable(MRoutes.BOOK) {
+                BookListScreen(
+                    viewModel = bookViewModel,
+                    onBack = { nav.popBackStack() },
+                    onOpenBook = { id -> nav.navigate(MRoutes.book(id)) }
+                )
+            }
+            composable(
+                MRoutes.BOOK_OPEN,
+                arguments = listOf(navArgument("id") { type = NavType.LongType })
+            ) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                BookScreen(
+                    bookId = id,
+                    viewModel = bookViewModel,
+                    onBack = {
+                        bookViewModel.close()
+                        nav.popBackStack()
+                    },
+                    onChapters = { nav.navigate(MRoutes.bookChapters(id)) },
+                    onNewChapter = { nav.navigate(MRoutes.bookChapterNew(id)) }
+                )
+            }
+            composable(
+                MRoutes.BOOK_CHAPTERS,
+                arguments = listOf(navArgument("id") { type = NavType.LongType })
+            ) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                BookChaptersScreen(
+                    bookId = id,
+                    viewModel = bookViewModel,
+                    onBack = { nav.popBackStack() },
+                    onPick = { nav.popBackStack() }
+                )
+            }
+            composable(
+                MRoutes.BOOK_CHAPTER_NEW,
+                arguments = listOf(navArgument("id") { type = NavType.LongType })
+            ) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                BookChapterNewScreen(
+                    bookId = id,
+                    viewModel = bookViewModel,
+                    onBack = { nav.popBackStack() },
+                    onSaved = { nav.popBackStack() }
                 )
             }
         }

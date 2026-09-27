@@ -1211,5 +1211,31 @@ object SourceBootstrap {
         SourceCatalog.put("activity.typeListenEnd", "Конец прослушивания")
         SourceCatalog.put("activity.typeScreen", "Экран")
         SourceCatalog.put("activity.typeSave", "Сохранение")
+        SourceCatalog.put("book.title", "Моя книга")
+        SourceCatalog.put(
+            "book.hint",
+            "Книга пишется по главам: текст главы можно надиктовать голосом и прослушать."
+        )
+        SourceCatalog.put(
+            "book.empty",
+            "Пока нет книг. Нажмите «плюс» внизу, чтобы добавить первую."
+        )
+        SourceCatalog.put("book.addBook", "Добавить книгу")
+        SourceCatalog.put("book.bookTitle", "Название книги")
+        SourceCatalog.put("book.bookTitleHint", "Например: моя история")
+        SourceCatalog.put("book.create", "Создать")
+        SourceCatalog.put("book.cancel", "Отмена")
+        SourceCatalog.put("book.chapters", "Главы")
+        SourceCatalog.put("book.chaptersEmpty", "В книге пока нет глав. Создайте первую главу.")
+        SourceCatalog.put("book.chaptersCount", "Глав: %1\$d")
+        SourceCatalog.put("book.newChapter", "Новая глава")
+        SourceCatalog.put("book.chapterTitle", "Название главы")
+        SourceCatalog.put("book.chapterText", "Текст главы")
+        SourceCatalog.put("book.save", "Сохранить")
+        SourceCatalog.put("book.saved", "Сохранено")
+        SourceCatalog.put("book.chapterDefault", "Глава %1\$d")
+        SourceCatalog.put("book.emptyText", "Текст пока пустой")
+        SourceCatalog.put("book.bookMissing", "Книга не найдена.")
+        SourceCatalog.put("book.back", "Назад")
     }
 }

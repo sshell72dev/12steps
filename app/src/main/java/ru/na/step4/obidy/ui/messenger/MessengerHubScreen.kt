@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.outlined.QrCode
@@ -46,6 +47,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import ru.na.step4.obidy.data.book.BookRu
 import ru.na.step4.obidy.data.messenger.MessengerChallenge
 import ru.na.step4.obidy.data.messenger.MessengerChat
 import ru.na.step4.obidy.data.messenger.MessengerRu
@@ -68,6 +70,7 @@ fun MessengerHubScreen(
     onScan: () -> Unit,
     onNewGroup: () -> Unit,
     onProfile: () -> Unit,
+    onBook: () -> Unit,
     onJoinChallenge: (String) -> Unit
 ) {
     val chats by viewModel.chats.collectAsStateWithLifecycle()
@@ -84,6 +87,9 @@ fun MessengerHubScreen(
                 title = { Text(MessengerRu.title, color = Forest) },
                 navigationIcon = { AppNavIcon(onBack = onBack) },
                 actions = {
+                    IconButton(onClick = onBook) {
+                        Icon(Icons.AutoMirrored.Outlined.MenuBook, BookRu.title, tint = Forest)
+                    }
                     IconButton(onClick = onProfile) {
                         Icon(Icons.Outlined.AccountCircle, MessengerRu.profileTitle, tint = Forest)
                     }

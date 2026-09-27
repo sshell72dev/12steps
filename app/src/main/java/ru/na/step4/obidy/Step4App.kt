@@ -26,6 +26,7 @@ import ru.na.step4.obidy.data.psych.PsychStreakStore
 import ru.na.step4.obidy.data.alerts.StreakWarningWorker
 import ru.na.step4.obidy.data.backup.BackupAutoWorker
 import ru.na.step4.obidy.data.backup.BackupServer
+import ru.na.step4.obidy.data.book.BookRepository
 import ru.na.step4.obidy.data.psych.PsychRepository
 import ru.na.step4.obidy.data.psych.PsychSettings
 import ru.na.step4.obidy.data.spiritual.SpiritualRatingStore
@@ -107,6 +108,9 @@ class Step4App : Application() {
     lateinit var messengerRepository: MessengerRepository
         private set
 
+    lateinit var bookRepository: BookRepository
+        private set
+
     lateinit var messengerChallenges: MessengerChallengeShare
         private set
 
@@ -162,6 +166,7 @@ class Step4App : Application() {
             spiritualRating
         )
         voiceHandsSettings = VoiceHandsSettings(this)
+        bookRepository = BookRepository(db.bookDao())
         activityLog = ActivityLog(db.activityDao(), appScope)
         voicePlugin.speaker.speakingListener = { on, preview ->
             activityLog.speakingChanged(on, preview)

@@ -853,7 +853,7 @@ object UiSourceKeys {
         "voice.previewText",
     )
 
-    val messenger: Set<String> = setOf(
+    private val messengerKeys: Set<String> = setOf(
         "messenger.title",
         "messenger.homeBody",
         "messenger.alertsTitle",
@@ -948,6 +948,47 @@ object UiSourceKeys {
         "messenger.messageEdited",
         "messenger.messageDeleted",
     )
+
+    /** Раздел «Моя книга» живёт внутри мессенджера и переводится вместе с ним. */
+    val book: Set<String> = setOf(
+        "book.title",
+        "book.hint",
+        "book.empty",
+        "book.addBook",
+        "book.bookTitle",
+        "book.bookTitleHint",
+        "book.create",
+        "book.cancel",
+        "book.chapters",
+        "book.chaptersEmpty",
+        "book.chaptersCount",
+        "book.newChapter",
+        "book.chapterTitle",
+        "book.chapterText",
+        "book.save",
+        "book.saved",
+        "book.chapterDefault",
+        "book.emptyText",
+        "book.bookMissing",
+        "book.back",
+        "book.fixErrors",
+        "book.fixTitle",
+        "book.fixChecking",
+        "book.fixOriginal",
+        "book.fixFixed",
+        "book.fixNothing",
+        "book.fixCount",
+        "book.fixMarked",
+        "book.fixAcceptAll",
+        "book.fixAcceptSelected",
+        "book.fixCancel",
+        "book.fixDone",
+        "book.fixError",
+        "book.fixWas",
+        "book.fixBecame",
+    )
+
+    val messenger: Set<String> get() = messengerKeys + book
 
     val voicehands: Set<String> = setOf(
         "voicehands.title",
