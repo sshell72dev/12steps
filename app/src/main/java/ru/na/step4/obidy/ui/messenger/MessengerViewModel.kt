@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.messenger.MessengerChallenge
+import ru.na.step4.obidy.data.messenger.MessengerChallengeKeys
 import ru.na.step4.obidy.data.messenger.MessengerChat
 import ru.na.step4.obidy.data.messenger.MessengerContact
 import ru.na.step4.obidy.data.messenger.MessengerGroupInfo
@@ -294,6 +295,14 @@ class MessengerViewModel(
         viewModelScope.launch {
             if (repository.removeMember(groupId, userId)) loadGroup(groupId)
         }
+    }
+
+    /** Группа «Челленджи»: внутри неё подгруппы, отдельной ленты «Общий» нет. */
+    fun isChallengeHubChat(chatId: String, groupId: String): Boolean {
+        val hub = _challenges.value.firstOrNull { it.key == MessengerChallengeKeys.HUB }
+        if (hub != null && groupId.isNotBlank() && hub.groupId == groupId) return true
+        val hubChat = repository.challengeChatId(MessengerChallengeKeys.HUB)
+        return hubChat.isNotBlank() && hubChat == chatId
     }
 
     fun loadTopics(groupId: String) {

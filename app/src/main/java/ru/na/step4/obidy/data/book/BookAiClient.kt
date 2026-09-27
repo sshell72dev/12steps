@@ -1,5 +1,7 @@
 package ru.na.step4.obidy.data.book
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import ru.na.step4.obidy.data.ai.AiHttp
 import ru.na.step4.obidy.data.i18n.I18n
@@ -29,17 +31,18 @@ object BookAiClient {
         data class Err(val message: String) : Result()
     }
 
-    fun fixText(text: String, premium: Boolean = false, admin: Boolean = false): Result {
-        if (text.isBlank()) return Result.Ok(emptyList())
-        val payload = JSONObject()
-            .put("text", text)
-            .put("premium", premium)
-            .put("language", I18n.languageCode().ifBlank { "ru" })
-        return when (val raw = AiHttp.post("/api/v1/book/fix", payload, readTimeoutMs = 180_000)) {
-            is AiHttp.Result.Err -> Result.Err(raw.message)
-            is AiHttp.Result.Ok -> parse(raw.code, raw.body, admin)
+    suspend fun fixText(text: String, premium: Boolean = false, admin: Boolean = false): Result =
+        withContext(Dispatchers.IO) {
+            if (text.isBlank()) return@withContext Result.Ok(emptyList())
+            val payload = JSONObject()
+                .put("text", text)
+                .put("premium", premium)
+                .put("language", I18n.languageCode().ifBlank { "ru" })
+            when (val raw = AiHttp.post("/api/v1/book/fix", payload, readTimeoutMs = 180_000)) {
+                is AiHttp.Result.Err -> Result.Err(raw.message)
+                is AiHttp.Result.Ok -> parse(raw.code, raw.body, admin)
+            }
         }
-    }
 
     private fun parse(code: Int, raw: String, admin: Boolean): Result {
         val obj = AiHttp.parseObject(raw)

@@ -96,6 +96,14 @@ class MessengerClient(private val messengerId: () -> String) {
         }
     }
 
+    /** Запись в челлендж: ленту подгруппы находит сервер по ключу челленджа. */
+    fun shareChallenge(key: String, body: String): MessengerResult<Unit> {
+        val payload = JSONObject().put("body", body)
+        return map(
+            MessengerHttp.post("/api/v1/messenger/challenges/$key/share", messengerId(), payload)
+        ) { }
+    }
+
     /** Пересылка: сервер копирует текст и подписывает автора оригинала, слать body не нужно. */
     fun forwardMessage(chatId: String, messageId: Long): MessengerResult<MessengerMessage> {
         val payload = JSONObject().put("forward_message_id", messageId)

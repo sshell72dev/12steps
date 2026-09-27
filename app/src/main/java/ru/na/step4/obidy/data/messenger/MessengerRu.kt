@@ -54,7 +54,7 @@ object MessengerRu {
     val challengeAnalysis: String get() = I18n.t("messenger.challengeAnalysis", "Челлендж самоанализов")
     val challengeStepsBody: String get() = I18n.t(
         "messenger.challengeStepsBody",
-        "После записи в точку дневника в группу уходит ударный режим, название и рейтинг духовной деятельности, а после работы по IP — отметка о проработке обиды и рейтинг."
+        "После записи в точку дневника в подгруппу уходит ударный режим, название и рейтинг духовной деятельности, а после работы по IP — отметка о проработке обиды и рейтинг."
     )
     val challengeAnalysisBody: String get() = I18n.t(
         "messenger.challengeAnalysisBody",
@@ -74,7 +74,7 @@ object MessengerRu {
     val topicsEmpty: String get() = I18n.t("messenger.topicsEmpty", "Пока нет тем — создайте первую.")
     val topicsScreenHint: String get() = I18n.t(
         "messenger.topicsScreenHint",
-        "Темы — подгруппы внутри группы: у каждой своя лента. «Общий» — лента всей группы."
+        "Подгруппы группы: у каждой своя лента сообщений."
     )
     val topicGeneral: String get() = I18n.t("messenger.topicGeneral", "Общий")
     val topicCreate: String get() = I18n.t("messenger.topicCreate", "Новая тема")

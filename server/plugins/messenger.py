@@ -1673,6 +1673,31 @@ def register(app, login_required, api_ok) -> None:
             }
         )
 
+    @app.post("/api/v1/messenger/challenges/<key>/share")
+    @guard(need_user=True)
+    def api_messenger_share_challenge(messenger_id: str, key: str):
+        """Запись в челлендж: лента подгруппы ищется по ключу, а не по id чата на клиенте."""
+        key = (key or "").strip().lower()
+        meta = next((item for item in CHALLENGE_TOPICS if item[0] == key), None)
+        if not meta:
+            return jsonify({"error": "not_found"}), 404
+        payload = request.get_json(silent=True) or {}
+        body = str(payload.get("body") or "").strip()[:MAX_TEXT]
+        if not body:
+            return jsonify({"error": "empty"}), 400
+        _, topic_id, _ = meta
+        with db.cursor() as cur:
+            user = _require_user(cur, messenger_id)
+            if not user:
+                return jsonify({"error": "not_registered"}), 404
+            _ensure_challenge_groups(cur)
+            if not _is_group_member(cur, HUB_GROUP_ID, messenger_id):
+                return jsonify({"error": "forbidden"}), 403
+            chat_id = _ensure_topic_chat(cur, HUB_GROUP_ID, topic_id)
+            _add_chat_member(cur, chat_id, messenger_id)
+            message_id = _insert_message(cur, chat_id, messenger_id, "text", body)
+        return jsonify({"ok": True, "chat_id": chat_id, "message_id": message_id})
+
     @app.get("/api/v1/messenger/chats")
     @guard(need_user=True)
     def api_messenger_chats(messenger_id: str):
@@ -2242,7 +2267,8 @@ def register(app, login_required, api_ok) -> None:
                     can_create = _is_group_member(cur, group_id, messenger_id)
                 else:
                     can_create = not challenge_key and group.get("owner_id") == messenger_id
-            if not is_ideas:
+            # У группы челленджей общей ленты нет: внутри неё сразу подгруппы.
+            if not is_ideas and not is_hub:
                 general_chat = _ensure_group_chat(cur, group_id)
                 items.append(_topic_json(cur, "", "", general_chat, messenger_id, is_default=True))
             cur.execute(
