@@ -352,6 +352,9 @@ def _ensure_media_schema(cur) -> None:
         cur.execute("ALTER TABLE messenger_topics ADD COLUMN author_id VARCHAR(64) NULL")
     if not _has_column(cur, "messenger_topics", "ticket_id"):
         cur.execute("ALTER TABLE messenger_topics ADD COLUMN ticket_id BIGINT NULL")
+    if not _has_column(cur, "messenger_topics", "support_message_id"):
+        # Курсор: номер последнего сообщения обращения, уже перенесённого в подгруппу.
+        cur.execute("ALTER TABLE messenger_topics ADD COLUMN support_message_id BIGINT NULL")
     if not _has_index(cur, "messenger_topics", "messenger_topics_ticket"):
         cur.execute(
             "ALTER TABLE messenger_topics ADD INDEX messenger_topics_ticket (ticket_id)"
@@ -507,6 +510,7 @@ def _topic_json(
         "last_body": last_body,
         "last_kind": last_kind,
         "last_at": last_at,
+        "avatar_url": _avatar_url("topic", topic_id),
     }
 
 
@@ -629,25 +633,88 @@ def attach_support_ticket(ticket: dict, messenger_id: str) -> dict:
                 _add_chat_member(cur, chat_id, author_id)
             # Первым сообщением подгруппы идёт сам вопрос от имени пользователя.
             _insert_message(cur, chat_id, sender, "text", body)
+        # Остальные сообщения обращения подтянет sync_support_ticket.
+        _mark_support_synced(ticket_id, ticket)
         return {"topic_id": topic_id, "chat_id": chat_id}
     except Exception:
         return {}
 
 
-def push_support_reply(ticket_id: int, body: str) -> dict:
-    """Ответ администратора из поддержки дублируется в подгруппу обращения."""
+def _mark_support_synced(ticket_id: int, ticket: dict) -> None:
+    """Запоминает, до какого сообщения обращения подгруппа уже наполнена."""
     try:
-        text = (body or "").strip()
-        if not text or not is_enabled():
+        messages = (ticket or {}).get("messages") or []
+        last_id = max((int(message.get("id") or 0) for message in messages), default=0)
+        if not last_id:
+            return
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE messenger_topics SET support_message_id = %s
+                WHERE ticket_id = %s AND COALESCE(support_message_id, 0) < %s
+                """,
+                (last_id, int(ticket_id), last_id),
+            )
+    except Exception:
+        pass
+
+
+def sync_support_ticket(ticket_id: int) -> dict:
+    """Доносит в подгруппу обращения все его сообщения: от пользователя, админа и служебные."""
+    try:
+        if not ticket_id or not is_enabled():
             return {}
         with db.cursor() as cur:
-            cur.execute("SELECT id FROM messenger_topics WHERE ticket_id = %s", (int(ticket_id),))
-            row = cur.fetchone()
-            if not row:
+            cur.execute(
+                """
+                SELECT id, author_id, support_message_id FROM messenger_topics
+                WHERE ticket_id = %s
+                """,
+                (int(ticket_id),),
+            )
+            topic = cur.fetchone()
+            if not topic:
                 return {}
-            chat_id = _ensure_topic_chat(cur, IDEAS_GROUP_ID, row["id"])
-            message_id = _insert_message(cur, chat_id, SYSTEM_USER_ID, "text", text)
-        return {"chat_id": chat_id, "message_id": message_id}
+            topic_id = str(topic["id"])
+            author_id = str(topic.get("author_id") or "")
+            last_raw = topic.get("support_message_id")
+            if last_raw is None:
+                # Тему заводят вместе с вопросом: он уже в чате, повторять его не нужно.
+                cur.execute(
+                    "SELECT MIN(id) AS first_id FROM support_messages WHERE ticket_id = %s",
+                    (int(ticket_id),),
+                )
+                last_id = int((cur.fetchone() or {}).get("first_id") or 0)
+            else:
+                last_id = int(last_raw or 0)
+            chat_id = _ensure_topic_chat(cur, IDEAS_GROUP_ID, topic_id)
+            if author_id:
+                _add_chat_member(cur, chat_id, author_id)
+            cur.execute(
+                """
+                SELECT id, author, body FROM support_messages
+                WHERE ticket_id = %s AND id > %s
+                ORDER BY id ASC
+                """,
+                (int(ticket_id), last_id),
+            )
+            rows = cur.fetchall()
+            added = 0
+            for row in rows:
+                body = str(row.get("body") or "").strip()
+                last_id = max(last_id, int(row.get("id") or 0))
+                if not body:
+                    continue
+                # Вопрос идёт от автора обращения, ответы и служебные — от администратора.
+                sender = author_id if str(row.get("author") or "") == "user" else SYSTEM_USER_ID
+                _insert_message(cur, chat_id, sender or SYSTEM_USER_ID, "text", body)
+                added += 1
+            if rows:
+                cur.execute(
+                    "UPDATE messenger_topics SET support_message_id = %s WHERE id = %s",
+                    (last_id, topic_id),
+                )
+        return {"chat_id": chat_id, "added": added}
     except Exception:
         return {}
 
@@ -954,6 +1021,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
     group_id = chat.get("group_id") or ""
     is_owner = False
     challenge_key = ""
+    has_topics = False
     if kind == "direct":
         cur.execute(
             """
@@ -977,6 +1045,11 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         title = group.get("name") or ""
         is_owner = group.get("owner_id") == me
         challenge_key = group.get("challenge_key") or ""
+        cur.execute(
+            "SELECT COUNT(*) AS total FROM messenger_topics WHERE group_id = %s",
+            (group_id,),
+        )
+        has_topics = int((cur.fetchone() or {}).get("total") or 0) > 0
     cur.execute(
         """
         SELECT id, kind, body, sender_id,
@@ -1008,6 +1081,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         "group_id": group_id,
         "is_owner": is_owner,
         "challenge_key": challenge_key,
+        "has_topics": has_topics,
         "avatar_url": avatar_url,
         "last_body": preview,
         "last_kind": last_kind,
@@ -1404,6 +1478,11 @@ def register(app, login_required, api_ok) -> None:
                     topics.append(
                         {"key": topic_key, "name": topic_name, "chat_id": topic_chat}
                     )
+            cur.execute(
+                "SELECT COUNT(*) AS total FROM messenger_topics WHERE group_id = %s",
+                (group_id,),
+            )
+            has_topics = int((cur.fetchone() or {}).get("total") or 0) > 0
             return jsonify(
                 {
                     "ok": True,
@@ -1412,6 +1491,7 @@ def register(app, login_required, api_ok) -> None:
                     "group_id": group_id,
                     "title": group.get("name") or "",
                     "key": group.get("challenge_key") or "",
+                    "has_topics": has_topics,
                     "topics": topics,
                 }
             )
@@ -1661,6 +1741,11 @@ def register(app, login_required, api_ok) -> None:
             topics = []
             if key == HUB_KEY:
                 topics = _challenge_topics_json(cur, group_id, messenger_id, True)
+            cur.execute(
+                "SELECT COUNT(*) AS total FROM messenger_topics WHERE group_id = %s",
+                (group_id,),
+            )
+            has_topics = int((cur.fetchone() or {}).get("total") or 0) > 0
         return jsonify(
             {
                 "ok": True,
@@ -1669,6 +1754,7 @@ def register(app, login_required, api_ok) -> None:
                 "chat_id": chat_id,
                 "group_id": group_id,
                 "title": name,
+                "has_topics": has_topics,
                 "topics": topics,
             }
         )
@@ -1733,9 +1819,15 @@ def register(app, login_required, api_ok) -> None:
         except ValueError:
             after = 0
         is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
+        ticket_id = 0
         with db.cursor() as cur:
             if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
+            ticket_id = _ideas_ticket_for_chat(cur, chat_id)
+        if ticket_id and not after:
+            # Открытие переписки дотягивает в неё все сообщения обращения.
+            sync_support_ticket(ticket_id)
+        with db.cursor() as cur:
             cur.execute(
                 f"""
                 {MESSAGE_SELECT}
@@ -1824,7 +1916,9 @@ def register(app, login_required, api_ok) -> None:
         if ticket_id and not forward_id:
             # Переписка в подгруппе «Идеи и Ошибки» продолжает обращение поддержки.
             try:
-                db.add_support_message(ticket_id, "admin" if is_admin else "user", body)
+                ticket = db.add_support_message(ticket_id, "admin" if is_admin else "user", body)
+                # Сообщение уже в чате — сдвигаем курсор, чтобы синхронизация его не повторила.
+                _mark_support_synced(ticket_id, ticket)
             except ValueError:
                 pass
         return jsonify({"message": _message_json(row, messenger_id, names)})
@@ -1919,11 +2013,20 @@ def register(app, login_required, api_ok) -> None:
         return jsonify({"ok": True})
 
     def _avatar_response(messenger_id: str, kind: str, owner_id: str):
-        if kind not in ("user", "group") or not _valid_id(owner_id):
+        if kind not in ("user", "group", "topic") or not _valid_id(owner_id):
             return jsonify({"error": "not_found"}), 404
         with db.cursor() as cur:
             if not _require_user(cur, messenger_id):
                 return jsonify({"error": "not_registered"}), 404
+            if kind == "topic":
+                # Фото подгруппы доступно участникам её группы.
+                cur.execute(
+                    "SELECT group_id FROM messenger_topics WHERE id = %s", (owner_id,)
+                )
+                topic_row = cur.fetchone() or {}
+                topic_group = topic_row.get("group_id") or ""
+                if not topic_group or not _is_group_member(cur, topic_group, messenger_id):
+                    return jsonify({"error": "forbidden"}), 403
             if kind == "group":
                 cur.execute(
                     "SELECT 1 FROM messenger_group_members WHERE group_id = %s AND user_id = %s",
@@ -1954,6 +2057,11 @@ def register(app, login_required, api_ok) -> None:
     @guard(need_user=True)
     def api_messenger_avatar_group(messenger_id: str, owner_id: str):
         return _avatar_response(messenger_id, "group", owner_id)
+
+    @app.get("/api/v1/messenger/avatar/topic/<owner_id>")
+    @guard(need_user=True)
+    def api_messenger_avatar_topic(messenger_id: str, owner_id: str):
+        return _avatar_response(messenger_id, "topic", owner_id)
 
     @app.post("/api/v1/messenger/me/avatar")
     @guard(need_user=True)
@@ -2022,6 +2130,58 @@ def register(app, login_required, api_ok) -> None:
             if group["owner_id"] != messenger_id:
                 return jsonify({"error": "forbidden"}), 403
         _drop_avatar("group", group_id)
+        return jsonify({"ok": True})
+
+    def _topic_for_avatar(cur, group_id: str, topic_id: str, messenger_id: str):
+        """Подгруппа и право на её оформление: автор подгруппы или владелец группы."""
+        cur.execute(
+            "SELECT id, author_id FROM messenger_topics WHERE id = %s AND group_id = %s",
+            (topic_id, group_id),
+        )
+        topic = cur.fetchone()
+        if not topic:
+            return None, (jsonify({"error": "topic_not_found"}), 404)
+        author_id = str(topic.get("author_id") or "")
+        if author_id == SYSTEM_USER_ID:
+            return None, (jsonify({"error": "challenge_locked"}), 403)
+        group = _group_row(cur, group_id)
+        if not group:
+            return None, (jsonify({"error": "not_found"}), 404)
+        if group["owner_id"] != messenger_id and author_id != messenger_id:
+            return None, (jsonify({"error": "forbidden"}), 403)
+        return topic, None
+
+    @app.post("/api/v1/messenger/groups/<group_id>/topics/<topic_id>/avatar")
+    @guard(need_user=True)
+    def api_messenger_upload_topic_avatar(messenger_id: str, group_id: str, topic_id: str):
+        if not _valid_id(group_id) or not _valid_id(topic_id):
+            return jsonify({"error": "not_found"}), 404
+        upload = request.files.get("file")
+        if upload is None:
+            return jsonify({"error": "file_required"}), 400
+        raw = upload.read(MAX_AVATAR_BYTES + 1)
+        if not raw or len(raw) > MAX_AVATAR_BYTES:
+            return jsonify({"error": "file_too_large"}), 400
+        if not _avatar_mime(raw):
+            return jsonify({"error": "bad_image"}), 400
+        with db.cursor() as cur:
+            _, err = _topic_for_avatar(cur, group_id, topic_id, messenger_id)
+            if err:
+                return err
+            if not _save_avatar("topic", topic_id, raw):
+                return jsonify({"error": "store_failed"}), 500
+        return jsonify({"avatar_url": _avatar_url("topic", topic_id)})
+
+    @app.delete("/api/v1/messenger/groups/<group_id>/topics/<topic_id>/avatar")
+    @guard(need_user=True)
+    def api_messenger_delete_topic_avatar(messenger_id: str, group_id: str, topic_id: str):
+        if not _valid_id(group_id) or not _valid_id(topic_id):
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            _, err = _topic_for_avatar(cur, group_id, topic_id, messenger_id)
+            if err:
+                return err
+        _drop_avatar("topic", topic_id)
         return jsonify({"ok": True})
 
     @app.post("/api/v1/messenger/messages/<int:message_id>/edit")
@@ -2276,11 +2436,7 @@ def register(app, login_required, api_ok) -> None:
                 (group_id,),
             )
             rows = cur.fetchall()
-            # Если у группы есть свои подгруппы, «Общий» лишний: он нужен только
-            # группе без тем, иначе открывать было бы нечего.
-            if not is_ideas and not rows:
-                general_chat = _ensure_group_chat(cur, group_id)
-                items.append(_topic_json(cur, "", "", general_chat, messenger_id, is_default=True))
+            # Ленты «Общий» нет: группа без своих тем открывается прямо в переписку.
             for row in rows:
                 author_id = str(row.get("author_id") or "")
                 if is_ideas and not is_admin and author_id != messenger_id:
@@ -2398,4 +2554,5 @@ def register(app, login_required, api_ok) -> None:
                 "DELETE FROM messenger_topics WHERE id = %s AND group_id = %s",
                 (topic_id, group_id),
             )
+        _drop_avatar("topic", topic_id)
         return jsonify({"ok": True})

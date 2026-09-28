@@ -655,6 +655,49 @@ class MessengerRepository(
         }
     }
 
+    suspend fun uploadTopicAvatar(groupId: String, topicId: String, uri: Uri): Boolean =
+        withContext(Dispatchers.IO) {
+            val file = MessengerImage.prepare(appContext, uri)
+            if (file == null) {
+                _error.value = MessengerRu.photoBadFormat
+                return@withContext false
+            }
+            val result = client.uploadTopicAvatar(groupId, topicId, file, MessengerImage.mimeType)
+            file.delete()
+            when (result) {
+                is MessengerResult.Ok -> {
+                    _groupRefresh.value = _groupRefresh.value + 1
+                    true
+                }
+                is MessengerResult.Disabled -> {
+                    applyEnabled(false)
+                    false
+                }
+                is MessengerResult.Err -> {
+                    _error.value = result.message.ifBlank { MessengerRu.error }
+                    false
+                }
+            }
+        }
+
+    suspend fun deleteTopicAvatar(groupId: String, topicId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            when (val result = client.deleteTopicAvatar(groupId, topicId)) {
+                is MessengerResult.Ok -> {
+                    _groupRefresh.value = _groupRefresh.value + 1
+                    true
+                }
+                is MessengerResult.Disabled -> {
+                    applyEnabled(false)
+                    false
+                }
+                is MessengerResult.Err -> {
+                    _error.value = result.message.ifBlank { MessengerRu.error }
+                    false
+                }
+            }
+        }
+
     suspend fun uploadGroupAvatar(groupId: String, uri: Uri): Boolean = withContext(Dispatchers.IO) {
         val file = MessengerImage.prepare(appContext, uri)
         if (file == null) {
@@ -842,7 +885,8 @@ class MessengerRepository(
         pinnedId = pinnedId,
         pinnedKind = pinnedKind,
         pinnedBody = pinnedBody,
-        pinnedSender = pinnedSender
+        pinnedSender = pinnedSender,
+        hasTopics = hasTopics
     )
 
     private fun MessengerChatRow.toChat() = MessengerChat(
@@ -860,7 +904,8 @@ class MessengerRepository(
         pinnedId = pinnedId,
         pinnedKind = pinnedKind,
         pinnedBody = pinnedBody,
-        pinnedSender = pinnedSender
+        pinnedSender = pinnedSender,
+        hasTopics = hasTopics
     )
 
     private fun MessengerMessage.toRow() = MessengerMessageRow(

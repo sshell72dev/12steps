@@ -981,7 +981,7 @@ object SourceBootstrap {
         SourceCatalog.put("messenger.challengeJoin", "Подключиться")
         SourceCatalog.put("messenger.challengePoint", "Точка")
         SourceCatalog.put("messenger.challengeAnalysisLabel", "Самоанализ")
-        SourceCatalog.put("messenger.challengeInventoryDone", "Проработка обиды")
+        SourceCatalog.put("messenger.challengeInventoryDone", "Работа по 4 шагу · Обиды по IP")
         SourceCatalog.put("messenger.challengeMembers", "участников")
         SourceCatalog.put("messenger.groupInfo", "О группе")
         SourceCatalog.put("messenger.topicsTitle", "Темы")

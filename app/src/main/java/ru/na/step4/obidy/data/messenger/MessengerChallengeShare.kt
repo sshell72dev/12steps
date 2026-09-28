@@ -36,16 +36,19 @@ class MessengerChallengeShare(
         }
     }
 
-    /** Работа по IP (обиды) отмечается в «Челлендже шагов» — без текста самой ситуации. */
-    suspend fun shareInventory() {
-        runCatching {
-            val streak = journalStreak.label() ?: Ru.analysisStreak
-            messenger.shareChallenge(
-                MessengerChallengeKeys.STEPS,
-                formatNote(streak, MessengerRu.challengeInventoryDone)
-            )
-        }
-    }
+    /**
+     * Работа по IP (обиды, 4 шаг) отмечается в «Челлендже шагов» короткой служебной
+     * записью — без названия ситуации и других данных пользователя. День засчитывается
+     * в ударный режим работы по шагам.
+     */
+    suspend fun shareInventory(): Boolean = runCatching {
+        journalStreak.recordCompletion()
+        val streak = journalStreak.label() ?: Ru.analysisStreak
+        messenger.shareChallenge(
+            MessengerChallengeKeys.STEPS,
+            formatNote(streak, MessengerRu.challengeInventoryDone)
+        )
+    }.getOrDefault(false)
 
     private fun format(streakLabel: String, subjectLabel: String, subjectName: String): String =
         formatNote(streakLabel, "$subjectLabel: $subjectName")

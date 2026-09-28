@@ -58,6 +58,7 @@ class MessengerClient(private val messengerId: () -> String) {
                 title = obj.optString("title"),
                 groupId = obj.optString("group_id"),
                 challengeKey = obj.optString("key"),
+                hasTopics = obj.optBoolean("has_topics"),
                 topics = parseChallengeTopics(obj.optJSONArray("topics"))
             )
         }
@@ -340,6 +341,33 @@ class MessengerClient(private val messengerId: () -> String) {
         ) { }
     }
 
+    fun uploadTopicAvatar(
+        groupId: String,
+        topicId: String,
+        file: File,
+        mimeType: String
+    ): MessengerResult<String> {
+        return map(
+            MessengerHttp.postFile(
+                path = "/api/v1/messenger/groups/$groupId/topics/$topicId/avatar",
+                messengerId = messengerId(),
+                file = file,
+                fieldName = "file",
+                fileName = "avatar",
+                mimeType = mimeType
+            )
+        ) { obj -> obj.optString("avatar_url") }
+    }
+
+    fun deleteTopicAvatar(groupId: String, topicId: String): MessengerResult<Unit> {
+        return map(
+            MessengerHttp.delete(
+                "/api/v1/messenger/groups/$groupId/topics/$topicId/avatar",
+                messengerId()
+            )
+        ) { }
+    }
+
     fun imageBytes(url: String): MessengerResult<ByteArray> {
         return MessengerHttp.getBytes(url, messengerId())
     }
@@ -467,6 +495,7 @@ class MessengerClient(private val messengerId: () -> String) {
             lastKind = row.optString("last_kind"),
             lastAt = row.optLong("last_at"),
             key = row.optString("key"),
+            avatarUrl = row.optString("avatar_url"),
             canManage = row.optBoolean("can_manage")
         )
     }
@@ -490,6 +519,7 @@ class MessengerClient(private val messengerId: () -> String) {
                         lastKind = row.optString("last_kind"),
                         lastAt = row.optLong("last_at"),
                         unread = row.optInt("unread"),
+                        hasTopics = row.optBoolean("has_topics"),
                         pinnedId = pinned?.optLong("id") ?: 0L,
                         pinnedKind = pinned?.optString("kind").orEmpty(),
                         pinnedBody = pinned?.optString("body").orEmpty(),

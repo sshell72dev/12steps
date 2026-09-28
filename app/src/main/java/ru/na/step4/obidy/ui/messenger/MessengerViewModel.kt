@@ -316,6 +316,14 @@ class MessengerViewModel(
         viewModelScope.launch { repository.deleteTopic(groupId, topicId) }
     }
 
+    fun uploadTopicAvatar(groupId: String, topicId: String, uri: Uri) {
+        viewModelScope.launch { repository.uploadTopicAvatar(groupId, topicId, uri) }
+    }
+
+    fun deleteTopicAvatar(groupId: String, topicId: String) {
+        viewModelScope.launch { repository.deleteTopicAvatar(groupId, topicId) }
+    }
+
     fun uploadGroupAvatar(groupId: String, uri: Uri) {
         viewModelScope.launch {
             if (repository.uploadGroupAvatar(groupId, uri)) loadGroup(groupId)

@@ -23,7 +23,9 @@ data class MessengerChat(
     val pinnedId: Long = 0L,
     val pinnedKind: String = "",
     val pinnedBody: String = "",
-    val pinnedSender: String = ""
+    val pinnedSender: String = "",
+    /** У группы есть свои подгруппы: она открывается их списком, а не общей лентой. */
+    val hasTopics: Boolean = false
 ) {
     val isGroup: Boolean get() = kind == "group"
     val isAlerts: Boolean get() = kind == AppAlerts.KIND || id == AppAlerts.CHAT_ID
@@ -124,6 +126,8 @@ data class MessengerTopic(
     val lastAt: Long = 0L,
     /** Ключ встроенной подгруппы челленджей: steps или analysis. */
     val key: String = "",
+    /** Фото подгруппы, если его поставили. */
+    val avatarUrl: String = "",
     /** Подгруппу можно переименовать или удалить — она создана самим участником. */
     val canManage: Boolean = false
 )
@@ -140,6 +144,8 @@ data class MessengerJoinResult(
     val title: String = "",
     val groupId: String = "",
     val challengeKey: String = "",
+    /** У подключённой группы есть подгруппы — открываем их, иначе ленту группы. */
+    val hasTopics: Boolean = false,
     val topics: List<MessengerChallengeTopic> = emptyList()
 )
 

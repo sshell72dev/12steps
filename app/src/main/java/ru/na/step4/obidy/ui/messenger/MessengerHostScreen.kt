@@ -106,7 +106,7 @@ fun MessengerHostScreen(
         if (result is MessengerResult.Ok && result.value.chatId.isNotBlank()) {
             val title = result.value.title.ifBlank { MessengerRu.title }
             viewModel.openChat(result.value.chatId, title, result.value.groupId)
-            if (result.value.groupId.isNotBlank()) {
+            if (result.value.groupId.isNotBlank() && result.value.hasTopics) {
                 nav.navigate(MRoutes.topics(result.value.groupId))
             } else {
                 nav.navigate(MRoutes.chat(result.value.chatId))
@@ -150,8 +150,8 @@ fun MessengerHostScreen(
                     onBack = onBack,
                     onOpenChat = { chat ->
                         viewModel.openChat(chat)
-                        // В группе сразу показываем подгруппы: «Общий» и темы одним списком.
-                        if (chat.groupId.isNotBlank()) {
+                        // Группа с подгруппами открывается их списком, группа без тем — лентой.
+                        if (chat.groupId.isNotBlank() && chat.hasTopics) {
                             nav.navigate(MRoutes.topics(chat.groupId))
                         } else {
                             nav.navigate(MRoutes.chat(chat.id))
@@ -170,7 +170,7 @@ fun MessengerHostScreen(
                             if (created != null && created.chatId.isNotBlank()) {
                                 val title = created.title.ifBlank { MessengerRu.challengeTitle(key, created.title) }
                                 viewModel.openChat(created.chatId, title, created.groupId)
-                                if (created.groupId.isNotBlank()) {
+                                if (created.groupId.isNotBlank() && created.hasTopics) {
                                     nav.navigate(MRoutes.topics(created.groupId))
                                 } else {
                                     nav.navigate(MRoutes.chat(created.chatId))
@@ -233,7 +233,7 @@ fun MessengerHostScreen(
                                 val title = result.value.title.ifBlank { MessengerRu.title }
                                 viewModel.openChat(result.value.chatId, title, result.value.groupId)
                                 nav.popBackStack()
-                                if (result.value.groupId.isNotBlank()) {
+                                if (result.value.groupId.isNotBlank() && result.value.hasTopics) {
                                     nav.navigate(MRoutes.topics(result.value.groupId))
                                 } else {
                                     nav.navigate(MRoutes.chat(result.value.chatId))
@@ -252,7 +252,7 @@ fun MessengerHostScreen(
                             if (created != null && created.chatId.isNotBlank()) {
                                 viewModel.openChat(created.chatId, created.title.ifBlank { name }, created.groupId)
                                 nav.popBackStack()
-                                if (created.groupId.isNotBlank()) {
+                                if (created.groupId.isNotBlank() && created.hasTopics) {
                                     nav.navigate(MRoutes.topics(created.groupId))
                                 } else {
                                     nav.navigate(MRoutes.chat(created.chatId))

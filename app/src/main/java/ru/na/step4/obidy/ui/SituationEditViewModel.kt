@@ -507,8 +507,8 @@ class SituationEditViewModel(
     private suspend fun shareInventoryChallenge() {
         if (challengeShared) return
         val share = challenges ?: return
-        challengeShared = true
-        share.shareInventory()
+        // Флаг ставим только после успешной отправки: иначе запись теряется безвозвратно.
+        if (share.shareInventory()) challengeShared = true
     }
 
     fun save(onSaved: () -> Unit) = saveThen { onSaved() }

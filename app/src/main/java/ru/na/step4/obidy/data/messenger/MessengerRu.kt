@@ -67,7 +67,10 @@ object MessengerRu {
     val challengeJoin: String get() = I18n.t("messenger.challengeJoin", "Подключиться")
     val challengePoint: String get() = I18n.t("messenger.challengePoint", "Точка")
     val challengeAnalysisLabel: String get() = I18n.t("messenger.challengeAnalysisLabel", "Самоанализ")
-    val challengeInventoryDone: String get() = I18n.t("messenger.challengeInventoryDone", "Проработка обиды")
+    val challengeInventoryDone: String get() = I18n.t(
+        "messenger.challengeInventoryDone",
+        "Работа по 4 шагу · Обиды по IP"
+    )
     val challengeMembers: String get() = I18n.t("messenger.challengeMembers", "участников")
     val groupInfo: String get() = I18n.t("messenger.groupInfo", "О группе")
     val topicsTitle: String get() = I18n.t("messenger.topicsTitle", "Темы")

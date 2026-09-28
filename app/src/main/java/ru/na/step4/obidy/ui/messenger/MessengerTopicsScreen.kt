@@ -1,5 +1,8 @@
 package ru.na.step4.obidy.ui.messenger
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.HideImage
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -50,8 +55,8 @@ import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
 /**
- * Подгруппы группы — как темы в Telegram: каждая со своей лентой,
- * «Общий» — общая лента всей группы.
+ * Подгруппы группы — как темы в Telegram: каждая со своей лентой.
+ * У группы без своих подгрупп открывается обычная переписка группы.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,7 +75,13 @@ fun MessengerTopicsScreen(
     var renameDraft by remember { mutableStateOf("") }
     var topicToRename by remember { mutableStateOf<MessengerTopic?>(null) }
     var topicToDelete by remember { mutableStateOf<MessengerTopic?>(null) }
+    var topicForPhoto by remember { mutableStateOf<MessengerTopic?>(null) }
     val canCreate by viewModel.topicsCanCreate.collectAsStateWithLifecycle()
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val target = topicForPhoto
+        topicForPhoto = null
+        if (uri != null && target != null) viewModel.uploadTopicAvatar(groupId, target.id, uri)
+    }
 
     LaunchedEffect(groupId, refresh) {
         viewModel.loadGroup(groupId)
@@ -80,11 +91,7 @@ fun MessengerTopicsScreen(
     fun openTopic(topic: MessengerTopic) {
         if (topic.chatId.isBlank()) return
         val groupName = info?.name.orEmpty()
-        val chatTitle = if (topic.isGeneral) {
-            groupName.ifBlank { MessengerRu.topicGeneral }
-        } else {
-            listOf(groupName, topic.name).filter { it.isNotBlank() }.joinToString(" · ")
-        }
+        val chatTitle = listOf(groupName, topic.name).filter { it.isNotBlank() }.joinToString(" · ")
         onOpenTopic(topic.chatId, chatTitle)
     }
 
@@ -169,14 +176,24 @@ fun MessengerTopicsScreen(
                     items(topics, key = { it.id.ifBlank { "general" } }) { topic ->
                         TopicRow(
                             topic = topic,
-                            title = if (topic.isGeneral) MessengerRu.topicGeneral else topic.name,
+                            title = topic.name,
                             canManage = topic.canManage,
+                            viewModel = viewModel,
                             onOpen = { openTopic(topic) },
                             onRename = {
                                 renameDraft = topic.name
                                 topicToRename = topic
                             },
-                            onDelete = { topicToDelete = topic }
+                            onDelete = { topicToDelete = topic },
+                            onPickPhoto = {
+                                topicForPhoto = topic
+                                photoPicker.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly
+                                    )
+                                )
+                            },
+                            onDeletePhoto = { viewModel.deleteTopicAvatar(groupId, topic.id) }
                         )
                     }
                     item { Spacer(Modifier.height(80.dp)) }
@@ -267,9 +284,12 @@ private fun TopicRow(
     topic: MessengerTopic,
     title: String,
     canManage: Boolean,
+    viewModel: MessengerViewModel,
     onOpen: () -> Unit,
     onRename: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onPickPhoto: () -> Unit,
+    onDeletePhoto: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -278,6 +298,13 @@ private fun TopicRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        MessengerAvatar(
+            avatarUrl = topic.avatarUrl,
+            title = title,
+            size = 40.dp,
+            viewModel = viewModel
+        )
+        Spacer(Modifier.size(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 title,
@@ -311,6 +338,18 @@ private fun TopicRow(
             )
         }
         if (canManage) {
+            IconButton(onClick = onPickPhoto) {
+                Icon(
+                    Icons.Outlined.PhotoCamera,
+                    if (topic.avatarUrl.isBlank()) MessengerRu.photoAdd else MessengerRu.photoChange,
+                    tint = Forest
+                )
+            }
+            if (topic.avatarUrl.isNotBlank()) {
+                IconButton(onClick = onDeletePhoto) {
+                    Icon(Icons.Outlined.HideImage, MessengerRu.photoDelete, tint = Forest)
+                }
+            }
             IconButton(onClick = onRename) {
                 Icon(Icons.Outlined.Edit, MessengerRu.topicRename, tint = Forest)
             }

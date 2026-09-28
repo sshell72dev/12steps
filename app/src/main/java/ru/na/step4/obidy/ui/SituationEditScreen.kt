@@ -92,7 +92,10 @@ fun SituationEditScreen(
         }
     }
 
-    BackHandler(enabled = wordPick != null) { wordPick = null }
+    BackHandler {
+        // Системный «назад» завершает работу так же, как кнопка: с сохранением и записью в челлендж.
+        if (wordPick != null) wordPick = null else viewModel.save(onBack)
+    }
 
     val notifySaved = rememberSavedNotice()
     val fullMode = state.emptyKeys().isEmpty()

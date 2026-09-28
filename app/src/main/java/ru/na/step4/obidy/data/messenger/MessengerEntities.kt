@@ -25,7 +25,8 @@ data class MessengerChatRow(
     val pinnedId: Long = 0L,
     val pinnedKind: String = "",
     val pinnedBody: String = "",
-    val pinnedSender: String = ""
+    val pinnedSender: String = "",
+    val hasTopics: Boolean = false
 )
 
 @Entity(tableName = "messages")
@@ -62,7 +63,11 @@ interface MessengerDao {
     @Query("SELECT * FROM chats ORDER BY lastAt DESC")
     fun observeChats(): Flow<List<MessengerChatRow>>
 
-    @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY id ASC")
+    /**
+     * Лента строится по времени создания: у локальных оповещений id отрицательный,
+     * поэтому сортировка только по id показывала их в обратном порядке.
+     */
+    @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY createdAt ASC, id ASC")
     fun observeMessages(chatId: String): Flow<List<MessengerMessageRow>>
 
     @Query("SELECT COALESCE(MAX(id), 0) FROM messages WHERE chatId = :chatId")

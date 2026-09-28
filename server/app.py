@@ -1369,6 +1369,8 @@ def support_admin():
         elif action == "complete":
             ticket = db.complete_support_ticket(ticket_id)
             if ticket:
+                # Служебная запись о завершении тоже видна в подгруппе обращения.
+                messenger_plugin.sync_support_ticket(ticket_id)
                 notice = "Задача завершена. Статус: Обработано."
                 return redirect(url_for("support_admin", id=ticket_id, saved=1))
             warn = "Не удалось завершить задачу."
@@ -1376,6 +1378,8 @@ def support_admin():
             status = (request.form.get("status") or "").strip()
             ticket = db.set_support_status(ticket_id, status)
             if ticket:
+                # Смена статуса дублируется в переписку мессенджера.
+                messenger_plugin.sync_support_ticket(ticket_id)
                 notice = f"Статус: {ticket.get('status_label') or status}. Пользователь уведомлён."
                 return redirect(url_for("support_admin", id=ticket_id, saved=1))
             warn = "Не удалось изменить статус."
@@ -1386,10 +1390,10 @@ def support_admin():
                 warn = "Введите ответ."
             else:
                 ticket = db.add_support_message(ticket_id, "admin", body)
-                # Ответ из веб-панели тоже попадает в подгруппу обращения.
-                messenger_plugin.push_support_reply(ticket_id, body)
                 if ticket and complete:
                     ticket = db.complete_support_ticket(ticket_id) or ticket
+                # В подгруппу попадают и ответ, и служебная запись о завершении.
+                messenger_plugin.sync_support_ticket(ticket_id)
                 if ticket:
                     notice = "Ответ отправлен."
                     return redirect(url_for("support_admin", id=ticket_id, saved=1))
@@ -1560,8 +1564,6 @@ def api_support_reply(ticket_id: int):
     try:
         if _admin_code_ok(code):
             ticket = db.add_support_message(ticket_id, "admin", body)
-            # Ответ администратора дублируется в подгруппу обращения.
-            messenger_plugin.push_support_reply(ticket_id, body)
             if ticket and complete:
                 ticket = db.complete_support_ticket(ticket_id) or ticket
         else:
@@ -1571,6 +1573,8 @@ def api_support_reply(ticket_id: int):
             ticket = db.add_support_message(ticket_id, "user", body)
     except ValueError:
         return jsonify({"error": "required"}), 400
+    # И вопрос пользователя, и ответ админа, и служебные записи идут в подгруппу обращения.
+    messenger_plugin.sync_support_ticket(ticket_id)
     if not ticket:
         return jsonify({"error": "not_found"}), 404
     return jsonify({"ok": True, "ticket": ticket})
@@ -1618,6 +1622,8 @@ def api_support_complete(ticket_id: int):
     ticket = db.complete_support_ticket(ticket_id)
     if not ticket:
         return jsonify({"error": "not_found"}), 404
+    # Завершение обращения тоже видно в подгруппе мессенджера.
+    messenger_plugin.sync_support_ticket(ticket_id)
     return jsonify({"ok": True, "ticket": ticket})
 
 
@@ -1635,6 +1641,8 @@ def api_support_status(ticket_id: int):
         return jsonify({"error": "required"}), 400
     if not ticket:
         return jsonify({"error": "not_found"}), 404
+    # Смена статуса дублируется в переписку обращения.
+    messenger_plugin.sync_support_ticket(ticket_id)
     return jsonify({"ok": True, "ticket": ticket})
 
 
