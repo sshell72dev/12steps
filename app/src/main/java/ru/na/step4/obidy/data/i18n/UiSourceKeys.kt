@@ -805,6 +805,13 @@ object UiSourceKeys {
         "life.emptyEvents",
         "life.emptyNotes",
         "life.emptyDone",
+        "life.today",
+        "life.doneAction",
+        "life.doneMark",
+        "life.withoutTime",
+        "life.pickTime",
+        "life.emptyDay",
+        "life.dragHint",
         "life.deleteTitle",
     )
 

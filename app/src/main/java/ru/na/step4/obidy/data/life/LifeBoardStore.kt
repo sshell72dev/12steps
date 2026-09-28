@@ -52,6 +52,7 @@ class LifeBoardStore(context: Context) {
         body: String,
         status: String,
         dueAt: Long?,
+        timeSet: Boolean = false,
         sourceId: String = ""
     ): LifeItem? {
         val split = splitText(title, body)
@@ -59,7 +60,14 @@ class LifeBoardStore(context: Context) {
         val now = System.currentTimeMillis()
         val normalizedKind = LifeKind.normalize(kind)
         val normalizedStatus = LifeStatus.normalize(status)
-        val eventDue = if (normalizedKind == LifeKind.EVENT) dueAt ?: startOfToday() else dueAt
+        val isEvent = normalizedKind == LifeKind.EVENT
+        val eventTimeSet = isEvent && timeSet && dueAt != null
+        val eventDue = when {
+            !isEvent -> dueAt
+            dueAt == null -> startOfToday()
+            eventTimeSet -> dueAt
+            else -> startOfDay(dueAt)
+        }
         var saved: LifeItem? = null
         mutex.withLock {
             val current = _items.value.toMutableList()
@@ -71,6 +79,7 @@ class LifeBoardStore(context: Context) {
                     body = split.second,
                     status = normalizedStatus,
                     dueAt = eventDue,
+                    timeSet = eventTimeSet,
                     updatedAt = now,
                     sourceId = sourceId.ifBlank { prev.sourceId }
                 )
@@ -83,6 +92,7 @@ class LifeBoardStore(context: Context) {
                     body = split.second,
                     status = normalizedStatus,
                     dueAt = eventDue,
+                    timeSet = eventTimeSet,
                     createdAt = now,
                     updatedAt = now,
                     sourceId = sourceId
@@ -137,6 +147,47 @@ class LifeBoardStore(context: Context) {
         }
     }
 
+    /** Перетаскивание в шкале дня: событие получает выбранное время. */
+    suspend fun setTime(id: String, millis: Long, timeSet: Boolean = true) {
+        mutex.withLock {
+            val next = _items.value.map { item ->
+                if (item.id != id) item
+                else item.copy(
+                    dueAt = millis,
+                    timeSet = timeSet,
+                    updatedAt = System.currentTimeMillis()
+                )
+            }
+            persist(next)
+        }
+    }
+
+    /** Перетаскивание события на другое: времена меняются местами. */
+    suspend fun swapTimes(firstId: String, secondId: String) {
+        if (firstId == secondId) return
+        mutex.withLock {
+            val first = _items.value.find { it.id == firstId } ?: return@withLock
+            val second = _items.value.find { it.id == secondId } ?: return@withLock
+            val now = System.currentTimeMillis()
+            val next = _items.value.map { item ->
+                when (item.id) {
+                    firstId -> item.copy(
+                        dueAt = second.dueAt,
+                        timeSet = second.timeSet,
+                        updatedAt = now
+                    )
+                    secondId -> item.copy(
+                        dueAt = first.dueAt,
+                        timeSet = first.timeSet,
+                        updatedAt = now
+                    )
+                    else -> item
+                }
+            }
+            persist(next)
+        }
+    }
+
     suspend fun delete(id: String) {
         mutex.withLock {
             persist(_items.value.filterNot { it.id == id })
@@ -162,6 +213,7 @@ class LifeBoardStore(context: Context) {
                     body = obj.optString("body"),
                     status = LifeStatus.normalize(obj.optString("status")),
                     dueAt = if (obj.has("dueAt") && !obj.isNull("dueAt")) obj.optLong("dueAt") else null,
+                    timeSet = obj.optBoolean("timeSet", false),
                     createdAt = obj.optLong("createdAt"),
                     updatedAt = obj.optLong("updatedAt"),
                     sourceId = obj.optString("sourceId")
@@ -181,6 +233,7 @@ class LifeBoardStore(context: Context) {
                     .put("body", item.body)
                     .put("status", item.status)
                     .put("dueAt", item.dueAt ?: JSONObject.NULL)
+                    .put("timeSet", item.timeSet)
                     .put("createdAt", item.createdAt)
                     .put("updatedAt", item.updatedAt)
                     .put("sourceId", item.sourceId)
@@ -199,8 +252,12 @@ class LifeBoardStore(context: Context) {
         private const val FILE_NAME = "life-board.json"
         private const val FORMAT = "life-board.v1"
 
-        fun startOfToday(): Long {
+        fun startOfToday(): Long = startOfDay(System.currentTimeMillis())
+
+        /** Начало суток указанного момента — дата события без привязки к часам. */
+        fun startOfDay(millis: Long): Long {
             val cal = java.util.Calendar.getInstance()
+            cal.timeInMillis = millis
             cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
             cal.set(java.util.Calendar.MINUTE, 0)
             cal.set(java.util.Calendar.SECOND, 0)

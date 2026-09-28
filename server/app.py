@@ -1371,7 +1371,7 @@ def support_admin():
             if ticket:
                 # Служебная запись о завершении тоже видна в подгруппе обращения.
                 messenger_plugin.sync_support_ticket(ticket_id)
-                notice = "Задача завершена. Статус: Обработано."
+                notice = f"Задача завершена. Статус: {db.SUPPORT_STATUS_LABELS['done']}."
                 return redirect(url_for("support_admin", id=ticket_id, saved=1))
             warn = "Не удалось завершить задачу."
         elif action == "status":
@@ -1385,17 +1385,23 @@ def support_admin():
             warn = "Не удалось изменить статус."
         elif action == "reply":
             body = (request.form.get("body") or "").strip()
+            status_choice = (request.form.get("status") or "").strip()
             complete = (request.form.get("complete") or "").strip() in {"1", "on", "true"}
             if not body:
                 warn = "Введите ответ."
             else:
                 ticket = db.add_support_message(ticket_id, "admin", body)
-                if ticket and complete:
-                    ticket = db.complete_support_ticket(ticket_id) or ticket
-                # В подгруппу попадают и ответ, и служебная запись о завершении.
+                if ticket:
+                    # Статус после ответа админ выбирает сам: ждём ответа или закрываем обращение.
+                    want = "done" if (complete or status_choice == "done") else status_choice
+                    if want == "done":
+                        ticket = db.complete_support_ticket(ticket_id) or ticket
+                    elif want:
+                        ticket = db.set_support_status(ticket_id, want) or ticket
+                # В подгруппу попадают и ответ, и служебная запись о статусе.
                 messenger_plugin.sync_support_ticket(ticket_id)
                 if ticket:
-                    notice = "Ответ отправлен."
+                    notice = f"Ответ отправлен. Статус: {ticket.get('status_label') or ''}."
                     return redirect(url_for("support_admin", id=ticket_id, saved=1))
                 warn = "Сообщение не найдено."
     if request.args.get("saved"):

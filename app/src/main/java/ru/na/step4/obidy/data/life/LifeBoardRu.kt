@@ -28,5 +28,12 @@ object LifeBoardRu {
     val emptyEvents: String get() = I18n.t("life.emptyEvents", "Пока нет событий.")
     val emptyNotes: String get() = I18n.t("life.emptyNotes", "Пока нет заметок.")
     val emptyDone: String get() = I18n.t("life.emptyDone", "Пока ничего не отмечено как выполненное.")
+    val today: String get() = I18n.t("life.today", "Сегодня")
+    val doneAction: String get() = I18n.t("life.doneAction", "Сделал")
+    val doneMark: String get() = I18n.t("life.doneMark", "Сделано")
+    val withoutTime: String get() = I18n.t("life.withoutTime", "Без времени")
+    val pickTime: String get() = I18n.t("life.pickTime", "Выбрать время")
+    val emptyDay: String get() = I18n.t("life.emptyDay", "На этот день событий нет.")
+    val dragHint: String get() = I18n.t("life.dragHint", "Удерживайте событие и перетащите: на другое событие — обмен местами, на свободное время — новый час.")
     val deleteTitle: String get() = I18n.t("life.deleteTitle", "Удалить запись?")
 }

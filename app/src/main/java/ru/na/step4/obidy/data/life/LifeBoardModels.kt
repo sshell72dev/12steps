@@ -7,6 +7,8 @@ data class LifeItem(
     val body: String = "",
     val status: String = LifeStatus.IN_PROGRESS,
     val dueAt: Long? = null,
+    /** У события задано время: иначе оно стоит в дне без привязки к часам. */
+    val timeSet: Boolean = false,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
     val sourceId: String = ""

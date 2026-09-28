@@ -31,9 +31,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,7 @@ import java.util.Date
 import java.util.Locale
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.life.LifeBoardRu
+import ru.na.step4.obidy.data.life.LifeBoardStore
 import ru.na.step4.obidy.data.life.LifeItem
 import ru.na.step4.obidy.data.life.LifeKind
 import ru.na.step4.obidy.data.life.LifeStatus
@@ -72,6 +75,11 @@ fun LifeBoardScreen(
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val kind = viewModel.kind
+    if (kind == LifeKind.EVENT) {
+        // События живут в календаре: месяц, день по часам и перетаскивание.
+        LifeCalendarScreen(viewModel = viewModel, onBack = onBack, onActivity = onActivity)
+        return
+    }
     var showDone by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<LifeItem?>(null) }
     var composing by remember { mutableStateOf(false) }
@@ -133,9 +141,9 @@ fun LifeBoardScreen(
                     kind = kind,
                     initial = editing,
                     onDismiss = { composing = false; editing = null },
-                    onSave = { id, itemTitle, itemBody, status, dueAt ->
+                    onSave = { id, itemTitle, itemBody, status, dueAt, timeSet ->
                         if (itemTitle.isNotBlank() || itemBody.isNotBlank()) {
-                            viewModel.save(id, itemTitle, itemBody, status, dueAt)
+                            viewModel.save(id, itemTitle, itemBody, status, dueAt, timeSet)
                             composing = false
                             editing = null
                         }
@@ -285,11 +293,11 @@ private fun LifeCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LifeEditor(
+internal fun LifeEditor(
     kind: String,
     initial: LifeItem?,
     onDismiss: () -> Unit,
-    onSave: (id: String?, title: String, body: String, status: String, dueAt: Long?) -> Unit
+    onSave: (id: String?, title: String, body: String, status: String, dueAt: Long?, timeSet: Boolean) -> Unit
 ) {
     var title by remember(initial?.id) { mutableStateOf(initial?.title.orEmpty()) }
     var body by remember(initial?.id) { mutableStateOf(initial?.body.orEmpty()) }
@@ -297,7 +305,17 @@ private fun LifeEditor(
         mutableStateOf(initial?.status ?: LifeStatus.IN_PROGRESS)
     }
     var dueAt by remember(initial?.id) { mutableStateOf(initial?.dueAt) }
+    var timeSet by remember(initial?.id) { mutableStateOf(initial?.timeSet == true) }
+    var timeMinutes by remember(initial?.id) {
+        val minutes = initial?.dueAt?.let { millis ->
+            val cal = java.util.Calendar.getInstance()
+            cal.timeInMillis = millis
+            cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+        }
+        mutableStateOf(minutes ?: DEFAULT_EVENT_MINUTES)
+    }
     var showDate by remember { mutableStateOf(false) }
+    var showTime by remember { mutableStateOf(false) }
     val notifySaved = rememberSavedNotice()
     val hint = when (kind) {
         LifeKind.GOAL -> LifeBoardRu.titleHintGoal
@@ -333,6 +351,15 @@ private fun LifeEditor(
                 "${LifeBoardRu.pickDate}${dueAt?.let { ": ${formatDate(it)}" } ?: ""}",
                 onClick = { showDate = true }
             )
+            JournalButton(
+                if (timeSet) "${LifeBoardRu.pickTime}: ${formatMinutes(timeMinutes)}" else LifeBoardRu.withoutTime,
+                onClick = { showTime = true }
+            )
+            if (timeSet) {
+                TextButton(onClick = { timeSet = false }) {
+                    Text(LifeBoardRu.withoutTime, color = Forest)
+                }
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
@@ -360,9 +387,33 @@ private fun LifeEditor(
         }
         JournalButton(Ru.save, onClick = {
             notifySaved()
-            onSave(initial?.id, title, body, status, dueAt)
+            val day = LifeBoardStore.startOfDay(dueAt ?: LifeBoardStore.startOfToday())
+            val eventDue = if (timeSet) day + timeMinutes * 60_000L else day
+            onSave(initial?.id, title, body, status, eventDue, timeSet)
         }, filled = true)
         JournalButton(Ru.cancel, onClick = onDismiss)
+    }
+    if (showTime) {
+        val timePicker = rememberTimePickerState(
+            initialHour = timeMinutes / 60,
+            initialMinute = timeMinutes % 60,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showTime = false },
+            title = { Text(LifeBoardRu.pickTime, color = Forest) },
+            confirmButton = {
+                TextButton(onClick = {
+                    timeMinutes = timePicker.hour * 60 + timePicker.minute
+                    timeSet = true
+                    showTime = false
+                }) { Text(Ru.save) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTime = false }) { Text(Ru.cancel) }
+            },
+            text = { TimePicker(state = timePicker) }
+        )
     }
     if (showDate) {
         val picker = rememberDatePickerState(initialSelectedDateMillis = dueAt)
@@ -388,3 +439,8 @@ private fun formatDate(millis: Long): String =
 
 private fun formatDateTime(millis: Long): String =
     SimpleDateFormat("d MMMM yyyy, HH:mm", Locale("ru")).format(Date(millis))
+
+private fun formatMinutes(minutes: Int): String =
+    String.format(Locale("ru"), "%02d:%02d", minutes / 60, minutes % 60)
+
+private const val DEFAULT_EVENT_MINUTES = 9 * 60

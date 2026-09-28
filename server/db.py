@@ -234,8 +234,8 @@ SUPPORT_STATUSES = ("new", "in_progress", "done")
 
 SUPPORT_STATUS_LABELS = {
     "new": "Новое",
-    "in_progress": "В разработке",
-    "done": "Обработано",
+    "in_progress": "В ожидании ответа",
+    "done": "Завершено",
 }
 
 SUPPORT_BELONGINGS = (
@@ -846,16 +846,14 @@ def add_support_message(ticket_id: int, author: str, body: str) -> dict[str, Any
                 (now, ticket_id),
             )
         else:
-            status = _normalize_status(str(row.get("status") or "new"))
-            # Сообщение пользователя снова делает обращение новым и непрочитанным.
-            next_status = "new" if status == "done" else status
+            # Сообщение пользователя всегда возвращает обращение в «Новое» и делает его непрочитанным.
             cur.execute(
                 """
                 UPDATE support_tickets
-                SET `updated_at` = %s, `admin_read` = 0, `user_read` = 1, `status` = %s
+                SET `updated_at` = %s, `admin_read` = 0, `user_read` = 1, `status` = 'new'
                 WHERE `id` = %s
                 """,
-                (now, next_status, ticket_id),
+                (now, ticket_id),
             )
     return get_support_ticket(ticket_id)
 

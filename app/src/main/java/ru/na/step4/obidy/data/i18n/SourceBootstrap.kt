@@ -824,8 +824,8 @@ object SourceBootstrap {
         SourceCatalog.put("support.newReport", "Новое сообщение")
         SourceCatalog.put("support.status", "Статус")
         SourceCatalog.put("support.statusNew", "Новое")
-        SourceCatalog.put("support.statusInProgress", "В разработке")
-        SourceCatalog.put("support.statusDone", "Обработано")
+        SourceCatalog.put("support.statusInProgress", "В ожидании ответа")
+        SourceCatalog.put("support.statusDone", "Завершено")
         SourceCatalog.put("support.changeStatus", "Сменить статус")
         SourceCatalog.put("support.statusChanged", "Статус обновлён. Пользователь уведомлён.")
         SourceCatalog.put("support.copy", "Копировать")
@@ -878,6 +878,16 @@ object SourceBootstrap {
         SourceCatalog.put("life.emptyEvents", "Пока нет событий.")
         SourceCatalog.put("life.emptyNotes", "Пока нет заметок.")
         SourceCatalog.put("life.emptyDone", "Пока ничего не отмечено как выполненное.")
+        SourceCatalog.put("life.today", "Сегодня")
+        SourceCatalog.put("life.doneAction", "Сделал")
+        SourceCatalog.put("life.doneMark", "Сделано")
+        SourceCatalog.put("life.withoutTime", "Без времени")
+        SourceCatalog.put("life.pickTime", "Выбрать время")
+        SourceCatalog.put("life.emptyDay", "На этот день событий нет.")
+        SourceCatalog.put(
+            "life.dragHint",
+            "Удерживайте событие и перетащите: на другое событие — обмен местами, на свободное время — новый час."
+        )
         SourceCatalog.put("life.deleteTitle", "Удалить запись?")
         SourceCatalog.put("spiritual.abbr", "ДД")
         SourceCatalog.put("spiritual.title", "Духовная Деятельность")

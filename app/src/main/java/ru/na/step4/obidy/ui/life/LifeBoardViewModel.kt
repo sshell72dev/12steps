@@ -47,11 +47,22 @@ class LifeBoardViewModel(
         title: String,
         body: String,
         status: String,
-        dueAt: Long?
+        dueAt: Long?,
+        timeSet: Boolean = false
     ) {
         viewModelScope.launch {
-            store.upsert(id, kind, title, body, status, dueAt)
+            store.upsert(id, kind, title, body, status, dueAt, timeSet)
         }
+    }
+
+    /** Перетаскивание в шкале дня: событие получает новое время. */
+    fun setTime(id: String, millis: Long, timeSet: Boolean = true) {
+        viewModelScope.launch { store.setTime(id, millis, timeSet) }
+    }
+
+    /** Перетаскивание события на другое: времена меняются местами. */
+    fun swapTimes(firstId: String, secondId: String) {
+        viewModelScope.launch { store.swapTimes(firstId, secondId) }
     }
 
     fun setStatus(id: String, status: String) {

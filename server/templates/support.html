@@ -215,7 +215,7 @@
       <div class="grid">
         <div class="card">
           <h1>Сообщения об ошибках</h1>
-          <div class="muted">Сначала новые, затем «в разработке», потом обработанные.</div>
+          <div class="muted">Сначала новые, затем ожидающие ответа, потом завершённые.</div>
           <a class="compose-link" href="{{ url_for('support_admin', compose=1, from=admin_source) }}">+ Написать пользователю</a>
           {% for item in items %}
             <a class="item{% if current and current.id == item.id %} active{% endif %}"
@@ -336,20 +336,14 @@
             <form method="post" class="reply-form" id="reply-form">
               <input type="hidden" name="id" value="{{ current.id }}" />
               <input type="hidden" name="action" value="reply" />
-              <label class="complete-row" for="complete-toggle">
-                <span>Задача завершена</span>
-                <input type="checkbox" name="complete" value="1" id="complete-toggle"
-                       {% if current.status == 'done' %}checked{% endif %}
-                       onchange="onCompleteToggle(this)" />
-                <span class="switch" aria-hidden="true"></span>
-              </label>
               <label for="body" class="field">Ответ</label>
               <textarea id="body" name="body" rows="4" required placeholder="Ответ пользователю"></textarea>
+              <label for="reply-status" class="field">Статус после ответа</label>
+              <select id="reply-status" name="status">
+                <option value="in_progress" {% if current.status != 'done' %}selected{% endif %}>{{ status_labels['in_progress'] }}</option>
+                <option value="done" {% if current.status == 'done' %}selected{% endif %}>{{ status_labels['done'] }}</option>
+              </select>
               <button type="submit">Отправить ответ</button>
-            </form>
-            <form method="post" id="complete-form" style="display:none;">
-              <input type="hidden" name="id" value="{{ current.id }}" />
-              <input type="hidden" name="action" value="complete" />
             </form>
             <script>
               const ticketShareText = {{ (
@@ -467,10 +461,6 @@
                     ta.setSelectionRange(ta.value.length, ta.value.length);
                   }
                 }
-              }
-              function onCompleteToggle(el) {
-                if (!el.checked) return;
-                document.getElementById("complete-form").submit();
               }
             </script>
           {% elif report %}
