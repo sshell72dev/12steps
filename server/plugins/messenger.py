@@ -2267,10 +2267,6 @@ def register(app, login_required, api_ok) -> None:
                     can_create = _is_group_member(cur, group_id, messenger_id)
                 else:
                     can_create = not challenge_key and group.get("owner_id") == messenger_id
-            # У группы челленджей общей ленты нет: внутри неё сразу подгруппы.
-            if not is_ideas and not is_hub:
-                general_chat = _ensure_group_chat(cur, group_id)
-                items.append(_topic_json(cur, "", "", general_chat, messenger_id, is_default=True))
             cur.execute(
                 """
                 SELECT id, name, author_id FROM messenger_topics
@@ -2279,7 +2275,13 @@ def register(app, login_required, api_ok) -> None:
                 """,
                 (group_id,),
             )
-            for row in cur.fetchall():
+            rows = cur.fetchall()
+            # Если у группы есть свои подгруппы, «Общий» лишний: он нужен только
+            # группе без тем, иначе открывать было бы нечего.
+            if not is_ideas and not rows:
+                general_chat = _ensure_group_chat(cur, group_id)
+                items.append(_topic_json(cur, "", "", general_chat, messenger_id, is_default=True))
+            for row in rows:
                 author_id = str(row.get("author_id") or "")
                 if is_ideas and not is_admin and author_id != messenger_id:
                     continue

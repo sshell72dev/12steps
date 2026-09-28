@@ -27,30 +27,6 @@ class MessengerPrefs(context: Context) {
             prefs.edit().putBoolean(KEY_ENABLED, value).apply()
         }
 
-    fun challengeChatId(key: String): String =
-        prefs.getString(challengeKey(key), "").orEmpty()
-
-    fun putChallenges(items: List<MessengerChallenge>) {
-        if (items.isEmpty()) return
-        // Публикации челленджей адресует сервер, а локально помним только чат группы
-        // «Челленджи»: через него открываются её подгруппы вместо ленты «Общий».
-        val hub = items.firstOrNull { it.key == MessengerChallengeKeys.HUB }
-        val editor = prefs.edit()
-        if (hub != null && hub.joined && hub.chatId.isNotBlank()) {
-            editor.putString(challengeKey(MessengerChallengeKeys.HUB), hub.chatId)
-        } else if (hub != null) {
-            editor.remove(challengeKey(MessengerChallengeKeys.HUB))
-        }
-        editor.apply()
-    }
-
-    fun putChallengeChat(key: String, chatId: String) {
-        if (key.isBlank() || chatId.isBlank()) return
-        prefs.edit().putString(challengeKey(key), chatId).apply()
-    }
-
-    private fun challengeKey(key: String) = "challenge_chat_$key"
-
     companion object {
         private const val PREFS = "messenger_prefs"
         private const val KEY_ID = "messenger_id"

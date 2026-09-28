@@ -171,10 +171,7 @@ class MessengerRepository(
 
     suspend fun refreshChallenges(): List<MessengerChallenge> = withContext(Dispatchers.IO) {
         when (val result = client.challenges()) {
-            is MessengerResult.Ok -> {
-                prefs.putChallenges(result.value)
-                result.value
-            }
+            is MessengerResult.Ok -> result.value
             is MessengerResult.Disabled -> {
                 applyEnabled(false)
                 emptyList()
@@ -186,9 +183,6 @@ class MessengerRepository(
     suspend fun joinChallenge(key: String): MessengerJoinResult? = withContext(Dispatchers.IO) {
         when (val result = client.joinChallenge(key)) {
             is MessengerResult.Ok -> {
-                // Чат группы помним, чтобы открывать подгруппы вместо ленты «Общий».
-                val chatKey = result.value.challengeKey.ifBlank { key }
-                prefs.putChallengeChat(chatKey, result.value.chatId)
                 refreshChats()
                 refreshChallenges()
                 result.value
@@ -220,8 +214,6 @@ class MessengerRepository(
             is MessengerResult.Err -> false
         }
     }
-
-    fun challengeChatId(key: String): String = prefs.challengeChatId(key)
 
     suspend fun refreshMessages(chatId: String) = withContext(Dispatchers.IO) {
         if (chatId == AppAlerts.CHAT_ID) {
@@ -394,8 +386,6 @@ class MessengerRepository(
     suspend fun join(token: String): MessengerResult<MessengerJoinResult> = withContext(Dispatchers.IO) {
         when (val result = client.join(token)) {
             is MessengerResult.Ok -> {
-                // Ключ есть только у группы челленджей: помним её чат для входа в подгруппы.
-                prefs.putChallengeChat(result.value.challengeKey, result.value.chatId)
                 refreshChats()
                 refreshContacts()
                 result

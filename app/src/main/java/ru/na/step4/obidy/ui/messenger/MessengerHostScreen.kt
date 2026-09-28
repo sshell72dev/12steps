@@ -37,7 +37,6 @@ import androidx.navigation.navArgument
 import ru.na.step4.obidy.MainActivity
 import ru.na.step4.obidy.Step4App
 import ru.na.step4.obidy.data.alerts.AppAlerts
-import ru.na.step4.obidy.data.messenger.MessengerChallengeKeys
 import ru.na.step4.obidy.data.messenger.MessengerInvite
 import ru.na.step4.obidy.data.messenger.MessengerResult
 import ru.na.step4.obidy.data.messenger.MessengerRu
@@ -107,7 +106,7 @@ fun MessengerHostScreen(
         if (result is MessengerResult.Ok && result.value.chatId.isNotBlank()) {
             val title = result.value.title.ifBlank { MessengerRu.title }
             viewModel.openChat(result.value.chatId, title, result.value.groupId)
-            if (result.value.challengeKey == MessengerChallengeKeys.HUB && result.value.groupId.isNotBlank()) {
+            if (result.value.groupId.isNotBlank()) {
                 nav.navigate(MRoutes.topics(result.value.groupId))
             } else {
                 nav.navigate(MRoutes.chat(result.value.chatId))
@@ -151,7 +150,12 @@ fun MessengerHostScreen(
                     onBack = onBack,
                     onOpenChat = { chat ->
                         viewModel.openChat(chat)
-                        nav.navigate(MRoutes.chat(chat.id))
+                        // В группе сразу показываем подгруппы: «Общий» и темы одним списком.
+                        if (chat.groupId.isNotBlank()) {
+                            nav.navigate(MRoutes.topics(chat.groupId))
+                        } else {
+                            nav.navigate(MRoutes.chat(chat.id))
+                        }
                     },
                     onMyQr = {
                         viewModel.preparePairQr()
@@ -166,8 +170,7 @@ fun MessengerHostScreen(
                             if (created != null && created.chatId.isNotBlank()) {
                                 val title = created.title.ifBlank { MessengerRu.challengeTitle(key, created.title) }
                                 viewModel.openChat(created.chatId, title, created.groupId)
-                                if (created.challengeKey == MessengerChallengeKeys.HUB && created.groupId.isNotBlank()) {
-                                    // У челленджей внутри группы свои подгруппы — показываем их сразу.
+                                if (created.groupId.isNotBlank()) {
                                     nav.navigate(MRoutes.topics(created.groupId))
                                 } else {
                                     nav.navigate(MRoutes.chat(created.chatId))
@@ -230,7 +233,11 @@ fun MessengerHostScreen(
                                 val title = result.value.title.ifBlank { MessengerRu.title }
                                 viewModel.openChat(result.value.chatId, title, result.value.groupId)
                                 nav.popBackStack()
-                                nav.navigate(MRoutes.chat(result.value.chatId))
+                                if (result.value.groupId.isNotBlank()) {
+                                    nav.navigate(MRoutes.topics(result.value.groupId))
+                                } else {
+                                    nav.navigate(MRoutes.chat(result.value.chatId))
+                                }
                             }
                         }
                     }
@@ -245,7 +252,11 @@ fun MessengerHostScreen(
                             if (created != null && created.chatId.isNotBlank()) {
                                 viewModel.openChat(created.chatId, created.title.ifBlank { name }, created.groupId)
                                 nav.popBackStack()
-                                nav.navigate(MRoutes.chat(created.chatId))
+                                if (created.groupId.isNotBlank()) {
+                                    nav.navigate(MRoutes.topics(created.groupId))
+                                } else {
+                                    nav.navigate(MRoutes.chat(created.chatId))
+                                }
                             }
                         }
                     }
