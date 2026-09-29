@@ -1,9 +1,8 @@
 package ru.na.step4.obidy.ui.life
 
-import androidx.compose.animation.animateContentSize
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,16 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,7 +34,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,19 +41,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.delay
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.data.life.LifeBoardRu
 import ru.na.step4.obidy.data.life.LifeBoardStore
@@ -72,15 +64,8 @@ import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.step4.obidy.ui.theme.SandDeep
 
-private val HOUR_HEIGHT: Dp = 56.dp
-private val GAP_HEIGHT: Dp = 44.dp
-private val EVENT_HEIGHT: Dp = 64.dp
-private val MINUTE_HEIGHT: Dp = 30.dp
-private const val MINUTES_IN_DAY = 24 * 60
-private const val HOLD_MS = 450L
-private const val EVENT_SPAN_MINUTES = 30
-
 private val monthFormat = SimpleDateFormat("LLLL yyyy", Locale("ru"))
+private val dayFormat = SimpleDateFormat("d MMMM", Locale("ru"))
 private val timeFormat = SimpleDateFormat("HH:mm", Locale("ru"))
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,8 +79,10 @@ fun LifeCalendarScreen(
     val events = remember(items) { items.filter { it.kind == LifeKind.EVENT } }
     var monthAnchor by remember { mutableStateOf(startOfMonth(System.currentTimeMillis())) }
     var selectedDay by remember { mutableStateOf(LifeBoardStore.startOfToday()) }
+    var dayOpen by remember { mutableStateOf(false) }
     var composing by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<LifeItem?>(null) }
+    var viewing by remember { mutableStateOf<LifeItem?>(null) }
     var pendingDelete by remember { mutableStateOf<LifeItem?>(null) }
     val dayEvents = remember(events, selectedDay) {
         events.filter { it.dueAt != null && LifeBoardStore.startOfDay(it.dueAt) == selectedDay }
@@ -110,15 +97,45 @@ fun LifeCalendarScreen(
             .groupingBy { it }
             .eachCount()
     }
+    // События сегодняшнего дня: со временем — по часам, без времени — по порядку записи.
+    val todayEvents = remember(events) {
+        val today = LifeBoardStore.startOfToday()
+        events.filter { it.dueAt != null && LifeBoardStore.startOfDay(it.dueAt) == today }
+            .sortedWith(
+                compareBy({ if (it.timeSet) 0 else 1 }, { it.dueAt ?: 0L }, { it.createdAt })
+            )
+    }
+
+    // Системный «назад» из дня тоже возвращает к календарю, а не закрывает экран.
+    BackHandler(enabled = dayOpen) { dayOpen = false }
 
     Scaffold(
         containerColor = Sand,
         topBar = {
             TopAppBar(
                 title = {
-                    Text(LifeBoardRu.calendar, style = MaterialTheme.typography.titleLarge, color = Forest)
+                    Text(
+                        if (dayOpen) dayFormat.format(Date(selectedDay)) else LifeBoardRu.calendar,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Forest
+                    )
                 },
-                navigationIcon = { AppNavIcon(onBack = onBack) },
+                navigationIcon = {
+                    // Стрелка идёт на предыдущий экран: из события — в день, из дня — в календарь.
+                    AppNavIcon(
+                        onBack = {
+                            when {
+                                composing || editing != null -> {
+                                    composing = false
+                                    editing = null
+                                }
+                                viewing != null -> viewing = null
+                                dayOpen -> dayOpen = false
+                                else -> onBack()
+                            }
+                        }
+                    )
+                },
                 actions = {
                     if (onActivity != null) {
                         IconButton(onClick = onActivity) {
@@ -161,14 +178,27 @@ fun LifeCalendarScreen(
                         }
                     }
                 )
+            } else if (dayOpen) {
+                // Страница дня: календарь убран, видна только круглосуточная шкала.
+                LifeDayPlan(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .imePadding(),
+                    day = selectedDay,
+                    timed = timed,
+                    untimed = untimed,
+                    onOpen = { viewing = it },
+                    onDone = { viewModel.setStatus(it.id, LifeStatus.DONE) },
+                    onMove = { id, millis -> viewModel.setTime(id, millis) },
+                    onDelete = { pendingDelete = it }
+                )
             } else {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .imePadding(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MonthHeader(
                         monthAnchor = monthAnchor,
@@ -179,24 +209,19 @@ fun LifeCalendarScreen(
                         monthAnchor = monthAnchor,
                         selectedDay = selectedDay,
                         counts = counts,
-                        onSelect = { day -> selectedDay = day }
+                        onSelect = { day ->
+                            selectedDay = day
+                            dayOpen = true
+                        }
                     )
-                    Text(
-                        LifeBoardRu.dragHint,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Forest.copy(alpha = 0.7f)
-                    )
-                    DayPlan(
-                        day = selectedDay,
-                        timed = timed,
-                        untimed = untimed,
-                        onOpen = { editing = it },
-                        onDone = { viewModel.setStatus(it.id, LifeStatus.DONE) },
-                        onMove = { id, millis -> viewModel.setTime(id, millis) },
-                        onSwap = { first, second -> viewModel.swapTimes(first, second) },
-                        onDelete = { pendingDelete = it }
-                    )
-                    Spacer(Modifier.height(72.dp))
+                    if (todayEvents.isNotEmpty()) {
+                        TodayEvents(
+                            modifier = Modifier.weight(1f),
+                            items = todayEvents,
+                            onOpen = { viewing = it },
+                            onDone = { viewModel.setStatus(it.id, LifeStatus.DONE) }
+                        )
+                    }
                 }
             }
         }
@@ -217,6 +242,64 @@ fun LifeCalendarScreen(
             }
         )
     }
+
+    viewing?.let { item ->
+        LifeEventView(
+            item = item,
+            onEdit = {
+                viewing = null
+                editing = item
+            },
+            onDismiss = { viewing = null }
+        )
+    }
+}
+
+/** Просмотр события: текст записи и переход в режим редактирования. */
+@Composable
+private fun LifeEventView(item: LifeItem, onEdit: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(item.title, style = MaterialTheme.typography.titleLarge, color = Forest)
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    when {
+                        !item.timeSet -> LifeBoardRu.withoutTime
+                        item.dueAt != null -> "${dayFormat.format(Date(item.dueAt))} · " +
+                            timeFormat.format(Date(item.dueAt))
+                        else -> LifeBoardRu.withoutTime
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Amber
+                )
+                if (item.body.isNotBlank()) {
+                    RichTextBlock(text = item.body)
+                }
+                if (item.status == LifeStatus.DONE) {
+                    Text(
+                        LifeBoardRu.doneMark,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Amber,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onEdit) { Text(LifeBoardRu.edit, color = Forest) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(LifeBoardRu.close, color = Forest) }
+        }
+    )
 }
 
 // ---- шапка и сетка месяца ----
@@ -348,406 +431,111 @@ private fun monthWeeks(monthAnchor: Long): List<List<Long?>> {
     return cells.chunked(7)
 }
 
-// ---- день ----
+// ---- события сегодняшнего дня ----
 
-private sealed interface DayRow {
-    val key: String
-    data class Event(val item: LifeItem) : DayRow {
-        override val key: String = "event:${item.id}"
-    }
-    data class Gap(val id: String, val from: Int, val to: Int) : DayRow {
-        override val key: String = "gap:$id"
-    }
-    data class Hour(val gapId: String, val hour: Int) : DayRow {
-        override val key: String = "hour:$gapId:$hour"
-    }
-    data class Minute(val gapId: String, val hour: Int, val minute: Int) : DayRow {
-        override val key: String = "minute:$gapId:$hour:$minute"
-    }
-}
 
-private fun rowHeight(row: DayRow): Dp = when (row) {
-    is DayRow.Event -> EVENT_HEIGHT
-    is DayRow.Gap -> GAP_HEIGHT
-    is DayRow.Hour -> HOUR_HEIGHT
-    is DayRow.Minute -> MINUTE_HEIGHT
-}
 
-/** Пустые часы дня держим одной строкой «от и до», пока их не раскрыли перетаскиванием. */
-private fun buildRows(timed: List<LifeItem>, expandedGap: String?, zoomHour: Int?): List<DayRow> {
-    val rows = mutableListOf<DayRow>()
-    var cursor = 0
-    timed.forEachIndexed { index, item ->
-        val start = minutesOfDay(item.dueAt ?: 0L)
-        if (start > cursor) {
-            rows.addAll(gapRows("gap$index-$cursor", cursor, start, expandedGap, zoomHour))
-        }
-        rows.add(DayRow.Event(item))
-        cursor = maxOf(cursor, start + EVENT_SPAN_MINUTES)
-    }
-    if (cursor < MINUTES_IN_DAY) {
-        rows.addAll(gapRows("gapTail-$cursor", cursor, MINUTES_IN_DAY, expandedGap, zoomHour))
-    }
-    return rows
-}
 
-private fun gapRows(
-    id: String,
-    from: Int,
-    to: Int,
-    expandedGap: String?,
-    zoomHour: Int?
-): List<DayRow> {
-    if (expandedGap != id) return listOf(DayRow.Gap(id, from, to))
-    val rows = mutableListOf<DayRow>()
-    var hour = from / 60
-    val lastHour = maxOf(to - 1, from) / 60
-    while (hour <= lastHour) {
-        rows.add(DayRow.Hour(id, hour))
-        if (zoomHour == hour) {
-            (0 until 6).forEach { step -> rows.add(DayRow.Minute(id, hour, step * 10)) }
-        }
-        hour++
-    }
-    return rows
-}
 
-private fun hitRow(rows: List<DayRow>, y: Float, density: Density): DayRow? {
-    val gap = with(density) { 6.dp.toPx() }
-    var top = 0f
-    rows.forEach { row ->
-        val height = with(density) { rowHeight(row).toPx() }
-        if (y >= top && y <= top + height) return row
-        top += height + gap
-    }
-    return null
-}
+
+
+
+
+
+
+// ---- события сегодняшнего дня ----
 
 @Composable
-private fun DayPlan(
-    day: Long,
-    timed: List<LifeItem>,
-    untimed: List<LifeItem>,
+private fun TodayEvents(
+    modifier: Modifier = Modifier,
+    items: List<LifeItem>,
     onOpen: (LifeItem) -> Unit,
-    onDone: (LifeItem) -> Unit,
-    onMove: (String, Long) -> Unit,
-    onSwap: (String, String) -> Unit,
-    onDelete: (LifeItem) -> Unit
+    onDone: (LifeItem) -> Unit
 ) {
-    var expandedGap by remember(day) { mutableStateOf<String?>(null) }
-    var zoomHour by remember(day) { mutableStateOf<Int?>(null) }
-    var dragId by remember { mutableStateOf<String?>(null) }
-    var dragY by remember { mutableStateOf(0f) }
-    var hover by remember { mutableStateOf<DayRow?>(null) }
-    val density = LocalDensity.current
-    val rows = remember(timed, expandedGap, zoomHour) { buildRows(timed, expandedGap, zoomHour) }
-    val isToday = day == LifeBoardStore.startOfToday()
-    val nowMinutes = currentMinutesOfDay()
-
-    // Удержание над свободным временем раскрывает часы, удержание на часе — по 10 минут.
-    LaunchedEffect(dragId, hover?.key) {
-        val target = hover
-        if (dragId == null || target == null) return@LaunchedEffect
-        when (target) {
-            is DayRow.Gap -> {
-                delay(HOLD_MS)
-                expandedGap = target.id
-            }
-            is DayRow.Hour -> {
-                delay(HOLD_MS)
-                zoomHour = target.hour
-            }
-            else -> Unit
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize()
-            .pointerInput(rows, day) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { offset ->
-                        val hit = hitRow(rows, offset.y, density)
-                        if (hit is DayRow.Event) {
-                            dragId = hit.item.id
-                            dragY = offset.y
-                            hover = hit
-                        }
-                    },
-                    onDrag = { change, amount ->
-                        change.consume()
-                        dragY += amount.y
-                        hover = hitRow(rows, dragY, density)
-                    },
-                    onDragEnd = {
-                        val target = hover
-                        val movingId = dragId
-                        if (movingId != null && target != null) {
-                            when (target) {
-                                is DayRow.Minute -> onMove(
-                                    movingId,
-                                    dayStartWithMinutes(day, target.hour * 60 + target.minute)
-                                )
-                                is DayRow.Hour -> onMove(
-                                    movingId,
-                                    dayStartWithMinutes(day, target.hour * 60)
-                                )
-                                is DayRow.Event -> if (target.item.id != movingId) {
-                                    onSwap(movingId, target.item.id)
-                                }
-                                is DayRow.Gap -> Unit
-                            }
-                        }
-                        dragId = null
-                        hover = null
-                        expandedGap = null
-                        zoomHour = null
-                    },
-                    onDragCancel = {
-                        dragId = null
-                        hover = null
-                        expandedGap = null
-                        zoomHour = null
-                    }
-                )
-            },
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        if (timed.isEmpty()) {
-            Text(
-                LifeBoardRu.emptyDay,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Forest.copy(alpha = 0.8f)
-            )
-        }
-        rows.forEach { row ->
-            when (row) {
-                is DayRow.Event -> EventRow(
-                    item = row.item,
-                    dragging = dragId == row.item.id,
-                    swapTarget = dragId != null && hover == row && dragId != row.item.id,
-                    onOpen = { onOpen(row.item) },
-                    onDone = { onDone(row.item) },
-                    onDelete = { onDelete(row.item) }
-                )
-                is DayRow.Gap -> GapRow(
-                    from = row.from,
-                    to = row.to,
-                    highlighted = hover == row,
-                    nowMinutes = if (isToday && nowMinutes in row.from until row.to) nowMinutes else null
-                )
-                is DayRow.Hour -> HourRow(hour = row.hour, highlighted = hover == row)
-                is DayRow.Minute -> MinuteRow(
-                    hour = row.hour,
-                    minute = row.minute,
-                    highlighted = hover == row
-                )
-            }
-        }
-        if (untimed.isNotEmpty()) {
-            Text(
-                LifeBoardRu.withoutTime,
-                style = MaterialTheme.typography.labelLarge,
-                color = Forest.copy(alpha = 0.75f)
-            )
-            untimed.forEach { item ->
-                UntimedRow(
-                    item = item,
-                    onOpen = { onOpen(item) },
-                    onDone = { onDone(item) },
-                    onDelete = { onDelete(item) }
-                )
-            }
-        }
-    }
-}
-
-// ---- строки дня ----
-
-@Composable
-private fun EventRow(
-    item: LifeItem,
-    dragging: Boolean,
-    swapTarget: Boolean,
-    onOpen: () -> Unit,
-    onDone: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val done = item.status == LifeStatus.DONE
-    val past = item.timeSet && (item.dueAt ?: 0L) < System.currentTimeMillis()
-    val background = when {
-        done -> Forest.copy(alpha = 0.85f)
-        dragging -> Amber.copy(alpha = 0.35f)
-        swapTarget -> Amber.copy(alpha = 0.2f)
-        else -> SandDeep.copy(alpha = 0.8f)
-    }
-    val contentColor = if (done) Sand else Forest
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(EVENT_HEIGHT)
-            .clip(RoundedCornerShape(14.dp))
-            .background(background)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(
-            Modifier
-                .weight(1f)
-                .clickable(onClick = onOpen)
-        ) {
-            Text(
-                item.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = contentColor,
-                maxLines = 2
-            )
-            val time = item.dueAt?.let { timeFormat.format(Date(it)) }.orEmpty()
-            Text(
-                if (done) "${LifeBoardRu.doneMark} · $time" else time,
-                style = MaterialTheme.typography.labelSmall,
-                color = if (done) Sand.copy(alpha = 0.85f) else Amber,
-                fontWeight = if (done) FontWeight.Bold else FontWeight.Normal
-            )
-        }
-        if (past && !done) {
-            TextButton(onClick = onDone) {
-                Icon(Icons.Outlined.Check, contentDescription = null, tint = Forest)
-                Spacer(Modifier.size(4.dp))
-                Text(LifeBoardRu.doneAction, color = Forest)
-            }
-        }
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Outlined.Delete, contentDescription = Ru.delete, tint = contentColor)
-        }
-    }
-}
-
-@Composable
-private fun GapRow(from: Int, to: Int, highlighted: Boolean, nowMinutes: Int?) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(GAP_HEIGHT)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (highlighted) Amber.copy(alpha = 0.25f) else SandDeep.copy(alpha = 0.35f))
-            .padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            "${formatMinutesOfDay(from)} – ${formatMinutesOfDay(to)}",
-            style = MaterialTheme.typography.labelMedium,
-            color = Forest.copy(alpha = 0.7f)
-        )
-        nowMinutes?.let { minutes ->
-            // Временная черта: где сейчас проходит время.
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .height(2.dp)
-                        .weight(1f)
-                        .background(Amber)
-                )
-                Spacer(Modifier.size(6.dp))
-                Text(
-                    formatMinutesOfDay(minutes),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Amber
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HourRow(hour: Int, highlighted: Boolean) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(HOUR_HEIGHT)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (highlighted) Amber.copy(alpha = 0.3f) else SandDeep.copy(alpha = 0.2f))
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Text(
-            formatMinutesOfDay(hour * 60),
-            style = MaterialTheme.typography.labelMedium,
+            LifeBoardRu.today,
+            style = MaterialTheme.typography.titleMedium,
             color = Forest
         )
+        Spacer(Modifier.height(6.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+        ) {
+            items.forEachIndexed { index, item ->
+                if (index > 0) EventDivider(strong = index % 2 == 1)
+                TodayEventRow(item = item, onOpen = { onOpen(item) }, onDone = { onDone(item) })
+            }
+        }
     }
 }
 
+/** Разделитель списка: полоса с градиентом идёт через одну. */
 @Composable
-private fun MinuteRow(hour: Int, minute: Int, highlighted: Boolean) {
+private fun EventDivider(strong: Boolean) {
+    val colors = if (strong) {
+        listOf(Color.Transparent, Forest.copy(alpha = 0.55f), Color.Transparent)
+    } else {
+        listOf(Color.Transparent, Forest.copy(alpha = 0.16f), Color.Transparent)
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(MINUTE_HEIGHT)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (highlighted) Amber.copy(alpha = 0.35f) else SandDeep.copy(alpha = 0.14f))
-            .padding(horizontal = 20.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Text(
-            formatMinutesOfDay(hour * 60 + minute),
-            style = MaterialTheme.typography.labelSmall,
-            color = Forest.copy(alpha = 0.8f)
-        )
-    }
+            .height(2.dp)
+            .background(Brush.horizontalGradient(colors))
+    )
 }
 
 @Composable
-private fun UntimedRow(
-    item: LifeItem,
-    onOpen: () -> Unit,
-    onDone: () -> Unit,
-    onDelete: () -> Unit
-) {
+private fun TodayEventRow(item: LifeItem, onOpen: () -> Unit, onDone: () -> Unit) {
     val done = item.status == LifeStatus.DONE
+    val past = item.timeSet && (item.dueAt ?: 0L) < System.currentTimeMillis()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (done) Forest.copy(alpha = 0.85f) else SandDeep.copy(alpha = 0.7f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .clickable(onClick = onOpen)
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            Modifier
-                .weight(1f)
-                .clickable(onClick = onOpen)
-        ) {
-            Text(
-                item.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (done) Sand else Forest,
-                maxLines = 2
+        Text(
+            if (item.timeSet) {
+                item.dueAt?.let { timeFormat.format(Date(it)) }.orEmpty()
+            } else {
+                LifeBoardRu.withoutTime
+            },
+            modifier = Modifier.width(78.dp),
+            style = MaterialTheme.typography.titleSmall,
+            color = if (done) Forest.copy(alpha = 0.6f) else Amber
+        )
+        Text(
+            item.title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (done) Forest.copy(alpha = 0.6f) else Forest,
+            maxLines = 2
+        )
+        when {
+            done -> Text(
+                LifeBoardRu.doneMark,
+                style = MaterialTheme.typography.labelLarge,
+                color = Amber,
+                fontWeight = FontWeight.Bold
             )
-            if (done) {
+            past -> Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Forest.copy(alpha = 0.12f))
+                    .clickable(onClick = onDone)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
                 Text(
-                    LifeBoardRu.doneMark,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Sand.copy(alpha = 0.85f),
-                    fontWeight = FontWeight.Bold
+                    LifeBoardRu.doneAction,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Forest
                 )
             }
-        }
-        if (!done) {
-            TextButton(onClick = onDone) {
-                Icon(Icons.Outlined.Check, contentDescription = null, tint = Forest)
-                Spacer(Modifier.size(4.dp))
-                Text(LifeBoardRu.doneAction, color = Forest)
-            }
-        }
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Outlined.Delete,
-                contentDescription = Ru.delete,
-                tint = if (done) Sand else Forest
-            )
         }
     }
 }
@@ -778,15 +566,4 @@ private fun dayOfMonth(dayStart: Long): Int {
     return cal.get(Calendar.DAY_OF_MONTH)
 }
 
-private fun minutesOfDay(millis: Long): Int {
-    val cal = Calendar.getInstance()
-    cal.timeInMillis = millis
-    return cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-}
 
-private fun currentMinutesOfDay(): Int = minutesOfDay(System.currentTimeMillis())
-
-private fun dayStartWithMinutes(day: Long, minutes: Int): Long = day + minutes * 60_000L
-
-private fun formatMinutesOfDay(minutes: Int): String =
-    String.format(Locale("ru"), "%02d:%02d", minutes / 60, minutes % 60)

@@ -36,4 +36,11 @@ object LifeBoardRu {
     val emptyDay: String get() = I18n.t("life.emptyDay", "На этот день событий нет.")
     val dragHint: String get() = I18n.t("life.dragHint", "Удерживайте событие и перетащите: на другое событие — обмен местами, на свободное время — новый час.")
     val deleteTitle: String get() = I18n.t("life.deleteTitle", "Удалить запись?")
+    val edit: String get() = I18n.t("life.edit", "Редактировать")
+    val close: String get() = I18n.t("life.close", "Закрыть")
+    val copy: String get() = I18n.t("life.copy", "Копировать")
+    val copied: String get() = I18n.t("life.copied", "Скопировано")
+    val call: String get() = I18n.t("life.call", "Позвонить")
+    val write: String get() = I18n.t("life.write", "Написать")
+    val openLink: String get() = I18n.t("life.openLink", "Открыть")
 }

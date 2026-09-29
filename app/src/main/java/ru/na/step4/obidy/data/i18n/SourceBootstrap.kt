@@ -889,6 +889,13 @@ object SourceBootstrap {
             "Удерживайте событие и перетащите: на другое событие — обмен местами, на свободное время — новый час."
         )
         SourceCatalog.put("life.deleteTitle", "Удалить запись?")
+        SourceCatalog.put("life.edit", "Редактировать")
+        SourceCatalog.put("life.close", "Закрыть")
+        SourceCatalog.put("life.copy", "Копировать")
+        SourceCatalog.put("life.copied", "Скопировано")
+        SourceCatalog.put("life.call", "Позвонить")
+        SourceCatalog.put("life.write", "Написать")
+        SourceCatalog.put("life.openLink", "Открыть")
         SourceCatalog.put("spiritual.abbr", "ДД")
         SourceCatalog.put("spiritual.title", "Духовная Деятельность")
         SourceCatalog.put("spiritual.badgeCd", "Статистика духовной деятельности")

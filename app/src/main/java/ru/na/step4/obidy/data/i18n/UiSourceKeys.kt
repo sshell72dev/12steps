@@ -813,6 +813,13 @@ object UiSourceKeys {
         "life.emptyDay",
         "life.dragHint",
         "life.deleteTitle",
+        "life.edit",
+        "life.close",
+        "life.copy",
+        "life.copied",
+        "life.call",
+        "life.write",
+        "life.openLink",
     )
 
     val spiritual: Set<String> = setOf(
