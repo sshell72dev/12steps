@@ -66,7 +66,7 @@ object JournalAiClient {
             .apply {
                 questionnaire?.trim()?.takeIf { it.isNotEmpty() }?.let { put("questionnaire", it) }
             }
-        return when (val raw = AiHttp.post("/api/v1/chat", payload, readTimeoutMs = 180_000)) {
+        return when (val raw = AiHttp.post("/api/v1/chat", payload, readTimeoutMs = 300_000)) {
             is AiHttp.Result.Err -> Result.Err(raw.message)
             is AiHttp.Result.Ok -> parse(raw.code, raw.body, admin)
         }

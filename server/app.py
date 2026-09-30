@@ -677,7 +677,9 @@ def api_analyze():
             ],
             max_tokens=max_tokens,
             timeout=180,
-            thinking=model == MODEL_PREMIUM,
+            # Размышления включаем только на тарифе Premium: иначе reasoning съедает
+            # бюджет токенов и разбор приходит обрезанным.
+            thinking=_payload_premium(payload),
         )
     except Exception as exc:
         return jsonify({"error": "upstream", "detail": str(exc)}), 502
@@ -1008,7 +1010,8 @@ def api_chat():
             messages,
             max_tokens=max_tokens,
             timeout=180,
-            thinking=model == MODEL_PREMIUM,
+            # См. api_analyze: reasoning — только для Premium, иначе ответ обрывается.
+            thinking=_payload_premium(payload),
         )
     except Exception as exc:
         return jsonify({"error": "upstream", "detail": str(exc)}), 502
@@ -1390,14 +1393,11 @@ def support_admin():
             if not body:
                 warn = "Введите ответ."
             else:
-                ticket = db.add_support_message(ticket_id, "admin", body)
-                if ticket:
-                    # Статус после ответа админ выбирает сам: ждём ответа или закрываем обращение.
-                    want = "done" if (complete or status_choice == "done") else status_choice
-                    if want == "done":
-                        ticket = db.complete_support_ticket(ticket_id) or ticket
-                    elif want:
-                        ticket = db.set_support_status(ticket_id, want) or ticket
+                # Статус после ответа админ выбирает сам: ждём ответа или закрываем обращение.
+                want = "done" if (complete or status_choice == "done") else "awaiting"
+                ticket = db.add_support_message(ticket_id, "admin", body, status_after=want)
+                if ticket and want == "done":
+                    ticket = db.complete_support_ticket(ticket_id) or ticket
                 # В подгруппу попадают и ответ, и служебная запись о статусе.
                 messenger_plugin.sync_support_ticket(ticket_id)
                 if ticket:
@@ -1569,8 +1569,9 @@ def api_support_reply(ticket_id: int):
     complete = bool(payload.get("complete"))
     try:
         if _admin_code_ok(code):
-            ticket = db.add_support_message(ticket_id, "admin", body)
-            if ticket and complete:
+            want = "done" if complete else "awaiting"
+            ticket = db.add_support_message(ticket_id, "admin", body, status_after=want)
+            if ticket and want == "done":
                 ticket = db.complete_support_ticket(ticket_id) or ticket
         else:
             existing = db.get_support_ticket(ticket_id)
@@ -1919,6 +1920,16 @@ def _model_for_user(premium: bool) -> str:
     return MODEL_PREMIUM if premium else MODEL_FLASH
 
 
+# Ответ не должен обрываться на полуслове: при упоре в лимит токенов модель
+# просят продолжить с того же места, а части склеиваются в один текст.
+_CHAT_CONTINUE_PROMPT = (
+    "Ответ оборвался на лимите длины. Продолжи ровно с того места, где оборвалось, "
+    "тем же стилем и структурой: без повторения уже написанного, без вступлений "
+    "и без служебных пояснений."
+)
+_CHAT_MAX_CONTINUES = 2
+
+
 def _deepseek_chat(
     api_key: str,
     model: str,
@@ -1927,10 +1938,10 @@ def _deepseek_chat(
     thinking: bool = False,
     timeout: int = 90,
 ) -> str:
-    def once(use_thinking: bool) -> str:
+    def once(msgs: list[dict[str, str]], use_thinking: bool) -> tuple[str, str]:
         payload: dict = {
             "model": model,
-            "messages": messages,
+            "messages": msgs,
             "max_tokens": max_tokens,
             "thinking": {"type": "enabled" if use_thinking else "disabled"},
         }
@@ -1956,18 +1967,37 @@ def _deepseek_chat(
             raise RuntimeError(f"DeepSeek HTTP {exc.code}: {detail}") from exc
         choices = data.get("choices") or []
         if not choices:
-            return ""
-        message = (choices[0] or {}).get("message") or {}
-        return str(message.get("content") or "").strip()
+            return "", ""
+        choice = choices[0] or {}
+        message = choice.get("message") or {}
+        content = str(message.get("content") or "").strip()
+        return content, str(choice.get("finish_reason") or "")
+
+    def collect(use_thinking: bool) -> str:
+        msgs = list(messages)
+        parts: list[str] = []
+        for _ in range(_CHAT_MAX_CONTINUES + 1):
+            content, finish = once(msgs, use_thinking)
+            if not content:
+                break
+            parts.append(content)
+            # length — модель упёрлась в потолок токенов и не договорила: просим продолжение.
+            if finish != "length":
+                break
+            msgs = msgs + [
+                {"role": "assistant", "content": content},
+                {"role": "user", "content": _CHAT_CONTINUE_PROMPT},
+            ]
+        return "".join(parts).strip()
 
     try:
-        text = once(thinking)
+        text = collect(thinking)
     except Exception:
         if not thinking:
             raise
         text = ""
     if not text and thinking:
-        text = once(False)
+        text = collect(False)
     if not text:
         raise RuntimeError("Пустой текст модели")
     return text

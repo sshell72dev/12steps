@@ -48,10 +48,11 @@ class LifeBoardViewModel(
         body: String,
         status: String,
         dueAt: Long?,
-        timeSet: Boolean = false
+        timeSet: Boolean = false,
+        callOn: Boolean = false
     ) {
         viewModelScope.launch {
-            store.upsert(id, kind, title, body, status, dueAt, timeSet)
+            store.upsert(id, kind, title, body, status, dueAt, timeSet, callOn)
         }
     }
 

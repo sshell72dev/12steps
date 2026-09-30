@@ -1,5 +1,9 @@
 package ru.na.step4.obidy.ui.life
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,12 +48,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import ru.na.step4.obidy.Ru
+import ru.na.step4.obidy.data.alerts.AppAlerts
 import ru.na.step4.obidy.data.life.LifeBoardRu
 import ru.na.step4.obidy.data.life.LifeBoardStore
 import ru.na.step4.obidy.data.life.LifeItem
@@ -141,9 +147,9 @@ fun LifeBoardScreen(
                     kind = kind,
                     initial = editing,
                     onDismiss = { composing = false; editing = null },
-                    onSave = { id, itemTitle, itemBody, status, dueAt, timeSet ->
+                    onSave = { id, itemTitle, itemBody, status, dueAt, timeSet, callOn ->
                         if (itemTitle.isNotBlank() || itemBody.isNotBlank()) {
-                            viewModel.save(id, itemTitle, itemBody, status, dueAt, timeSet)
+                            viewModel.save(id, itemTitle, itemBody, status, dueAt, timeSet, callOn)
                             composing = false
                             editing = null
                         }
@@ -297,8 +303,12 @@ internal fun LifeEditor(
     kind: String,
     initial: LifeItem?,
     onDismiss: () -> Unit,
-    onSave: (id: String?, title: String, body: String, status: String, dueAt: Long?, timeSet: Boolean) -> Unit
+    onSave: (id: String?, title: String, body: String, status: String, dueAt: Long?, timeSet: Boolean, callOn: Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    val notifyPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
     var title by remember(initial?.id) { mutableStateOf(initial?.title.orEmpty()) }
     var body by remember(initial?.id) { mutableStateOf(initial?.body.orEmpty()) }
     var status by remember(initial?.id) {
@@ -314,6 +324,7 @@ internal fun LifeEditor(
         }
         mutableStateOf(minutes ?: DEFAULT_EVENT_MINUTES)
     }
+    var callOn by remember(initial?.id) { mutableStateOf(initial?.callOn == true) }
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
     val notifySaved = rememberSavedNotice()
@@ -356,9 +367,30 @@ internal fun LifeEditor(
                 onClick = { showTime = true }
             )
             if (timeSet) {
-                TextButton(onClick = { timeSet = false }) {
+                TextButton(onClick = { timeSet = false; callOn = false }) {
                     Text(LifeBoardRu.withoutTime, color = Forest)
                 }
+                FilterChip(
+                    selected = callOn,
+                    onClick = {
+                        callOn = !callOn
+                        if (callOn && Build.VERSION.SDK_INT >= 33 && !AppAlerts.canPost(context)) {
+                            notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                    label = { Text(LifeBoardRu.callAlarm) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Forest,
+                        selectedLabelColor = Sand,
+                        containerColor = SandDeep,
+                        labelColor = Forest
+                    )
+                )
+                Text(
+                    LifeBoardRu.callAlarmHint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Forest.copy(alpha = 0.7f)
+                )
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -389,7 +421,7 @@ internal fun LifeEditor(
             notifySaved()
             val day = LifeBoardStore.startOfDay(dueAt ?: LifeBoardStore.startOfToday())
             val eventDue = if (timeSet) day + timeMinutes * 60_000L else day
-            onSave(initial?.id, title, body, status, eventDue, timeSet)
+            onSave(initial?.id, title, body, status, eventDue, timeSet, callOn && timeSet)
         }, filled = true)
         JournalButton(Ru.cancel, onClick = onDismiss)
     }

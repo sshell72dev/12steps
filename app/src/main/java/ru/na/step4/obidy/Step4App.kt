@@ -20,6 +20,7 @@ import ru.na.step4.obidy.data.journal.JournalPrefs
 import ru.na.step4.obidy.data.journal.JournalStore
 import ru.na.step4.obidy.data.journal.JournalStreakStore
 import ru.na.step4.obidy.data.life.LifeBoardStore
+import ru.na.step4.obidy.data.life.LifeCallAlarms
 import ru.na.step4.obidy.data.profile.ProfileStore
 import ru.na.step4.obidy.data.psych.PsychReminderWorker
 import ru.na.step4.obidy.data.psych.PsychStreakStore
@@ -168,6 +169,8 @@ class Step4App : Application() {
         voiceHandsSettings = VoiceHandsSettings(this)
         bookRepository = BookRepository(db.bookDao())
         activityLog = ActivityLog(db.activityDao(), appScope)
+        // Звонки по событиям календаря пересобираются при любом изменении расписания.
+        appScope.launch { lifeBoard.items.collect { LifeCallAlarms.sync(this@Step4App, it) } }
         voicePlugin.speaker.speakingListener = { on, preview ->
             activityLog.speakingChanged(on, preview)
         }

@@ -43,4 +43,16 @@ object LifeBoardRu {
     val call: String get() = I18n.t("life.call", "Позвонить")
     val write: String get() = I18n.t("life.write", "Написать")
     val openLink: String get() = I18n.t("life.openLink", "Открыть")
+    val callAlarm: String get() = I18n.t("life.callAlarm", "Звонок")
+    val callAlarmHint: String get() = I18n.t(
+        "life.callAlarmHint",
+        "В момент события телефон зазвонит и покажет напоминание."
+    )
+    val callChannel: String get() = I18n.t("life.callChannel", "Звонки календаря")
+    val callChannelHint: String get() = I18n.t(
+        "life.callChannelHint",
+        "Звонок по событиям, у которых включён звонок."
+    )
+    val callBody: String get() = I18n.t("life.callBody", "Событие сейчас")
+    val stop: String get() = I18n.t("life.stop", "Остановить")
 }

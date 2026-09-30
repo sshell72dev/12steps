@@ -429,6 +429,7 @@ object UiSourceKeys {
         "journal.settingsGeneral",
         "journal.settingsEntries",
         "journal.settingsAnalysis",
+        "journal.settingsData",
         "journal.fieldsHint",
         "journal.addField",
         "journal.addFieldTitle",
@@ -749,6 +750,7 @@ object UiSourceKeys {
         "support.status",
         "support.statusNew",
         "support.statusInProgress",
+        "support.statusAwaiting",
         "support.statusDone",
         "support.changeStatus",
         "support.statusChanged",
@@ -820,6 +822,12 @@ object UiSourceKeys {
         "life.call",
         "life.write",
         "life.openLink",
+        "life.callAlarm",
+        "life.callAlarmHint",
+        "life.callChannel",
+        "life.callChannelHint",
+        "life.callBody",
+        "life.stop",
     )
 
     val spiritual: Set<String> = setOf(

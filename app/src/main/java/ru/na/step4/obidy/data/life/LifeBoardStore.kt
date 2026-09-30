@@ -53,6 +53,7 @@ class LifeBoardStore(context: Context) {
         status: String,
         dueAt: Long?,
         timeSet: Boolean = false,
+        callOn: Boolean = false,
         sourceId: String = ""
     ): LifeItem? {
         val split = splitText(title, body)
@@ -62,6 +63,8 @@ class LifeBoardStore(context: Context) {
         val normalizedStatus = LifeStatus.normalize(status)
         val isEvent = normalizedKind == LifeKind.EVENT
         val eventTimeSet = isEvent && timeSet && dueAt != null
+        // Звонок имеет смысл только у события с заданным временем.
+        val eventCallOn = isEvent && eventTimeSet && callOn
         val eventDue = when {
             !isEvent -> dueAt
             dueAt == null -> startOfToday()
@@ -80,6 +83,7 @@ class LifeBoardStore(context: Context) {
                     status = normalizedStatus,
                     dueAt = eventDue,
                     timeSet = eventTimeSet,
+                    callOn = eventCallOn,
                     updatedAt = now,
                     sourceId = sourceId.ifBlank { prev.sourceId }
                 )
@@ -93,6 +97,7 @@ class LifeBoardStore(context: Context) {
                     status = normalizedStatus,
                     dueAt = eventDue,
                     timeSet = eventTimeSet,
+                    callOn = eventCallOn,
                     createdAt = now,
                     updatedAt = now,
                     sourceId = sourceId
@@ -214,6 +219,7 @@ class LifeBoardStore(context: Context) {
                     status = LifeStatus.normalize(obj.optString("status")),
                     dueAt = if (obj.has("dueAt") && !obj.isNull("dueAt")) obj.optLong("dueAt") else null,
                     timeSet = obj.optBoolean("timeSet", false),
+                    callOn = obj.optBoolean("callOn", false),
                     createdAt = obj.optLong("createdAt"),
                     updatedAt = obj.optLong("updatedAt"),
                     sourceId = obj.optString("sourceId")
@@ -234,6 +240,7 @@ class LifeBoardStore(context: Context) {
                     .put("status", item.status)
                     .put("dueAt", item.dueAt ?: JSONObject.NULL)
                     .put("timeSet", item.timeSet)
+                    .put("callOn", item.callOn)
                     .put("createdAt", item.createdAt)
                     .put("updatedAt", item.updatedAt)
                     .put("sourceId", item.sourceId)

@@ -9,6 +9,8 @@ data class LifeItem(
     val dueAt: Long? = null,
     /** У события задано время: иначе оно стоит в дне без привязки к часам. */
     val timeSet: Boolean = false,
+    /** Звонить в момент события: будильник и уведомление телефона. */
+    val callOn: Boolean = false,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
     val sourceId: String = ""

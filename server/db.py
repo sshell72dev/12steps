@@ -230,11 +230,12 @@ def init_schema() -> None:
         )
 
 
-SUPPORT_STATUSES = ("new", "in_progress", "done")
+SUPPORT_STATUSES = ("new", "in_progress", "awaiting", "done")
 
 SUPPORT_STATUS_LABELS = {
     "new": "Новое",
-    "in_progress": "В ожидании ответа",
+    "in_progress": "В проработке",
+    "awaiting": "В ожидании ответа",
     "done": "Завершено",
 }
 
@@ -797,7 +798,12 @@ def create_support_ticket(
     return get_support_ticket(ticket_id) or {}
 
 
-def add_support_message(ticket_id: int, author: str, body: str) -> dict[str, Any] | None:
+def add_support_message(
+    ticket_id: int,
+    author: str,
+    body: str,
+    status_after: str | None = None,
+) -> dict[str, Any] | None:
     body = (body or "").strip()
     if author not in {"user", "admin", "system"} or not body:
         raise ValueError("required")
@@ -816,8 +822,10 @@ def add_support_message(ticket_id: int, author: str, body: str) -> dict[str, Any
         )
         if author == "admin":
             status = _normalize_status(str(row.get("status") or "new"))
-            # First admin reply moves ticket into work unless already done.
-            next_status = "in_progress" if status == "new" else status
+            # Ответ админа переводит обращение в ожидание ответа пользователя,
+            # но из формы ответа обращение можно сразу и закрыть.
+            wanted = (status_after or "").strip().lower()
+            next_status = wanted if wanted in SUPPORT_STATUSES else "awaiting"
             _mark_user_messages_admin_read(cur, ticket_id)
             cur.execute(
                 """
@@ -1090,7 +1098,7 @@ _TICKET_PREVIEW_SQL = """
 
 def list_support_tickets(user_id: str = "") -> list[dict[str, Any]]:
     order_sql = """
-        ORDER BY FIELD(t.`status`, 'new', 'in_progress', 'done'),
+        ORDER BY FIELD(t.`status`, 'new', 'in_progress', 'awaiting', 'done'),
                  t.`updated_at` DESC
     """
     with cursor() as cur:

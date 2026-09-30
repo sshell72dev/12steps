@@ -995,6 +995,30 @@ def _unread(cur, chat_id: str, me: str, last_read_id: int) -> int:
     return int(row.get("c") or 0)
 
 
+def _topics_unread(cur, group_id: str, me: str, is_ideas: bool) -> int:
+    """Непрочитанное в подгруппах группы: своей ленты у неё нет, цифру собираем из тем.
+
+    В группе обращений участник видит только свои темы — считаем ровно их,
+    иначе цифра в списке чатов не совпала бы со списком подгрупп.
+    """
+    author_filter = "AND t.author_id = %s" if is_ideas else ""
+    params: tuple = (me, group_id, me) if is_ideas else (me, group_id)
+    cur.execute(
+        f"""
+        SELECT c.id AS chat_id, COALESCE(m.last_read_id, 0) AS last_read
+        FROM messenger_topics t
+        JOIN messenger_chats c ON c.topic_id = t.id AND c.kind = 'topic'
+        LEFT JOIN messenger_chat_members m ON m.chat_id = c.id AND m.user_id = %s
+        WHERE t.group_id = %s {author_filter}
+        """,
+        params,
+    )
+    total = 0
+    for row in cur.fetchall():
+        total += _unread(cur, row["chat_id"], me, int(row["last_read"] or 0))
+    return total
+
+
 def _pinned_json(cur, chat_id: str, me: str = "") -> dict | None:
     """Закреплённое сообщение чата: показывается шапкой над лентой."""
     cur.execute(
@@ -1073,6 +1097,9 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
     if last_kind == "voice":
         preview = "Голосовое сообщение"
     avatar_url = _avatar_url("user", peer_id) if kind == "direct" else _avatar_url("group", group_id)
+    unread = _unread(cur, chat["id"], me, last_read)
+    if has_topics:
+        unread += _topics_unread(cur, group_id, me, challenge_key == IDEAS_KEY)
     return {
         "id": chat["id"],
         "kind": kind,
@@ -1086,7 +1113,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         "last_body": preview,
         "last_kind": last_kind,
         "last_at": last_at,
-        "unread": _unread(cur, chat["id"], me, last_read),
+        "unread": unread,
         "pinned": _pinned_json(cur, chat["id"], me),
     }
 

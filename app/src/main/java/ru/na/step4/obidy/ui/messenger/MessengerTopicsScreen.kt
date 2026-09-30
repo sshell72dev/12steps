@@ -3,6 +3,7 @@ package ru.na.step4.obidy.ui.messenger
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
@@ -42,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +53,7 @@ import ru.na.step4.obidy.data.messenger.MessengerTopic
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
+import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.steps12.voice.ui.VoiceOutlinedTextField
@@ -331,11 +335,19 @@ private fun TopicRow(
             )
         }
         if (topic.unread > 0) {
-            Text(
-                " ${topic.unread}",
-                style = MaterialTheme.typography.labelLarge,
-                color = Forest
-            )
+            Spacer(Modifier.size(6.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Amber)
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    if (topic.unread > 99) "99+" else topic.unread.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Forest
+                )
+            }
         }
         if (canManage) {
             IconButton(onClick = onPickPhoto) {

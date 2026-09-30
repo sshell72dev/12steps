@@ -4,7 +4,14 @@ data class WordColumn(
     val id: String,
     val title: String,
     val words: List<String>
-)
+) {
+    /**
+     * Заголовок группы — тоже слово: «Гнев», «Страх», «Грусть», «Радость», «Любовь»
+     * выбираются наравне с остальными, при этом остаются подписями вкладок.
+     */
+    val pickableWords: List<String>
+        get() = if (words.any { it.equals(title, ignoreCase = true) }) words else listOf(title) + words
+}
 
 object EmotionCatalog {
     val feelingColumns = listOf(
@@ -110,7 +117,7 @@ object EmotionCatalog {
     }
 
     fun allWords(kind: JournalFieldKind): List<Pair<WordColumn, String>> =
-        columns(kind).flatMap { column -> column.words.map { column to it } }
+        columns(kind).flatMap { column -> column.pickableWords.map { column to it } }
 
     fun containsWord(
         text: String,
@@ -120,7 +127,7 @@ object EmotionCatalog {
         if (text.isBlank() || word.isBlank()) return false
         val matches = wordBoundary(word).findAll(text).toList()
         if (matches.isEmpty()) return false
-        val longer = columns(kind).flatMap { it.words }
+        val longer = columns(kind).flatMap { it.pickableWords }
             .filter { it.length > word.length && it.contains(word, ignoreCase = true) }
         if (longer.isEmpty()) return true
         return matches.any { match ->
@@ -134,7 +141,7 @@ object EmotionCatalog {
     }
 
     fun selectedWords(text: String, kind: JournalFieldKind = JournalFieldKind.FEELINGS): List<String> =
-        columns(kind).flatMap { it.words }.filter { containsWord(text, it, kind) }
+        columns(kind).flatMap { it.pickableWords }.filter { containsWord(text, it, kind) }
 
     /**
      * Обычное нажатие: слово дописывается в поле через запятую.

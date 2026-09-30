@@ -56,7 +56,9 @@ object AnalysisAiClient {
             .ifBlank { profile?.languageCode.orEmpty() }
             .ifBlank { "ru" }
         payload.put("language", language)
-        return when (val raw = AiHttp.post("/api/v1/analyze", payload, readTimeoutMs = 180_000)) {
+        // Запас по времени: при обрыве ответа на лимите токенов сервер дособирает текст
+        // вторым запросом к модели, поэтому 180 секунд может не хватить.
+        return when (val raw = AiHttp.post("/api/v1/analyze", payload, readTimeoutMs = 300_000)) {
             is AiHttp.Result.Err -> Result.Err(raw.message)
             is AiHttp.Result.Ok -> parse(raw.code, raw.body, admin)
         }

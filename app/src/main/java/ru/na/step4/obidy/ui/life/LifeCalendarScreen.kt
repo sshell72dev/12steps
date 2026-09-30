@@ -169,9 +169,9 @@ fun LifeCalendarScreen(
                     kind = LifeKind.EVENT,
                     initial = editing,
                     onDismiss = { composing = false; editing = null },
-                    onSave = { id, title, body, status, dueAt, timeSet ->
+                    onSave = { id, title, body, status, dueAt, timeSet, callOn ->
                         if (title.isNotBlank() || body.isNotBlank()) {
-                            viewModel.save(id, title, body, status, dueAt, timeSet)
+                            viewModel.save(id, title, body, status, dueAt, timeSet, callOn)
                             dueAt?.let { day -> selectedDay = LifeBoardStore.startOfDay(day) }
                             composing = false
                             editing = null

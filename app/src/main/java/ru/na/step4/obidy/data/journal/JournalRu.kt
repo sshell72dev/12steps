@@ -54,6 +54,7 @@ object JournalRu {
     val settingsGeneral: String get() = I18n.t("journal.settingsGeneral", "Общие")
     val settingsEntries: String get() = I18n.t("journal.settingsEntries", "Записи")
     val settingsAnalysis: String get() = I18n.t("journal.settingsAnalysis", "Самоанализ")
+    val settingsData: String get() = I18n.t("journal.settingsData", "Данные")
     val fieldsHint: String get() = I18n.t("journal.fieldsHint", "Как выглядит форма записи по точке. Можно одно поле или несколько, менять названия, порядок и набор.")
     val addField: String get() = I18n.t("journal.addField", "Добавить поле")
     val addFieldTitle: String get() = I18n.t("journal.addFieldTitle", "Название поля")

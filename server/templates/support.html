@@ -102,6 +102,7 @@
       .badge { border-radius: 99px; padding: 1px 6px; font-size: 10px; margin-left: 4px; color: #fff; vertical-align: middle; }
       .badge.new { background: var(--new); }
       .badge.in_progress { background: var(--work); }
+      .badge.awaiting { background: var(--warn); }
       .badge.done { background: var(--done); }
       .badge.unread { background: var(--warn); }
       .badge.read { background: var(--done); }
@@ -188,7 +189,11 @@
       }
       .complete-row input:checked + .switch::after { transform: translateX(20px); }
       .complete-row:focus-within .switch { outline: 2px solid rgba(27, 46, 36, 0.25); outline-offset: 2px; }
-      .reply-form button[type=submit] { margin-top: 6px; }
+      .reply-actions {
+        display: flex; align-items: center; justify-content: flex-end;
+        gap: 12px; flex-wrap: wrap; margin-top: 6px;
+      }
+      .reply-actions .complete-row { margin: 0; }
     </style>
   </head>
   <body>
@@ -215,7 +220,7 @@
       <div class="grid">
         <div class="card">
           <h1>Сообщения об ошибках</h1>
-          <div class="muted">Сначала новые, затем ожидающие ответа, потом завершённые.</div>
+          <div class="muted">Сначала новые, затем в проработке и ожидающие ответа, потом завершённые.</div>
           <a class="compose-link" href="{{ url_for('support_admin', compose=1, from=admin_source) }}">+ Написать пользователю</a>
           {% for item in items %}
             <a class="item{% if current and current.id == item.id %} active{% endif %}"
@@ -340,10 +345,24 @@
               <textarea id="body" name="body" rows="4" required placeholder="Ответ пользователю"></textarea>
               <label for="reply-status" class="field">Статус после ответа</label>
               <select id="reply-status" name="status">
-                <option value="in_progress" {% if current.status != 'done' %}selected{% endif %}>{{ status_labels['in_progress'] }}</option>
+                <option value="awaiting" {% if current.status != 'done' %}selected{% endif %}>{{ status_labels['awaiting'] }}</option>
                 <option value="done" {% if current.status == 'done' %}selected{% endif %}>{{ status_labels['done'] }}</option>
               </select>
-              <button type="submit">Отправить ответ</button>
+              <div class="reply-actions">
+                <button type="submit">Отправить ответ</button>
+                <label class="complete-row" for="complete-toggle">
+                  <span>Задача выполнена</span>
+                  <input type="checkbox" name="complete" value="1" id="complete-toggle"
+                         {% if current.status == 'done' %}checked{% endif %}
+                         onchange="onCompleteToggle(this)" />
+                  <span class="switch" aria-hidden="true"></span>
+                </label>
+              </div>
+            </form>
+            <form method="post" id="status-form" style="display:none;">
+              <input type="hidden" name="id" value="{{ current.id }}" />
+              <input type="hidden" name="action" id="status-action" value="complete" />
+              <input type="hidden" name="status" id="status-value" value="done" />
             </form>
             <script>
               const ticketShareText = {{ (
@@ -461,6 +480,22 @@
                     ta.setSelectionRange(ta.value.length, ta.value.length);
                   }
                 }
+              }
+              function onCompleteToggle(el) {
+                const form = document.getElementById("status-form");
+                if (!form) return;
+                const replyForm = document.getElementById("reply-form");
+                const body = document.getElementById("body");
+                if (el.checked && replyForm && body && body.value.trim()) {
+                  // Ответ уже написан: отправляем его вместе с завершением обращения.
+                  const select = document.getElementById("reply-status");
+                  if (select) select.value = "done";
+                  replyForm.submit();
+                  return;
+                }
+                document.getElementById("status-action").value = el.checked ? "complete" : "status";
+                document.getElementById("status-value").value = el.checked ? "done" : "awaiting";
+                form.submit();
               }
             </script>
           {% elif report %}

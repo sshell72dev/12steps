@@ -46,13 +46,15 @@ data class SupportTicket(
 object SupportStatus {
     const val NEW = "new"
     const val IN_PROGRESS = "in_progress"
+    const val AWAITING = "awaiting"
     const val DONE = "done"
 
-    val all = listOf(NEW, IN_PROGRESS, DONE)
+    val all = listOf(NEW, IN_PROGRESS, AWAITING, DONE)
 
     fun label(status: String): String = when (status) {
         NEW -> SupportRu.statusNew
         IN_PROGRESS -> SupportRu.statusInProgress
+        AWAITING -> SupportRu.statusAwaiting
         DONE -> SupportRu.statusDone
         else -> SupportRu.statusNew
     }

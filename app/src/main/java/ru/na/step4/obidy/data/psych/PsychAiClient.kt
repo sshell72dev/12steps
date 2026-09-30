@@ -56,7 +56,8 @@ class PsychAiClient {
             )
         if (topics != null && topics.length() > 0) payload.put("topics", topics)
         if (topic != null) payload.put("topic", topic)
-        return when (val raw = AiHttp.post("/api/v1/psych", payload, readTimeoutMs = 180_000)) {
+        // См. AnalysisAiClient: длинный ответ может дособираться вторым запросом к модели.
+        return when (val raw = AiHttp.post("/api/v1/psych", payload, readTimeoutMs = 300_000)) {
             is AiHttp.Result.Err -> Result.Err(raw.message)
             is AiHttp.Result.Ok -> parse(raw.code, raw.body, admin)
         }

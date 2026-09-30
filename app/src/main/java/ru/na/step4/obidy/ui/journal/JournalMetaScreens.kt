@@ -203,10 +203,15 @@ fun JournalSettingsScreen(
                         onClick = { settingsTab = 2 },
                         text = { Text(JournalRu.settingsAnalysis) }
                     )
+                    Tab(
+                        selected = settingsTab == 3,
+                        onClick = { settingsTab = 3 },
+                        text = { Text(JournalRu.settingsData) }
+                    )
                     if (state.isAdmin) {
                         Tab(
-                            selected = settingsTab == 3,
-                            onClick = { settingsTab = 3 },
+                            selected = settingsTab == 4,
+                            onClick = { settingsTab = 4 },
                             text = { Text(SupportRu.inbox) }
                         )
                     }
@@ -217,7 +222,21 @@ fun JournalSettingsScreen(
                         prefs = journalPrefs,
                         onEdit = onEditAnalysis
                     )
-                } else if (settingsTab == 3 && state.isAdmin) {
+                } else if (settingsTab == 3) {
+                    SettingsDataTab(
+                        viewModel = viewModel,
+                        onOpenJson = {
+                            openJson.launch(
+                                arrayOf(
+                                    "application/json",
+                                    "text/json",
+                                    "text/plain",
+                                    "*/*"
+                                )
+                            )
+                        }
+                    )
+                } else if (settingsTab == 4 && state.isAdmin) {
                     SupportInboxScreen(
                         repository = (context.applicationContext as Step4App).supportRepository
                     )
@@ -244,29 +263,6 @@ fun JournalSettingsScreen(
                     onSelect = {
                         adviceLength = it
                         journalPrefs.adviceLength = it
-                    }
-                )
-                Text(JournalRu.exportJson, color = Amber, style = MaterialTheme.typography.labelMedium)
-                Text(
-                    JournalRu.exportJsonHint,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                JournalButton(
-                    JournalRu.exportJson,
-                    onClick = { viewModel.exportToDownloads(context) }
-                )
-                JournalButton(
-                    JournalRu.importJson,
-                    onClick = {
-                        openJson.launch(
-                            arrayOf(
-                                "application/json",
-                                "text/json",
-                                "text/plain",
-                                "*/*"
-                            )
-                        )
                     }
                 )
                 Text(JournalRu.settingsPlace, color = Amber, style = MaterialTheme.typography.labelMedium)
@@ -358,7 +354,6 @@ fun JournalSettingsScreen(
                     VoiceSettingsPanel(plugin = voicePlugin)
                 }
                 VoiceHandsSettingsPanel()
-                BackupSettingsPanel()
                 Text(JournalRu.versionOpen, color = Amber, style = MaterialTheme.typography.labelMedium)
                 JournalButton(
                     "${BuildConfig.APP_VERSION_NAME} · ${JournalRu.versionHistory}",
@@ -421,6 +416,38 @@ fun JournalSettingsScreen(
                 ) { Text(Ru.cancel) }
             }
         )
+    }
+}
+
+/**
+ * Вкладка «Данные»: сохранение и восстановление данных пользователя — копия на сервере,
+ * копия в файл с паролем, выгрузка и загрузка записей дневника в JSON.
+ */
+@Composable
+private fun SettingsDataTab(
+    viewModel: JournalViewModel,
+    onOpenJson: () -> Unit
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        BackupSettingsPanel()
+        Text(JournalRu.exportJson, color = Amber, style = MaterialTheme.typography.labelMedium)
+        Text(
+            JournalRu.exportJsonHint,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        JournalButton(
+            JournalRu.exportJson,
+            onClick = { viewModel.exportToDownloads(context) }
+        )
+        JournalButton(JournalRu.importJson, onClick = onOpenJson)
     }
 }
 

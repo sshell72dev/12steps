@@ -36,7 +36,9 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
@@ -80,6 +82,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -93,6 +97,8 @@ import ru.na.step4.obidy.data.psych.PsychReminderWorker
 import ru.na.step4.obidy.data.psych.PsychRu
 import ru.na.step4.obidy.data.psych.PsychSettings
 import ru.na.step4.obidy.data.psych.PsychTopic
+import ru.na.step4.obidy.data.journal.JournalFieldKind
+import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.notes.NoteIds
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
@@ -101,6 +107,7 @@ import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.components.isImeVisible
 import ru.na.step4.obidy.ui.components.navigationBarsPaddingIfImeHidden
 import ru.na.step4.obidy.ui.components.rememberSavedNotice
+import ru.na.step4.obidy.ui.journal.WordPickDictateHost
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Moss
@@ -1777,6 +1784,8 @@ private fun PsychWriteColumn(
     footer: @Composable ColumnScope.() -> Unit
 ) {
     val scroll = rememberScrollToEndOnGrow(text)
+    var picking by remember { mutableStateOf<JournalFieldKind?>(null) }
+    var pickPages by remember { mutableStateOf(mapOf<JournalFieldKind, Int>()) }
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -1787,6 +1796,7 @@ private fun PsychWriteColumn(
         ) {
             header()
             if (showField) {
+                PsychTableIcons(onPick = { picking = it })
                 PsychField(
                     text,
                     onChange,
@@ -1797,6 +1807,54 @@ private fun PsychWriteColumn(
             }
         }
         footer()
+    }
+    picking?.let { kind ->
+        Dialog(
+            onDismissRequest = { picking = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                WordPickDictateHost(
+                    visible = true,
+                    title = when (kind) {
+                        JournalFieldKind.FEELINGS -> JournalRu.pickFeelings
+                        JournalFieldKind.THOUGHTS -> JournalRu.pickThoughts
+                        JournalFieldKind.TEXT -> ""
+                    },
+                    kind = kind,
+                    value = text,
+                    onValueChange = onChange,
+                    onDismiss = { picking = null },
+                    savedPage = pickPages[kind] ?: 0,
+                    onSavePage = { page -> pickPages = pickPages + (kind to page) }
+                )
+            }
+        }
+    }
+}
+
+/** Два значка над полем ввода: таблица чувств и таблица мыслей. */
+@Composable
+private fun PsychTableIcons(onPick: (JournalFieldKind) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = { onPick(JournalFieldKind.FEELINGS) }) {
+            Icon(
+                Icons.Outlined.FavoriteBorder,
+                contentDescription = JournalRu.pickFeelings,
+                tint = Forest
+            )
+        }
+        IconButton(onClick = { onPick(JournalFieldKind.THOUGHTS) }) {
+            Icon(
+                Icons.Outlined.Psychology,
+                contentDescription = JournalRu.pickThoughts,
+                tint = Forest
+            )
+        }
     }
 }
 

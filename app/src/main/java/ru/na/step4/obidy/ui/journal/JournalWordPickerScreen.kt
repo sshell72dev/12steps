@@ -255,13 +255,15 @@ private fun WordColumnPage(
             .verticalScroll(rememberScrollState())
             .padding(top = 8.dp, bottom = 12.dp)
     ) {
-        Text(
-            column.title,
-            style = MaterialTheme.typography.titleLarge,
-            color = Forest,
-            modifier = Modifier.padding(bottom = 10.dp)
+        WordChip(
+            word = column.title,
+            selected = selected.any { it.equals(column.title, ignoreCase = true) },
+            onClick = { onPick(column.title) },
+            onLongClick = { onDictate(column.title) },
+            large = true
         )
         FlowRow(
+            modifier = Modifier.padding(top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -280,6 +282,7 @@ private fun WordColumnPage(
 /**
  * Чип слова: обычное нажатие дописывает чувство через запятую,
  * удержание — добавляет строку «Слово - » и включает диктовку.
+ * [large] — заголовок группы, его тоже можно выбрать как чувство.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -287,19 +290,23 @@ private fun WordChip(
     word: String,
     selected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    large: Boolean = false
 ) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(if (large) 10.dp else 8.dp),
         color = if (selected) Forest else Sand.copy(alpha = 0.85f),
         border = BorderStroke(1.dp, if (selected) Forest else Moss.copy(alpha = 0.35f)),
         modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
         Text(
             word,
-            style = MaterialTheme.typography.labelLarge,
+            style = if (large) MaterialTheme.typography.titleLarge else MaterialTheme.typography.labelLarge,
             color = if (selected) Sand else Forest,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            modifier = Modifier.padding(
+                horizontal = if (large) 14.dp else 12.dp,
+                vertical = if (large) 8.dp else 8.dp
+            )
         )
     }
 }
