@@ -17,10 +17,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 
@@ -66,5 +69,28 @@ fun MessengerAvatar(
         ) {
             Text(letter, color = Sand, style = MaterialTheme.typography.titleMedium)
         }
+    }
+}
+
+/**
+ * Иконка группы «Неудобные вопросы»: перевёрнутый вопросительный знак
+ * на зелёном круге — в неё пишут от лица «Анонимный».
+ */
+@Composable
+fun AnonQuestionsAvatar(size: Dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(Forest),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "?",
+            color = Sand,
+            fontSize = (size.value * 0.6f).sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.rotate(180f)
+        )
     }
 }

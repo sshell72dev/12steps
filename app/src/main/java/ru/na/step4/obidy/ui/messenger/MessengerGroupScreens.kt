@@ -21,6 +21,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -198,6 +200,27 @@ fun MessengerGroupInfoScreen(
                         },
                         filled = true
                     )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                MessengerRu.groupAnonTitle,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Forest
+                            )
+                            Text(
+                                MessengerRu.groupAnonHint,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = info?.anonymous == true,
+                            onCheckedChange = { viewModel.setGroupAnonymous(groupId, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = Forest)
+                        )
+                    }
                 }
                 JournalButton(label = MessengerRu.groupQr, onClick = {
                     info?.let { viewModel.openGroupQr(it) }

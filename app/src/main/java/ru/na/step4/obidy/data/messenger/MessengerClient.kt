@@ -87,9 +87,15 @@ class MessengerClient(private val messengerId: () -> String) {
         }
     }
 
-    fun sendText(chatId: String, body: String, replyToId: Long = 0L): MessengerResult<MessengerMessage> {
+    fun sendText(
+        chatId: String,
+        body: String,
+        replyToId: Long = 0L,
+        anonymous: Boolean = false
+    ): MessengerResult<MessengerMessage> {
         val payload = JSONObject().put("body", body)
         if (replyToId > 0L) payload.put("reply_to_id", replyToId)
+        if (anonymous) payload.put("anonymous", true)
         return map(
             MessengerHttp.post("/api/v1/messenger/chats/$chatId/messages", messengerId(), payload)
         ) { obj ->
@@ -230,6 +236,7 @@ class MessengerClient(private val messengerId: () -> String) {
                 isOwner = g.optBoolean("is_owner"),
                 canManage = g.optBoolean("can_manage"),
                 avatarUrl = g.optString("avatar_url"),
+                anonymous = g.optBoolean("anonymous"),
                 members = members,
                 token = obj.optString("token"),
                 chatId = obj.optString("chat_id")
@@ -291,6 +298,14 @@ class MessengerClient(private val messengerId: () -> String) {
         val payload = JSONObject().put("name", name)
         return map(MessengerHttp.post("/api/v1/messenger/groups/$groupId", messengerId(), payload)) { obj ->
             obj.optJSONObject("group")?.optString("name").orEmpty().ifBlank { name }
+        }
+    }
+
+    /** Режим анонимности группы: её участники могут писать от лица «Анонимный». */
+    fun setGroupAnonymous(groupId: String, anonymous: Boolean): MessengerResult<Boolean> {
+        val payload = JSONObject().put("anonymous", anonymous)
+        return map(MessengerHttp.post("/api/v1/messenger/groups/$groupId", messengerId(), payload)) { obj ->
+            obj.optJSONObject("group")?.optBoolean("anonymous") ?: anonymous
         }
     }
 
@@ -520,6 +535,7 @@ class MessengerClient(private val messengerId: () -> String) {
                         lastAt = row.optLong("last_at"),
                         unread = row.optInt("unread"),
                         hasTopics = row.optBoolean("has_topics"),
+                        anonymous = row.optBoolean("anonymous"),
                         pinnedId = pinned?.optLong("id") ?: 0L,
                         pinnedKind = pinned?.optString("kind").orEmpty(),
                         pinnedBody = pinned?.optString("body").orEmpty(),

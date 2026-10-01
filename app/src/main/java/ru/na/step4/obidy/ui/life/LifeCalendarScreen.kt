@@ -168,6 +168,7 @@ fun LifeCalendarScreen(
                 LifeEditor(
                     kind = LifeKind.EVENT,
                     initial = editing,
+                    dateDefault = selectedDay,
                     onDismiss = { composing = false; editing = null },
                     onSave = { id, title, body, status, dueAt, timeSet, callOn ->
                         if (title.isNotBlank() || body.isNotBlank()) {

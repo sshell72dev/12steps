@@ -15,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -44,6 +46,7 @@ fun MessengerProfileScreen(
 ) {
     val avatar by viewModel.myAvatarUrl.collectAsStateWithLifecycle()
     val savedName by viewModel.repository.displayName.collectAsStateWithLifecycle()
+    val anonChatVisible by viewModel.anonChatVisible.collectAsStateWithLifecycle()
     var draft by remember(savedName) { mutableStateOf(savedName) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) viewModel.uploadAvatar(uri)
@@ -115,6 +118,34 @@ fun MessengerProfileScreen(
                             if (trimmed.isNotBlank()) viewModel.saveNickname(trimmed)
                         },
                         filled = true
+                    )
+                }
+                Text(
+                    MessengerRu.settingsTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Forest,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            MessengerRu.anonChatTitle,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Forest
+                        )
+                        Text(
+                            MessengerRu.anonChatHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = anonChatVisible,
+                        onCheckedChange = { viewModel.setAnonChatVisible(it) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = Forest)
                     )
                 }
             }

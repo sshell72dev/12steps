@@ -123,6 +123,8 @@ class Step4App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Оформление читаем до первого кадра, иначе тема мигнёт светлой.
+        ru.na.step4.obidy.ui.theme.initThemeMode(this)
         appLockStore = AppLockStore(this)
         val db = AppDatabase.get(this)
         repository = ResentmentRepository(

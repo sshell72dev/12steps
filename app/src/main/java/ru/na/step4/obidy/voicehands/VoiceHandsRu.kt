@@ -7,7 +7,7 @@ object VoiceHandsRu {
     val experiment: String get() = I18n.t("voicehands.experiment", "Эксперимент")
     val hint: String get() = I18n.t(
         "voicehands.hint",
-        "Пока приложение открыто. В ожидании микрофон выключен — нажмите «Слушать», и запись начнётся сразу. Существующие экраны не меняются. Выключите, если что-то пойдёт не так."
+        "Пока приложение открыто. Пока режим включён, в левом нижнем углу виден микрофон: нажмите его, чтобы включить помощника и начать запись. Выключите, если что-то пойдёт не так."
     )
     val commands: String get() = I18n.t(
         "voicehands.commands",
@@ -31,7 +31,7 @@ object VoiceHandsRu {
     val quiet: String get() = I18n.t("voicehands.quiet", "Микрофон выключен")
     val hintStandby: String get() = I18n.t(
         "voicehands.hintStandby",
-        "Нажмите «Слушать» — запись начнётся сразу"
+        "Нажмите микрофон в левом нижнем углу — запись начнётся сразу"
     )
     val hintDictating: String get() = I18n.t(
         "voicehands.hintDictating",

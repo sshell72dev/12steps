@@ -1054,6 +1054,18 @@ object SourceBootstrap {
         SourceCatalog.put("messenger.nameRequired", "Укажите название.")
         SourceCatalog.put("messenger.noRights", "Недостаточно прав для этого действия.")
         SourceCatalog.put("messenger.profileTitle", "Профиль")
+        SourceCatalog.put("messenger.settingsTitle", "Настройки")
+        SourceCatalog.put("messenger.anonChatTitle", "Неудобные вопросы")
+        SourceCatalog.put(
+            "messenger.anonChatHint",
+            "Группа, где пишут от лица «Анонимный». Выключите, чтобы её не было в чатах."
+        )
+        SourceCatalog.put("messenger.anonSend", "Отправить анонимно")
+        SourceCatalog.put("messenger.groupAnonTitle", "Анонимные сообщения")
+        SourceCatalog.put(
+            "messenger.groupAnonHint",
+            "Участники смогут писать от лица «Анонимный»: галочка появится у всех в этой группе."
+        )
         SourceCatalog.put("messenger.photoHint", "Фото видят те, с кем вы переписываетесь.")
         SourceCatalog.put("messenger.photoAdd", "Добавить фото")
         SourceCatalog.put("messenger.photoChange", "Сменить фото")

@@ -25,7 +25,9 @@ data class MessengerChat(
     val pinnedBody: String = "",
     val pinnedSender: String = "",
     /** У группы есть свои подгруппы: она открывается их списком, а не общей лентой. */
-    val hasTopics: Boolean = false
+    val hasTopics: Boolean = false,
+    /** В группе включён режим анонимности: сообщения можно писать от лица «Анонимный». */
+    val anonymous: Boolean = false
 ) {
     val isGroup: Boolean get() = kind == "group"
     val isAlerts: Boolean get() = kind == AppAlerts.KIND || id == AppAlerts.CHAT_ID
@@ -35,6 +37,12 @@ data class MessengerChat(
 
     /** Служебный чат: пишет само приложение, аватар — иконка вместо буквы. */
     val isService: Boolean get() = isAlerts || kind == "service"
+
+    /** Встроенная группа «Неудобные вопросы»: в профиле её можно скрыть. */
+    val isAnonQuestions: Boolean get() = groupId == MessengerAnon.GROUP_ID || id == MessengerAnon.GROUP_ID
+
+    /** Группа с включённым режимом анонимности: своя иконка и анонимная отправка. */
+    val isAnonymousChat: Boolean get() = anonymous || isAnonQuestions
 }
 
 data class MessengerMessage(
@@ -109,6 +117,8 @@ data class MessengerGroupInfo(
     val isOwner: Boolean,
     val canManage: Boolean = false,
     val avatarUrl: String = "",
+    /** Режим анонимности группы: включается в её настройках. */
+    val anonymous: Boolean = false,
     val members: List<MessengerContact>,
     val token: String,
     val chatId: String
@@ -154,6 +164,15 @@ object MessengerChallengeKeys {
     const val ANALYSIS = "analysis"
     const val SUPPORT = "support"
     const val HUB = "hub"
+}
+
+/**
+ * Встроенная группа «Неудобные вопросы»: в неё попадают все пользователи,
+ * а сообщения можно отправлять от лица «Анонимный».
+ */
+object MessengerAnon {
+    const val GROUP_ID = "challenge_anonq"
+    const val SENDER_NAME = "Анонимный"
 }
 
 /** Подгруппа челленджей внутри группы: своя лента и свой ключ публикации. */

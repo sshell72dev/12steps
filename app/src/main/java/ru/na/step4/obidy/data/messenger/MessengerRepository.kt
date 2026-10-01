@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import ru.na.step4.obidy.data.profile.ProfileStore
@@ -70,12 +71,20 @@ class MessengerRepository(
     val pinned: StateFlow<MessengerMessage?> = _pinned.asStateFlow()
     val pinnedChatId: StateFlow<String> = _pinnedChatId.asStateFlow()
 
-    val chats: Flow<List<MessengerChat>> = dao.observeChats().map { rows ->
-        val mapped = rows.map { it.toChat() }
-        mapped.sortedWith(
-            compareByDescending<MessengerChat> { it.id == AppAlerts.CHAT_ID }
-                .thenByDescending { it.lastAt }
-        )
+    /** Группа «Неудобные вопросы» показывается по умолчанию: в профиле её можно скрыть. */
+    private val _anonChatVisible = MutableStateFlow(prefs.anonChatEnabled)
+    val anonChatVisible: StateFlow<Boolean> = _anonChatVisible.asStateFlow()
+
+    val chats: Flow<List<MessengerChat>> = combine(
+        dao.observeChats(),
+        _anonChatVisible
+    ) { rows, anonVisible ->
+        rows.map { it.toChat() }
+            .filterNot { it.isAnonQuestions && !anonVisible }
+            .sortedWith(
+                compareByDescending<MessengerChat> { it.id == AppAlerts.CHAT_ID }
+                    .thenByDescending { it.lastAt }
+            )
     }
 
     val contacts: Flow<List<MessengerContact>> = dao.observeContacts().map { rows ->
@@ -236,9 +245,14 @@ class MessengerRepository(
         }
     }
 
-    suspend fun sendText(chatId: String, body: String, replyToId: Long = 0L): Boolean = withContext(Dispatchers.IO) {
+    suspend fun sendText(
+        chatId: String,
+        body: String,
+        replyToId: Long = 0L,
+        anonymous: Boolean = false
+    ): Boolean = withContext(Dispatchers.IO) {
         if (chatId == AppAlerts.CHAT_ID) return@withContext false
-        when (val result = client.sendText(chatId, body, replyToId)) {
+        when (val result = client.sendText(chatId, body, replyToId, anonymous)) {
             is MessengerResult.Ok -> {
                 dao.upsertMessages(listOf(result.value.toRow()))
                 refreshChats()
@@ -558,6 +572,26 @@ class MessengerRepository(
         }
     }
 
+    /** Режим анонимности группы включает её владелец — после этого можно писать «Анонимный». */
+    suspend fun setGroupAnonymous(groupId: String, anonymous: Boolean): Boolean =
+        withContext(Dispatchers.IO) {
+            when (val result = client.setGroupAnonymous(groupId, anonymous)) {
+                is MessengerResult.Ok -> {
+                    _groupRefresh.value = _groupRefresh.value + 1
+                    refreshChats()
+                    true
+                }
+                is MessengerResult.Disabled -> {
+                    applyEnabled(false)
+                    false
+                }
+                is MessengerResult.Err -> {
+                    _error.value = result.message.ifBlank { MessengerRu.error }
+                    false
+                }
+            }
+        }
+
     suspend fun deleteGroup(groupId: String): Boolean = withContext(Dispatchers.IO) {
         when (val result = client.deleteGroup(groupId)) {
             is MessengerResult.Ok -> {
@@ -853,6 +887,12 @@ class MessengerRepository(
         return on
     }
 
+    /** Показ группы «Неудобные вопросы»: чат скрывается из списка, переписка не удаляется. */
+    fun setAnonChatVisible(on: Boolean) {
+        prefs.anonChatEnabled = on
+        _anonChatVisible.value = on
+    }
+
     /** Реакции в кэше хранятся строкой: Room не умеет списки без конвертера. */
     private fun encodeReactions(items: List<MessengerReaction>): String =
         items.joinToString(";") { "${it.emoji}|${it.count}|${if (it.mine) 1 else 0}" }
@@ -886,7 +926,8 @@ class MessengerRepository(
         pinnedKind = pinnedKind,
         pinnedBody = pinnedBody,
         pinnedSender = pinnedSender,
-        hasTopics = hasTopics
+        hasTopics = hasTopics,
+        anonymous = anonymous
     )
 
     private fun MessengerChatRow.toChat() = MessengerChat(
@@ -905,7 +946,8 @@ class MessengerRepository(
         pinnedKind = pinnedKind,
         pinnedBody = pinnedBody,
         pinnedSender = pinnedSender,
-        hasTopics = hasTopics
+        hasTopics = hasTopics,
+        anonymous = anonymous
     )
 
     private fun MessengerMessage.toRow() = MessengerMessageRow(

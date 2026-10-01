@@ -31,6 +31,16 @@ SUPPORT_GROUP_NAME = "Техподдержка"
 IDEAS_KEY = "ideas"
 IDEAS_GROUP_ID = "challenge_ideas"
 IDEAS_GROUP_NAME = "Идеи и Ошибки"
+ANON_KEY = "anonq"
+ANON_GROUP_ID = "challenge_anonq"
+ANON_GROUP_NAME = "Неудобные вопросы"
+ANON_SENDER_NAME = "Анонимный"
+# Описание группы, которое висит в закрепе: как здесь работает анонимность.
+ANON_GROUP_DESCRIPTION = (
+    "Группа «Неудобные вопросы». Здесь можно писать анонимно: галочка "
+    "«Отправить анонимно» внизу экрана уже стоит. Снимешь её — сообщение уйдёт "
+    "от твоего имени. В группе состоят все, а отключить её у себя можно в профиле."
+)
 SYSTEM_TEXT_NAME = "Администратор"
 TOPIC_NAME_WORDS = 2
 # Все челленджи живут в одной группе, а сами челленджи — её подгруппы.
@@ -46,10 +56,11 @@ CHALLENGES = (
     (HUB_KEY, HUB_GROUP_ID, HUB_GROUP_NAME),
     (SUPPORT_KEY, SUPPORT_GROUP_ID, SUPPORT_GROUP_NAME),
     (IDEAS_KEY, IDEAS_GROUP_ID, IDEAS_GROUP_NAME),
+    (ANON_KEY, ANON_GROUP_ID, ANON_GROUP_NAME),
 )
 CHALLENGE_KEYS = {item[0] for item in CHALLENGES}
-# Группа обращений не выдаётся карточкой «Подключиться»: в неё попадают автоматически.
-HIDDEN_CHALLENGE_KEYS = {IDEAS_KEY}
+# Группы, которые не выдаются карточкой «Подключиться»: в них попадают автоматически.
+HIDDEN_CHALLENGE_KEYS = {IDEAS_KEY, ANON_KEY}
 
 
 def is_enabled() -> bool:
@@ -202,6 +213,11 @@ def _ensure_challenge_schema(cur) -> None:
         cur.execute(
             "ALTER TABLE messenger_groups ADD UNIQUE KEY messenger_groups_challenge (challenge_key)"
         )
+    # Режим анонимности включается в настройках группы: сообщение уходит от лица «Анонимный».
+    if not _has_column(cur, "messenger_groups", "anonymous"):
+        cur.execute(
+            "ALTER TABLE messenger_groups ADD COLUMN anonymous TINYINT(1) NOT NULL DEFAULT 0"
+        )
     _ensure_challenge_groups(cur)
 
 
@@ -223,6 +239,12 @@ def _ensure_challenge_groups(cur) -> None:
         )
         row = cur.fetchone()
         if row:
+            if key == ANON_KEY:
+                # Встроенная группа «Неудобные вопросы» анонимна всегда.
+                cur.execute(
+                    "UPDATE messenger_groups SET anonymous = 1 WHERE id = %s",
+                    (row["id"],),
+                )
             _ensure_group_chat(cur, row["id"])
             continue
         cur.execute("SELECT id FROM messenger_groups WHERE id = %s", (group_id,))
@@ -247,8 +269,14 @@ def _ensure_challenge_groups(cur) -> None:
                 """,
                 (group_id, SYSTEM_USER_ID, now),
             )
+        if key == ANON_KEY:
+            cur.execute(
+                "UPDATE messenger_groups SET anonymous = 1 WHERE id = %s",
+                (group_id,),
+            )
         _ensure_group_chat(cur, group_id)
     _ensure_challenge_topics(cur)
+    _ensure_anon_pinned(cur)
 
 
 def _ensure_challenge_topics(cur) -> None:
@@ -332,6 +360,11 @@ def _ensure_media_schema(cur) -> None:
     if not _has_column(cur, "messenger_messages", "forward_from"):
         cur.execute(
             "ALTER TABLE messenger_messages ADD COLUMN forward_from VARCHAR(64) NOT NULL DEFAULT ''"
+        )
+    if not _has_column(cur, "messenger_messages", "anonymous"):
+        # Отправлено от «Анонимного»: автор в базе остаётся, но имя не раскрывается.
+        cur.execute(
+            "ALTER TABLE messenger_messages ADD COLUMN anonymous TINYINT(1) NOT NULL DEFAULT 0"
         )
     if not _has_column(cur, "messenger_chats", "pinned_message_id"):
         cur.execute("ALTER TABLE messenger_chats ADD COLUMN pinned_message_id BIGINT NULL")
@@ -418,7 +451,10 @@ def _drop_avatar(kind: str, owner_id: str) -> None:
 
 def _group_row(cur, group_id: str):
     cur.execute(
-        "SELECT id, name, owner_id, challenge_key FROM messenger_groups WHERE id = %s",
+        """
+        SELECT id, name, owner_id, challenge_key, anonymous
+        FROM messenger_groups WHERE id = %s
+        """,
         (group_id,),
     )
     return cur.fetchone()
@@ -559,6 +595,60 @@ def _ensure_ideas_membership(cur, messenger_id: str) -> None:
     )
     chat_id = _ensure_group_chat(cur, IDEAS_GROUP_ID)
     _add_chat_member(cur, chat_id, messenger_id)
+
+
+def _ensure_anon_membership(cur, messenger_id: str) -> None:
+    """Группа «Неудобные вопросы» открыта каждому: участники — все пользователи приложения."""
+    if not messenger_id or messenger_id == SYSTEM_USER_ID:
+        return
+    cur.execute(
+        """
+        INSERT IGNORE INTO messenger_group_members (group_id, user_id, role, created_at)
+        VALUES (%s, %s, 'member', %s)
+        """,
+        (ANON_GROUP_ID, messenger_id, db.utc_now()),
+    )
+    chat_id = _ensure_group_chat(cur, ANON_GROUP_ID)
+    _add_chat_member(cur, chat_id, messenger_id)
+
+
+def _ensure_anon_pinned(cur) -> None:
+    """Описание группы «Неудобные вопросы» — сообщением в закрепе.
+
+    Ставится один раз: если участники закрепили своё сообщение, не перезаписываем.
+    """
+    cur.execute(
+        """
+        SELECT id, pinned_message_id FROM messenger_chats
+        WHERE group_id = %s AND kind = 'group'
+        """,
+        (ANON_GROUP_ID,),
+    )
+    chat = cur.fetchone()
+    if not chat or int(chat.get("pinned_message_id") or 0):
+        return
+    message_id = _insert_message(
+        cur, chat["id"], SYSTEM_USER_ID, "text", ANON_GROUP_DESCRIPTION
+    )
+    cur.execute(
+        "UPDATE messenger_chats SET pinned_message_id = %s WHERE id = %s",
+        (message_id, chat["id"]),
+    )
+
+
+def _is_anon_chat(cur, chat_id: str) -> bool:
+    """Анонимная отправка доступна там, где в настройках группы включён режим анонимности."""
+    cur.execute(
+        """
+        SELECT g.anonymous AS anonymous
+        FROM messenger_chats c
+        JOIN messenger_groups g ON g.id = c.group_id
+        WHERE c.id = %s
+        """,
+        (chat_id,),
+    )
+    row = cur.fetchone() or {}
+    return bool(int(row.get("anonymous") or 0))
 
 
 def _ideas_ticket_for_chat(cur, chat_id: str) -> int:
@@ -1046,6 +1136,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
     is_owner = False
     challenge_key = ""
     has_topics = False
+    anonymous = False
     if kind == "direct":
         cur.execute(
             """
@@ -1062,13 +1153,17 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         title = peer.get("display_name") or ""
     else:
         cur.execute(
-            "SELECT id, name, owner_id, challenge_key FROM messenger_groups WHERE id = %s",
+            """
+            SELECT id, name, owner_id, challenge_key, anonymous
+            FROM messenger_groups WHERE id = %s
+            """,
             (group_id,),
         )
         group = cur.fetchone() or {}
         title = group.get("name") or ""
         is_owner = group.get("owner_id") == me
         challenge_key = group.get("challenge_key") or ""
+        anonymous = bool(int(group.get("anonymous") or 0))
         cur.execute(
             "SELECT COUNT(*) AS total FROM messenger_topics WHERE group_id = %s",
             (group_id,),
@@ -1109,6 +1204,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         "is_owner": is_owner,
         "challenge_key": challenge_key,
         "has_topics": has_topics,
+        "anonymous": anonymous,
         "avatar_url": avatar_url,
         "last_body": preview,
         "last_kind": last_kind,
@@ -1118,7 +1214,10 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
     }
 
 
-def _sender_display(sender: str, kind: str, names: dict[str, str]) -> str:
+def _sender_display(sender: str, kind: str, names: dict[str, str], anonymous: int = 0) -> str:
+    # Сообщение из группы «Неудобные вопросы»: автор скрыт, но в базе он остаётся.
+    if anonymous:
+        return ANON_SENDER_NAME
     # Сообщения об обновлении шлёт системный пользователь, но в чате
     # техподдержки подписывать их «Челленджи» нельзя.
     if kind == "update":
@@ -1136,6 +1235,7 @@ def _message_json(
 ) -> dict:
     sender = row.get("sender_id") or ""
     kind = row["kind"]
+    anonymous = 1 if int(row.get("anonymous") or 0) else 0
     deleted = bool(int(row.get("deleted") or 0))
     reply_id = int(row.get("reply_to_id") or 0)
     reply = None
@@ -1144,7 +1244,10 @@ def _message_json(
         reply = {
             "id": reply_id,
             "sender_name": _sender_display(
-                row.get("reply_sender_id") or "", row.get("reply_kind") or "text", names
+                row.get("reply_sender_id") or "",
+                row.get("reply_kind") or "text",
+                names,
+                1 if int(row.get("reply_anonymous") or 0) else 0,
             ),
             "kind": row.get("reply_kind") or "text",
             "body": "" if reply_deleted else (row.get("reply_body") or ""),
@@ -1155,7 +1258,7 @@ def _message_json(
         "id": int(row["id"]),
         "chat_id": row["chat_id"],
         "sender_id": sender,
-        "sender_name": _sender_display(sender, kind, names),
+        "sender_name": _sender_display(sender, kind, names, anonymous),
         "kind": kind,
         "body": "" if deleted else (row.get("body") or ""),
         "voice_duration_ms": 0 if deleted else int(row.get("voice_duration_ms") or 0),
@@ -1214,11 +1317,12 @@ def _reactions_for(cur, message_ids: list[int], me: str) -> dict[int, list[dict]
 # одним запросом, без отдельного обращения на каждое сообщение ленты.
 MESSAGE_SELECT = """
     SELECT m.id, m.chat_id, m.sender_id, m.kind, m.body, m.voice_duration_ms, m.deleted,
-           m.reply_to_id, m.forward_from,
+           m.reply_to_id, m.forward_from, m.anonymous,
            UNIX_TIMESTAMP(m.created_at) AS created_unix,
            UNIX_TIMESTAMP(m.edited_at) AS edited_unix,
            r.sender_id AS reply_sender_id, r.kind AS reply_kind, r.body AS reply_body,
-           r.voice_duration_ms AS reply_voice_ms, r.deleted AS reply_deleted
+           r.voice_duration_ms AS reply_voice_ms, r.deleted AS reply_deleted,
+           r.anonymous AS reply_anonymous
     FROM messenger_messages m
     LEFT JOIN messenger_messages r ON r.id = m.reply_to_id
 """
@@ -1233,16 +1337,27 @@ def _insert_message(
     duration_ms: int = 0,
     reply_to_id: int = 0,
     forward_from: str = "",
+    anonymous: int = 0,
 ) -> int:
     now = db.utc_now()
     cur.execute(
         """
         INSERT INTO messenger_messages
             (chat_id, sender_id, kind, body, voice_path, voice_duration_ms,
-             created_at, reply_to_id, forward_from)
-        VALUES (%s, %s, %s, %s, '', %s, %s, %s, %s)
+             created_at, reply_to_id, forward_from, anonymous)
+        VALUES (%s, %s, %s, %s, '', %s, %s, %s, %s, %s)
         """,
-        (chat_id, sender_id, kind, body, duration_ms, now, reply_to_id or None, forward_from),
+        (
+            chat_id,
+            sender_id,
+            kind,
+            body,
+            duration_ms,
+            now,
+            reply_to_id or None,
+            forward_from,
+            1 if anonymous else 0,
+        ),
     )
     message_id = int(cur.lastrowid)
     cur.execute(
@@ -1618,7 +1733,7 @@ def register(app, login_required, api_ok) -> None:
             if not cur.fetchone():
                 return jsonify({"error": "forbidden"}), 403
             cur.execute(
-                "SELECT id, name, owner_id FROM messenger_groups WHERE id = %s",
+                "SELECT id, name, owner_id, anonymous FROM messenger_groups WHERE id = %s",
                 (group_id,),
             )
             group = cur.fetchone()
@@ -1657,6 +1772,7 @@ def register(app, login_required, api_ok) -> None:
                     "owner_id": group["owner_id"],
                     "is_owner": group["owner_id"] == messenger_id,
                     "can_manage": group["owner_id"] == messenger_id,
+                    "anonymous": bool(int(group.get("anonymous") or 0)),
                     "avatar_url": _avatar_url("group", group_id),
                 },
                 "members": members,
@@ -1733,6 +1849,7 @@ def register(app, login_required, api_ok) -> None:
             _ensure_challenge_groups(cur)
             _ensure_support_membership(cur, messenger_id)
             _ensure_ideas_membership(cur, messenger_id)
+            _ensure_anon_membership(cur, messenger_id)
             items = []
             for key, group_id, name in CHALLENGES:
                 if key in HIDDEN_CHALLENGE_KEYS:
@@ -1821,6 +1938,7 @@ def register(app, login_required, api_ok) -> None:
             _ensure_challenge_groups(cur)
             _ensure_support_membership(cur, messenger_id)
             _ensure_ideas_membership(cur, messenger_id)
+            _ensure_anon_membership(cur, messenger_id)
             cur.execute(
                 """
                 SELECT c.id, c.kind, c.group_id, c.pair_key,
@@ -1887,13 +2005,16 @@ def register(app, login_required, api_ok) -> None:
         body = str(payload.get("body") or "").strip()[:MAX_TEXT]
         reply_to_id = _int_value(payload.get("reply_to_id"))
         forward_id = _int_value(payload.get("forward_message_id"))
+        want_anonymous = bool(payload.get("anonymous"))
         if not body and not forward_id:
             return jsonify({"error": "empty"}), 400
         is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
         ticket_id = 0
+        anonymous = 0
         with db.cursor() as cur:
             if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
                 return jsonify({"error": "forbidden"}), 403
+            anonymous = 1 if want_anonymous and _is_anon_chat(cur, chat_id) else 0
             reply_to_id = _reply_target(cur, chat_id, reply_to_id)
             forward_from = ""
             kind = "text"
@@ -1901,7 +2022,7 @@ def register(app, login_required, api_ok) -> None:
             if forward_id:
                 cur.execute(
                     """
-                    SELECT chat_id, sender_id, kind, body, voice_duration_ms, deleted
+                    SELECT chat_id, sender_id, kind, body, voice_duration_ms, deleted, anonymous
                     FROM messenger_messages WHERE id = %s
                     """,
                     (forward_id,),
@@ -1914,7 +2035,10 @@ def register(app, login_required, api_ok) -> None:
                 source_kind = source.get("kind") or "text"
                 sender_names = _names_for(cur, [source.get("sender_id") or ""])
                 forward_from = _sender_display(
-                    source.get("sender_id") or "", source_kind, sender_names
+                    source.get("sender_id") or "",
+                    source_kind,
+                    sender_names,
+                    1 if int(source.get("anonymous") or 0) else 0,
                 )
                 if source_kind == "voice":
                     kind = "voice"
@@ -1925,7 +2049,15 @@ def register(app, login_required, api_ok) -> None:
                     if not body:
                         return jsonify({"error": "empty"}), 400
             message_id = _insert_message(
-                cur, chat_id, messenger_id, kind, body, duration_ms, reply_to_id, forward_from
+                cur,
+                chat_id,
+                messenger_id,
+                kind,
+                body,
+                duration_ms,
+                reply_to_id,
+                forward_from,
+                anonymous,
             )
             if kind == "voice":
                 if not _copy_voice(forward_id, message_id):
@@ -2359,26 +2491,48 @@ def register(app, login_required, api_ok) -> None:
 
     @app.post("/api/v1/messenger/groups/<group_id>")
     @guard(need_user=True)
-    def api_messenger_rename_group(messenger_id: str, group_id: str):
+    def api_messenger_update_group(messenger_id: str, group_id: str):
         if not _valid_id(group_id):
             return jsonify({"error": "not_found"}), 404
         payload = request.get_json(silent=True) or {}
-        name = _clean_name(str(payload.get("name") or ""))
-        if not name:
+        raw_name = payload.get("name")
+        raw_anonymous = payload.get("anonymous")
+        if raw_name is None and raw_anonymous is None:
+            return jsonify({"error": "nothing_to_update"}), 400
+        name = _clean_name(str(raw_name)) if raw_name is not None else ""
+        if raw_name is not None and not name:
             return jsonify({"error": "name_required"}), 400
         with db.cursor() as cur:
             group = _group_row(cur, group_id)
             if not group:
                 return jsonify({"error": "not_found"}), 404
             if group["challenge_key"]:
+                # У встроенных групп режим задаёт приложение, а не владелец.
                 return jsonify({"error": "challenge_locked"}), 403
             if group["owner_id"] != messenger_id:
                 return jsonify({"error": "forbidden"}), 403
-            cur.execute(
-                "UPDATE messenger_groups SET name = %s WHERE id = %s",
-                (name, group_id),
-            )
-        return jsonify({"group": {"id": group_id, "name": name, "owner_id": messenger_id}})
+            if raw_name is not None:
+                cur.execute(
+                    "UPDATE messenger_groups SET name = %s WHERE id = %s",
+                    (name, group_id),
+                )
+            if raw_anonymous is not None:
+                # Режим анонимности: в группе можно писать от лица «Анонимный».
+                cur.execute(
+                    "UPDATE messenger_groups SET anonymous = %s WHERE id = %s",
+                    (1 if raw_anonymous else 0, group_id),
+                )
+            updated = _group_row(cur, group_id) or {}
+        return jsonify(
+            {
+                "group": {
+                    "id": group_id,
+                    "name": updated.get("name") or name,
+                    "owner_id": messenger_id,
+                    "anonymous": bool(int(updated.get("anonymous") or 0)),
+                }
+            }
+        )
 
     @app.delete("/api/v1/messenger/groups/<group_id>")
     @guard(need_user=True)
@@ -2438,13 +2592,15 @@ def register(app, login_required, api_ok) -> None:
             if not group:
                 return jsonify({"error": "not_found"}), 404
             is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
-            is_ideas = (group.get("challenge_key") or "") == IDEAS_KEY
+            challenge_key = group.get("challenge_key") or ""
+            is_ideas = challenge_key == IDEAS_KEY
             if is_ideas:
                 _ensure_ideas_membership(cur, messenger_id)
+            elif challenge_key == ANON_KEY:
+                _ensure_anon_membership(cur, messenger_id)
             if not _is_group_member(cur, group_id, messenger_id):
                 return jsonify({"error": "forbidden"}), 403
             items = []
-            challenge_key = group.get("challenge_key") or ""
             is_hub = challenge_key == HUB_KEY
             # В группе челленджей свои подгруппы заводит любой участник,
             # в обычной группе — только её создатель.

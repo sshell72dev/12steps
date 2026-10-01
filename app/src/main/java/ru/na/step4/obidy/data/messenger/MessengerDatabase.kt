@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [MessengerChatRow::class, MessengerMessageRow::class, MessengerContactRow::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class MessengerDatabase : RoomDatabase() {
@@ -65,6 +65,12 @@ abstract class MessengerDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chats ADD COLUMN anonymous INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): MessengerDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -77,7 +83,8 @@ abstract class MessengerDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
-                    MIGRATION_6_7
+                    MIGRATION_6_7,
+                    MIGRATION_7_8
                 ).build().also { instance = it }
             }
         }

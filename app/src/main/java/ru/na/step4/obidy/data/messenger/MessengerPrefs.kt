@@ -27,10 +27,18 @@ class MessengerPrefs(context: Context) {
             prefs.edit().putBoolean(KEY_ENABLED, value).apply()
         }
 
+    /** Группа «Неудобные вопросы» показывается по умолчанию; её можно скрыть в профиле. */
+    var anonChatEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ANON_CHAT, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ANON_CHAT, value).apply()
+        }
+
     companion object {
         private const val PREFS = "messenger_prefs"
         private const val KEY_ID = "messenger_id"
         private const val KEY_NAME = "display_name"
         private const val KEY_ENABLED = "enabled_cached"
+        private const val KEY_ANON_CHAT = "anon_chat_enabled"
     }
 }

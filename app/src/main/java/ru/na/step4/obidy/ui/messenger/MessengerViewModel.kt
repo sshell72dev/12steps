@@ -47,6 +47,7 @@ class MessengerViewModel(
     val playingId = repository.voicePlayer.playingId
     val myAvatarUrl = repository.myAvatarUrl
     val groupRefresh = repository.groupRefresh
+    val anonChatVisible = repository.anonChatVisible
 
     var chatTitle: String = ""
         private set
@@ -168,10 +169,10 @@ class MessengerViewModel(
         chatPoll = null
     }
 
-    fun sendText(chatId: String, body: String, replyToId: Long = 0L) {
+    fun sendText(chatId: String, body: String, replyToId: Long = 0L, anonymous: Boolean = false) {
         val text = body.trim()
         if (text.isBlank()) return
-        viewModelScope.launch { repository.sendText(chatId, text, replyToId) }
+        viewModelScope.launch { repository.sendText(chatId, text, replyToId, anonymous) }
     }
 
     fun sendVoice(chatId: String, file: File, durationMs: Int, replyToId: Long = 0L) {
@@ -281,6 +282,13 @@ class MessengerViewModel(
         }
     }
 
+    /** Переключатель «Анонимные сообщения» в настройках группы. */
+    fun setGroupAnonymous(groupId: String, anonymous: Boolean) {
+        viewModelScope.launch {
+            if (repository.setGroupAnonymous(groupId, anonymous)) loadGroup(groupId)
+        }
+    }
+
     fun deleteGroup(groupId: String, onDone: () -> Unit) {
         viewModelScope.launch {
             if (repository.deleteGroup(groupId)) {
@@ -354,6 +362,9 @@ class MessengerViewModel(
     }
 
     fun clearError() = repository.clearError()
+
+    /** Показ группы «Неудобные вопросы» в списке чатов. */
+    fun setAnonChatVisible(on: Boolean) = repository.setAnonChatVisible(on)
 
     override fun onCleared() {
         stopHubPolling()

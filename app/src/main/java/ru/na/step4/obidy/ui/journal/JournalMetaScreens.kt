@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -70,6 +71,8 @@ import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.step4.obidy.ui.theme.SandDeep
+import ru.na.step4.obidy.ui.theme.darkTheme
+import ru.na.step4.obidy.ui.theme.setDarkTheme
 import ru.na.steps12.voice.ui.LocalVoicePlugin
 import ru.na.steps12.voice.ui.SpeakableText
 import ru.na.steps12.voice.ui.VoiceOutlinedTextField
@@ -249,6 +252,7 @@ fun JournalSettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (settingsTab == 0) {
+                DarkThemeRow()
                 Text(JournalRu.settingsLiterature, color = Amber, style = MaterialTheme.typography.labelMedium)
                 AiLengthRow(
                     current = literatureLength,
@@ -471,6 +475,34 @@ private fun AiLengthRow(current: String, onSelect: (String) -> Unit) {
                 )
             )
         }
+    }
+}
+
+/** Тёмная тема: переключатель стоит первым в разделе «Общие». */
+@Composable
+private fun DarkThemeRow() {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                JournalRu.settingsDarkTheme,
+                color = Forest,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                JournalRu.settingsDarkThemeHint,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        Switch(
+            checked = darkTheme,
+            onCheckedChange = { setDarkTheme(context, it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = Forest)
+        )
     }
 }
 

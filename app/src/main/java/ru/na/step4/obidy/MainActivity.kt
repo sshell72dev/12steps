@@ -84,6 +84,12 @@ class MainActivity : FragmentActivity() {
         handleAlertsOpen(intent)
         handlePsychReminder(intent)
         enableEdgeToEdge()
+        // Фон окна — как у выбранной темы: иначе при запуске мелькает светлый кадр.
+        window.setBackgroundDrawable(
+            android.graphics.drawable.ColorDrawable(
+                ru.na.step4.obidy.ui.theme.themeWindowColor()
+            )
+        )
         setContent {
             Step4Theme {
                 VoiceHost(plugin = (application as Step4App).voicePlugin) {

@@ -161,6 +161,18 @@ object MessengerRu {
     val messageSelectCancel: String get() = I18n.t("messenger.messageSelectCancel", "Отмена")
     val messagePinnedTitle: String get() = I18n.t("messenger.messagePinnedTitle", "Закреплённое сообщение")
     val messageReaction: String get() = I18n.t("messenger.messageReaction", "Реакция")
+    val anonSend: String get() = I18n.t("messenger.anonSend", "Отправить анонимно")
+    val settingsTitle: String get() = I18n.t("messenger.settingsTitle", "Настройки")
+    val anonChatTitle: String get() = I18n.t("messenger.anonChatTitle", "Неудобные вопросы")
+    val anonChatHint: String get() = I18n.t(
+        "messenger.anonChatHint",
+        "Показывать эту группу в мессенджере: в ней можно писать анонимно."
+    )
+    val groupAnonTitle: String get() = I18n.t("messenger.groupAnonTitle", "Анонимные сообщения")
+    val groupAnonHint: String get() = I18n.t(
+        "messenger.groupAnonHint",
+        "Участники смогут писать от лица «Анонимный»: галочка появится у всех в этой группе."
+    )
 
     fun challengeTitle(key: String, fallback: String): String = when (key) {
         "steps" -> challengeSteps

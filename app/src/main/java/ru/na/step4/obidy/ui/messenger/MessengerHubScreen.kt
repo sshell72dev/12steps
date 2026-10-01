@@ -202,16 +202,16 @@ private fun ChatRow(chat: MessengerChat, viewModel: MessengerViewModel, onClick:
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (chat.isService) {
-            Image(
+        when {
+            chat.isAnonQuestions -> AnonQuestionsAvatar(48.dp)
+            chat.isService -> Image(
                 painter = painterResource(R.drawable.ic_app_avatar),
                 contentDescription = null,
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
             )
-        } else {
-            MessengerAvatar(
+            else -> MessengerAvatar(
                 avatarUrl = chat.avatarUrl,
                 title = chat.title,
                 size = 48.dp,

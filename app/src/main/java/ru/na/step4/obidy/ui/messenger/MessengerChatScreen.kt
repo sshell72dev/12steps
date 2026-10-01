@@ -41,6 +41,8 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.alerts.AppAlerts
+import ru.na.step4.obidy.data.messenger.MessengerAnon
 import ru.na.step4.obidy.data.messenger.MessengerMessage
 import ru.na.step4.obidy.data.messenger.MessengerRu
 import ru.na.step4.obidy.data.messenger.formatVoiceDuration
@@ -120,7 +123,17 @@ fun MessengerChatScreen(
     val context = LocalContext.current
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val listState = rememberLazyListState()
+    /** Нажатие на шапку закрепа прокручивает ленту к этому сообщению. */
+    val pinnedScope = rememberCoroutineScope()
     val alertsChat = chatId == AppAlerts.CHAT_ID
+    /** Анонимный режим включают в настройках группы; в её подгруппах он тоже действует. */
+    val anonChat = groupId == MessengerAnon.GROUP_ID || chats.any {
+        (it.id == chatId || (groupId.isNotBlank() && it.groupId == groupId)) && it.isAnonymousChat
+    }
+    /** Иконка-вопрос закреплена за встроенной группой «Неудобные вопросы». */
+    val anonBadge = groupId == MessengerAnon.GROUP_ID
+    /** Галочка стоит по умолчанию: снимешь — сообщение уйдёт от твоего имени. */
+    var anonymous by remember(chatId) { mutableStateOf(true) }
 
     DisposableEffect(chatId) {
         viewModel.startChatPolling(chatId)
@@ -177,7 +190,7 @@ fun MessengerChatScreen(
         val replyId = replyTo?.id ?: 0L
         draft = ""
         replyTo = null
-        viewModel.sendText(chatId, text, replyId)
+        viewModel.sendText(chatId, text, replyId, anonChat && anonymous)
     }
 
     menuFor?.let { target ->
@@ -368,7 +381,10 @@ fun MessengerChatScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (avatarUrl.isNotBlank() && !alertsChat) {
+                        if (anonBadge) {
+                            AnonQuestionsAvatar(34.dp)
+                            Spacer(Modifier.size(10.dp))
+                        } else if (avatarUrl.isNotBlank() && !alertsChat) {
                             MessengerAvatar(
                                 avatarUrl = avatarUrl,
                                 title = title,
@@ -403,6 +419,12 @@ fun MessengerChatScreen(
                         Modifier
                             .fillMaxWidth()
                             .background(SandDeep)
+                            .clickable {
+                                val index = messages.indexOfFirst { it.id == pinnedItem.id }
+                                if (index >= 0) {
+                                    pinnedScope.launch { listState.animateScrollToItem(index) }
+                                }
+                            }
                             .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -555,6 +577,25 @@ fun MessengerChatScreen(
                         IconButton(onClick = { replyTo = null }) {
                             Icon(Icons.Outlined.Close, MessengerRu.messageReplyCancel, tint = Forest)
                         }
+                    }
+                }
+                if (anonChat && !recording) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = anonymous,
+                            onCheckedChange = { anonymous = it },
+                            colors = CheckboxDefaults.colors(checkedColor = Forest)
+                        )
+                        Text(
+                            MessengerRu.anonSend,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Forest
+                        )
                     }
                 }
                 Row(

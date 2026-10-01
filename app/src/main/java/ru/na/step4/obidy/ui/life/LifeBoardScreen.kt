@@ -302,6 +302,8 @@ private fun LifeCard(
 internal fun LifeEditor(
     kind: String,
     initial: LifeItem?,
+    /** День, открытый в календаре: на него падает новая запись. */
+    dateDefault: Long? = null,
     onDismiss: () -> Unit,
     onSave: (id: String?, title: String, body: String, status: String, dueAt: Long?, timeSet: Boolean, callOn: Boolean) -> Unit
 ) {
@@ -314,7 +316,7 @@ internal fun LifeEditor(
     var status by remember(initial?.id) {
         mutableStateOf(initial?.status ?: LifeStatus.IN_PROGRESS)
     }
-    var dueAt by remember(initial?.id) { mutableStateOf(initial?.dueAt) }
+    var dueAt by remember(initial?.id) { mutableStateOf(initial?.dueAt ?: dateDefault) }
     var timeSet by remember(initial?.id) { mutableStateOf(initial?.timeSet == true) }
     var timeMinutes by remember(initial?.id) {
         val minutes = initial?.dueAt?.let { millis ->

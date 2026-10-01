@@ -26,7 +26,9 @@ data class MessengerChatRow(
     val pinnedKind: String = "",
     val pinnedBody: String = "",
     val pinnedSender: String = "",
-    val hasTopics: Boolean = false
+    val hasTopics: Boolean = false,
+    /** В группе включён режим анонимности: сообщения можно писать от лица «Анонимный». */
+    val anonymous: Boolean = false
 )
 
 @Entity(tableName = "messages")

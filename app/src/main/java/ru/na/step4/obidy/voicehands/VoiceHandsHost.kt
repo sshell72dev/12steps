@@ -103,6 +103,7 @@ fun VoiceHandsHost(
     ) { granted ->
         if (granted) settings.setEnabled(true)
     }
+    /** Кнопка в углу включает режим помощника: разрешение на микрофон спрашиваем здесь же. */
     fun enableAssistant() {
         val granted = ContextCompat.checkSelfPermission(
             context,
@@ -111,7 +112,8 @@ fun VoiceHandsHost(
         if (granted) settings.setEnabled(true)
         else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
-    val showOverlay = enabled || ui.phase != VoiceHandsPhase.Off
+    // Карточка снизу нужна только во время работы; в тихом ожидании её заменяет микрофон в углу.
+    val showOverlay = ui.phase != VoiceHandsPhase.Off && ui.phase != VoiceHandsPhase.Standby
     Box(modifier.fillMaxSize()) {
         if (showOverlay) {
             VoiceHandsOverlay(
@@ -121,9 +123,13 @@ fun VoiceHandsHost(
                 onListen = controller::listenNow,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
-        } else if (!isImeVisible()) {
+        } else if (enabled && !isImeVisible()) {
+            // Микрофон есть только у включённого режима: выключенный не занимает экран.
             SmallFloatingActionButton(
-                onClick = { enableAssistant() },
+                onClick = {
+                    // Кнопка включает режим помощника; когда он уже ждёт — сразу начинает слушать.
+                    if (ui.phase == VoiceHandsPhase.Off) enableAssistant() else controller.listenNow()
+                },
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()
