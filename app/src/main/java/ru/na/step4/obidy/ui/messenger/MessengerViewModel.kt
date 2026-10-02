@@ -157,8 +157,12 @@ class MessengerViewModel(
     fun startChatPolling(chatId: String) {
         chatPoll?.cancel()
         chatPoll = viewModelScope.launch {
+            var tick = 0
             while (isActive) {
                 repository.refreshMessages(chatId)
+                // Раз в 10 секунд обновляем список чатов: из него шапка берёт, кто сейчас в сети.
+                if (tick % 4 == 0) repository.refreshChats()
+                tick++
                 delay(2_500)
             }
         }

@@ -1,9 +1,7 @@
 package ru.na.step4.obidy.ui
 
-import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -15,12 +13,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.Ru
 import ru.na.step4.obidy.Step4App
-import ru.na.step4.obidy.data.profile.ProfileQuestionnaire
 import ru.na.step4.obidy.assistant.AssistantBrief
 import ru.na.step4.obidy.assistant.ChatTurn
 import ru.na.step4.obidy.assistant.DialogSession
 import ru.na.step4.obidy.assistant.LocalFunnel
-import ru.na.step4.obidy.assistant.VapiVoiceController
+import ru.na.step4.obidy.assistant.LocalVoiceDialog
 import ru.na.step4.obidy.assistant.VoiceUiState
 import ru.na.step4.obidy.data.Category
 import ru.na.step4.obidy.data.QuestionFocus
@@ -58,9 +55,11 @@ class AssistantViewModel(
     private val focusKey: String = ""
 ) : AndroidViewModel(app) {
 
-    private val voice = VapiVoiceController(
+    private val voice = LocalVoiceDialog(
+        context = app,
         scope = viewModelScope,
-        plugin = (getApplication<Application>() as? Step4App)?.voicePlugin
+        speaker = (app as? Step4App)?.voicePlugin?.speaker,
+        onHeard = ::submitVoice
     )
 
     private val session = MutableStateFlow(DialogSession())
@@ -131,10 +130,6 @@ class AssistantViewModel(
         )
     }
 
-    fun attachHost(activity: Activity, lifecycle: Lifecycle) {
-        voice.attach(activity, lifecycle)
-    }
-
     fun updateInput(value: String) {
         input.value = value
     }
@@ -143,67 +138,35 @@ class AssistantViewModel(
         val text = input.value.trim()
         if (text.isEmpty()) return
         input.value = ""
-        val qa = questionAssist.value
-        if (qa.active) {
-            val userTurn = ChatTurn("user", text)
-            val reply = ChatTurn("assistant", Ru.questionAssistReply)
-            session.value = session.value.copy(
-                turns = session.value.turns + userTurn + reply
-            )
-        } else {
-            val (next, _) = LocalFunnel.reply(session.value, text)
-            session.value = next
-        }
+        submitVoice(text)
     }
 
     fun startVoice() {
-        val state = uiState.value
-        val qa = state.questionAssist
-        val profile = profileExtras()
-        if (qa.active) {
-            val extras = mapOf(
-                "category_names" to state.categoryNames.ifBlank { "(none)" },
-                "resentment_context" to qa.situationAnswers,
-                "resentment_target" to qa.target.ifBlank { "(не указано)" },
-                "focus_question" to qa.focusTitle,
-                "focus_hint" to qa.focusHint,
-                "focus_current_answer" to qa.currentAnswer.ifBlank { "(пока пусто)" },
-                "situation_answers" to qa.situationAnswers,
-                "inventory_total" to state.inventoryTotal.toString(),
-                "inventory_done" to state.inventoryDone.toString()
-            ) + profile
-            voice.start(session.value, extras, questionFocus = true)
+        voice.start()
+    }
+
+    /** Распознанная речь: реплика в ленту, а возвращённый ответ консультанта озвучиваем. */
+    private fun submitVoice(text: String): String {
+        val clean = text.trim()
+        if (clean.isEmpty()) return ""
+        val qa = questionAssist.value
+        return if (qa.active) {
+            val reply = Ru.questionAssistReply
+            session.value = session.value.copy(
+                turns = session.value.turns + ChatTurn("user", clean) + ChatTurn("assistant", reply)
+            )
+            reply
         } else {
-            val extras = mapOf(
-                "category_names" to state.categoryNames.ifBlank { "(none)" },
-                "resentment_context" to session.value.funnelSummary(),
-                "inventory_total" to state.inventoryTotal.toString(),
-                "inventory_done" to state.inventoryDone.toString()
-            ) + profile
-            voice.start(session.value, extras, questionFocus = false)
+            val next = LocalFunnel.reply(session.value, clean).first
+            val reply = next.turns.lastOrNull { it.role == "assistant" }?.content.orEmpty()
+            session.value = next
+            reply
         }
     }
 
     fun stopVoice() = voice.stop()
 
     fun toggleMute() = voice.toggleMute()
-
-    private fun profileExtras(): Map<String, String> {
-        val snap = (getApplication<Application>() as? Step4App)?.profileStore?.current
-        val questionnaire = snap?.let { ProfileQuestionnaire.formatAnswers(it) }
-            ?.ifBlank { null }
-            ?: "(не заполнено)"
-        val program = snap?.program?.takeIf { it.isNotBlank() }
-            ?: snap?.answers?.get(ProfileQuestionnaire.ID_PROGRAM)?.takeIf { it.isNotBlank() }
-            ?: "(не указана)"
-        // Блок «Моя личность» временно выключен — в промпт ассистента портрет не подмешиваем.
-        val personality = "(не использовать)"
-        return mapOf(
-            "questionnaire" to questionnaire,
-            "program" to program,
-            "personality" to personality
-        )
-    }
 
     fun onMicPermissionDenied() {
         voice.setError(Ru.micPermissionNeeded)

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -281,6 +283,24 @@ private fun LifeEventView(item: LifeItem, onEdit: () -> Unit, onDismiss: () -> U
                     style = MaterialTheme.typography.labelLarge,
                     color = Amber
                 )
+                if (item.callOn && item.timeSet) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Notifications,
+                            contentDescription = LifeBoardRu.callMark,
+                            tint = Amber,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            LifeBoardRu.callAlarm,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Amber
+                        )
+                    }
+                }
                 if (item.body.isNotBlank()) {
                     RichTextBlock(text = item.body)
                 }
@@ -300,6 +320,21 @@ private fun LifeEventView(item: LifeItem, onEdit: () -> Unit, onDismiss: () -> U
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(LifeBoardRu.close, color = Forest) }
         }
+    )
+}
+
+/**
+ * Колокольчик события: у записи включён звуковой сигнал, и в её время телефон зазвонит.
+ * Сигнал возможен только у события со временем, поэтому без времени метка не показывается.
+ */
+@Composable
+internal fun CallBell(item: LifeItem, modifier: Modifier = Modifier, tint: Color = Amber) {
+    if (!item.callOn || !item.timeSet) return
+    Icon(
+        Icons.Outlined.Notifications,
+        contentDescription = LifeBoardRu.callMark,
+        tint = tint,
+        modifier = modifier.size(16.dp)
     )
 }
 
@@ -516,6 +551,11 @@ private fun TodayEventRow(item: LifeItem, onOpen: () -> Unit, onDone: () -> Unit
             style = MaterialTheme.typography.bodyLarge,
             color = if (done) Forest.copy(alpha = 0.6f) else Forest,
             maxLines = 2
+        )
+        CallBell(
+            item = item,
+            modifier = Modifier.padding(end = 8.dp),
+            tint = if (done) Forest.copy(alpha = 0.45f) else Amber
         )
         when {
             done -> Text(

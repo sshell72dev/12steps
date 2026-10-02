@@ -299,10 +299,18 @@ private fun VoiceBar(
                 }
             }
         }
+        if (inCall && !muted) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                Ru.voiceListeningHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (!configured) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                Ru.voiceNotConfigured,
+                Ru.voiceNoSpeech,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

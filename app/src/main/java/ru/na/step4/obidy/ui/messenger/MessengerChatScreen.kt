@@ -116,6 +116,10 @@ fun MessengerChatScreen(
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val myName by viewModel.repository.displayName.collectAsStateWithLifecycle()
     val chats by viewModel.repository.chats.collectAsStateWithLifecycle(emptyList())
+    /** Чат из списка: оттуда берём число участников и кто из них сейчас в сети.
+     *  Для подгруппы (темы) чата в списке нет — берём её группу: участники те же. */
+    val chat = chats.firstOrNull { it.id == chatId }
+        ?: chats.firstOrNull { groupId.isNotBlank() && it.groupId == groupId }
     val pinnedMessage by viewModel.repository.pinned.collectAsStateWithLifecycle()
     val pinnedChatId by viewModel.repository.pinnedChatId.collectAsStateWithLifecycle()
     val pinned = pinnedMessage.takeIf { pinnedChatId == chatId }
@@ -134,6 +138,13 @@ fun MessengerChatScreen(
     val anonBadge = groupId == MessengerAnon.GROUP_ID
     /** Галочка стоит по умолчанию: снимешь — сообщение уйдёт от твоего имени. */
     var anonymous by remember(chatId) { mutableStateOf(true) }
+    /** Подпись под названием: сколько человек в чате и сколько из них сейчас в сети. */
+    val presence = when {
+        alertsChat || chat == null || chat.members <= 0 -> ""
+        chat.isGroup -> MessengerRu.chatPresence(chat.members, chat.online)
+        chat.peerOnline -> MessengerRu.online
+        else -> MessengerRu.offline
+    }
 
     DisposableEffect(chatId) {
         viewModel.startChatPolling(chatId)
@@ -393,7 +404,16 @@ fun MessengerChatScreen(
                             )
                             Spacer(Modifier.size(10.dp))
                         }
-                        Text(title.ifBlank { MessengerRu.title }, color = Forest)
+                        Column {
+                            Text(title.ifBlank { MessengerRu.title }, color = Forest)
+                            if (presence.isNotBlank()) {
+                                Text(
+                                    presence,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Forest.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
                     }
                 },
                 navigationIcon = { AppNavIcon(onBack = onBack) },

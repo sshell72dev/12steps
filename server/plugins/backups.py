@@ -115,8 +115,11 @@ def _now() -> str:
     return db.utc_now()
 
 
-def _parse(value: str | None) -> datetime | None:
-    raw = (value or "").strip()
+def _parse(value) -> datetime | None:
+    """Время из БД: PyMySQL отдаёт DATETIME объектом datetime, а не строкой."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    raw = str(value or "").strip()[:19]
     if not raw:
         return None
     try:

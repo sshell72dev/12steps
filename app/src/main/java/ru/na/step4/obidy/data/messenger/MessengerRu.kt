@@ -72,6 +72,12 @@ object MessengerRu {
         "Работа по 4 шагу · Обиды по IP"
     )
     val challengeMembers: String get() = I18n.t("messenger.challengeMembers", "участников")
+    val online: String get() = I18n.t("messenger.online", "в сети")
+    val offline: String get() = I18n.t("messenger.offline", "не в сети")
+
+    /** Подпись в шапке группы: сколько человек в чате и сколько из них сейчас в сети. */
+    fun chatPresence(members: Int, onlineCount: Int): String =
+        "$members $challengeMembers · $onlineCount $online"
     val groupInfo: String get() = I18n.t("messenger.groupInfo", "О группе")
     val topicsTitle: String get() = I18n.t("messenger.topicsTitle", "Темы")
     val topicsEmpty: String get() = I18n.t("messenger.topicsEmpty", "Пока нет тем — создайте первую.")

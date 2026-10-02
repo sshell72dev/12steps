@@ -44,6 +44,7 @@ object LifeBoardRu {
     val write: String get() = I18n.t("life.write", "Написать")
     val openLink: String get() = I18n.t("life.openLink", "Открыть")
     val callAlarm: String get() = I18n.t("life.callAlarm", "Звонок")
+    val callMark: String get() = I18n.t("life.callMark", "Со звуковым сигналом")
     val callAlarmHint: String get() = I18n.t(
         "life.callAlarmHint",
         "В момент события телефон зазвонит и покажет напоминание."

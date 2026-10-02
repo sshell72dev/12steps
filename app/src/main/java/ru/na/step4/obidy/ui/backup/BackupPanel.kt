@@ -265,7 +265,6 @@ fun BackupSettingsPanel() {
         onEmailChange = { email = it },
         onCodeChange = { code = it },
         onCodeSent = { codeSent = true },
-        notice = { report(it) },
         onLinked = {
             linked = true
             code = ""
@@ -353,7 +352,6 @@ private fun BackupServerSection(
     onEmailChange: (String) -> Unit,
     onCodeChange: (String) -> Unit,
     onCodeSent: () -> Unit,
-    notice: (String?) -> Unit,
     onLinked: () -> Unit,
     onSlot: (ServerSlot?) -> Unit,
     onLogout: () -> Unit,
@@ -361,6 +359,7 @@ private fun BackupServerSection(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
 
     if (linked) {
         LaunchedEffect(linked) {
@@ -405,9 +404,9 @@ private fun BackupServerSection(
                             scopeBusy(false)
                             if (answer.ok) {
                                 onCodeSent()
-                                notice(BackupRu.serverCodeSent)
+                                message = BackupRu.serverCodeSent
                             } else {
-                                notice(serverMessage(answer.code))
+                                message = serverMessage(answer.code)
                             }
                         } else {
                             val answer = BackupServer.login(context, target, code.trim(), BackupServer.deviceIdOf(context))
@@ -415,11 +414,11 @@ private fun BackupServerSection(
                             if (answer.ok) {
                                 BackupAutoWorker.schedule(context)
                                 onLinked()
-                                notice(null)
+                                message = null
                                 val meta = BackupServer.meta(context)
                                 if (meta.ok) onSlot(meta.value)
                             } else {
-                                notice(serverMessage(answer.code))
+                                message = serverMessage(answer.code)
                             }
                         }
                     }
@@ -449,7 +448,7 @@ private fun BackupServerSection(
                         val exported = BackupManager.exportToFile(context, archive, null)
                         if (!exported.ok) {
                             scopeBusy(false)
-                            notice(BackupRu.savedError)
+                            message = BackupRu.savedError
                             return@launch
                         }
                         val answer = BackupServer.upload(context, archive)
@@ -457,9 +456,9 @@ private fun BackupServerSection(
                         scopeBusy(false)
                         if (answer.ok) {
                             onSlot(answer.value)
-                            notice(BackupRu.serverUploaded)
+                            message = BackupRu.serverUploaded
                         } else {
-                            notice(serverMessage(answer.code))
+                            message = serverMessage(answer.code)
                         }
                     }
                 }
@@ -474,7 +473,7 @@ private fun BackupServerSection(
                         val answer = BackupServer.download(context, target)
                         if (!answer.ok) {
                             scopeBusy(false)
-                            notice(serverMessage(answer.code))
+                            message = serverMessage(answer.code)
                             return@launch
                         }
                         BackupManager.saveRollback(context)
@@ -485,13 +484,14 @@ private fun BackupServerSection(
                             Toast.makeText(context, BackupRu.restoredOk, Toast.LENGTH_LONG).show()
                             BackupManager.restartApp(context)
                         } else {
-                            notice(BackupRu.restoredError)
+                            message = BackupRu.restoredError
                         }
                     }
                 }
             )
             JournalButton(label = BackupRu.serverLogout, enabled = !busy, onClick = onLogout)
         }
+        reportNotice(message)
     }
 }
 

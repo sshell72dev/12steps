@@ -1,7 +1,6 @@
 package ru.na.step4.obidy.ui
 
 import android.app.Application
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -210,7 +209,6 @@ fun Step4Nav() {
     val context = LocalContext.current
     val app = context.applicationContext as Step4App
     val repository = app.repository
-    val activity = context as ComponentActivity
     val scope = rememberCoroutineScope()
 
     CompositionLocalProvider(LocalNotesRepository provides app.notesRepository) {
@@ -865,10 +863,6 @@ fun Step4Nav() {
                     repository = repository
                 )
             )
-            DisposableEffect(activity) {
-                vm.attachHost(activity, activity.lifecycle)
-                onDispose { }
-            }
             AssistantScreen(
                 viewModel = vm,
                 onBack = { navController.popBackStack() },
@@ -897,10 +891,6 @@ fun Step4Nav() {
                     focusKey = focus
                 )
             )
-            DisposableEffect(activity) {
-                vm.attachHost(activity, activity.lifecycle)
-                onDispose { }
-            }
             AssistantScreen(
                 viewModel = vm,
                 onBack = { navController.popBackStack() },

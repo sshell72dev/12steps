@@ -23,6 +23,10 @@ MAX_VOICE_BYTES = 1_048_576
 MAX_VOICE_MS = 60_000
 MAX_AVATAR_BYTES = 2_097_152
 SETTING_KEY = "messenger_enabled"
+# Присутствие: клиент опрашивает сервер каждые 2.5–8 секунд, поэтому 90 секунд без
+# запросов означают «вышел», а отметку пишем не чаще раза в минуту.
+PRESENCE_ONLINE_SEC = 90
+PRESENCE_STEP_SEC = 60
 SYSTEM_USER_ID = "steps12_system"
 SYSTEM_USER_NAME = "Челленджи"
 SUPPORT_KEY = "support"
@@ -176,6 +180,7 @@ def init_schema() -> None:
         )
         _ensure_media_schema(cur)
         _ensure_challenge_schema(cur)
+        _ensure_presence_schema(cur)
 
 
 def _has_column(cur, table: str, column: str) -> bool:
@@ -202,6 +207,12 @@ def _has_index(cur, table: str, name: str) -> bool:
         (table, name),
     )
     return int((cur.fetchone() or {}).get("c") or 0) > 0
+
+
+def _ensure_presence_schema(cur) -> None:
+    """Отметка «был в сети»: по ней считаем, сколько участников чата сейчас онлайн."""
+    if not _has_column(cur, "messenger_users", "last_seen_at"):
+        cur.execute("ALTER TABLE messenger_users ADD COLUMN last_seen_at DATETIME NULL")
 
 
 def _ensure_challenge_schema(cur) -> None:
@@ -565,12 +576,14 @@ def _ensure_support_membership(cur, messenger_id: str) -> None:
     _add_chat_member(cur, chat_id, messenger_id)
 
 
-def _topic_name_from_body(body: str) -> str:
-    """Название подгруппы — первые два слова обращения."""
+def _topic_name_from_body(body: str, sender_name: str = "") -> str:
+    """Название подгруппы — имя отправителя и первые два слова обращения."""
     words = [word for word in (body or "").split() if word]
-    if not words:
-        return ""
-    return _clean_name(" ".join(words[:TOPIC_NAME_WORDS]))
+    parts: list[str] = []
+    if (sender_name or "").strip():
+        parts.append(sender_name.strip())
+    parts.extend(words[:TOPIC_NAME_WORDS])
+    return _clean_name(" ".join(parts))
 
 
 def _admin_ok(raw: str) -> bool:
@@ -686,26 +699,31 @@ def attach_support_ticket(ticket: dict, messenger_id: str) -> dict:
         if not body:
             return {}
         author_id = messenger_id if _valid_id(messenger_id) else ""
-        name = _topic_name_from_body(body) or IDEAS_GROUP_NAME
+        ticket_name = _clean_name(str(ticket.get("user_name") or ""))
         with db.cursor() as cur:
             _ensure_challenge_groups(cur)
             # Клиент мессенджера мог ещё не заводить профиль — создаём его из обращения.
+            sender_name = ticket_name
             if author_id:
-                cur.execute("SELECT id FROM messenger_users WHERE id = %s", (author_id,))
-                if not cur.fetchone():
+                cur.execute(
+                    "SELECT id, display_name FROM messenger_users WHERE id = %s", (author_id,)
+                )
+                profile = cur.fetchone()
+                if profile:
+                    # В теме стоит то же имя, что участники видят в мессенджере.
+                    sender_name = (
+                        _clean_name(str(profile.get("display_name") or "")) or sender_name
+                    )
+                else:
                     now = db.utc_now()
                     cur.execute(
                         """
                         INSERT INTO messenger_users (id, display_name, created_at, updated_at)
                         VALUES (%s, %s, %s, %s)
                         """,
-                        (
-                            author_id,
-                            _clean_name(str(ticket.get("user_name") or "")) or "Пользователь",
-                            now,
-                            now,
-                        ),
+                        (author_id, ticket_name or "Пользователь", now, now),
                     )
+            name = _topic_name_from_body(body, sender_name) or IDEAS_GROUP_NAME
             cur.execute("SELECT id FROM messenger_topics WHERE ticket_id = %s", (ticket_id,))
             if cur.fetchone():
                 return {}
@@ -874,6 +892,68 @@ def _ms(row: dict, key: str) -> int:
         return int(row.get(key) or 0) * 1000
     except (TypeError, ValueError):
         return 0
+
+
+def _touch_presence(messenger_id: str) -> None:
+    """Отмечает «был в сети»: пока клиент опрашивает сервер, человек считается в сети.
+
+    Опрос идёт каждые 2.5–8 секунд, поэтому строку обновляем не чаще раза в минуту.
+    Отметка не должна ломать сам запрос — при сбое просто пропускаем её.
+    """
+    try:
+        now = db.utc_now()
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE messenger_users SET last_seen_at = %s
+                WHERE id = %s
+                  AND (last_seen_at IS NULL
+                       OR last_seen_at < DATE_SUB(%s, INTERVAL %s SECOND))
+                """,
+                (now, messenger_id, now, PRESENCE_STEP_SEC),
+            )
+    except Exception:
+        pass
+
+
+def _user_online(cur, user_id: str) -> bool:
+    """Был ли человек в сети последние PRESENCE_ONLINE_SEC секунд."""
+    cur.execute(
+        """
+        SELECT 1 FROM messenger_users
+        WHERE id = %s AND last_seen_at IS NOT NULL
+          AND last_seen_at >= DATE_SUB(%s, INTERVAL %s SECOND)
+        """,
+        (user_id, db.utc_now(), PRESENCE_ONLINE_SEC),
+    )
+    return cur.fetchone() is not None
+
+
+def _chat_presence(cur, chat: dict) -> tuple[int, int]:
+    """Сколько человек в чате и сколько из них сейчас в сети.
+
+    В группе участники — это её состав, а не только те, кто открывал ленту.
+    Имена таблиц и колонок берутся из фиксированного набора, не из запроса.
+    """
+    group_id = chat.get("group_id") or ""
+    if chat.get("kind") == "group" and group_id:
+        table, key, value = "messenger_group_members", "group_id", group_id
+    else:
+        table, key, value = "messenger_chat_members", "chat_id", chat["id"]
+    cur.execute(f"SELECT COUNT(*) AS total FROM {table} WHERE {key} = %s", (value,))
+    members = int((cur.fetchone() or {}).get("total") or 0)
+    cur.execute(
+        f"""
+        SELECT COUNT(*) AS total
+        FROM {table} t
+        JOIN messenger_users u ON u.id = t.user_id
+        WHERE t.{key} = %s AND u.last_seen_at IS NOT NULL
+          AND u.last_seen_at >= DATE_SUB(%s, INTERVAL %s SECOND)
+        """,
+        (value, db.utc_now(), PRESENCE_ONLINE_SEC),
+    )
+    online = int((cur.fetchone() or {}).get("total") or 0)
+    return members, online
 
 
 def _user_json(row: dict) -> dict:
@@ -1195,6 +1275,8 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
     unread = _unread(cur, chat["id"], me, last_read)
     if has_topics:
         unread += _topics_unread(cur, group_id, me, challenge_key == IDEAS_KEY)
+    members, online = _chat_presence(cur, chat)
+    peer_online = kind == "direct" and bool(peer_id) and _user_online(cur, peer_id)
     return {
         "id": chat["id"],
         "kind": kind,
@@ -1210,6 +1292,9 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         "last_kind": last_kind,
         "last_at": last_at,
         "unread": unread,
+        "members": members,
+        "online": online,
+        "peer_online": peer_online,
         "pinned": _pinned_json(cur, chat["id"], me),
     }
 
@@ -1469,6 +1554,9 @@ def register(app, login_required, api_ok) -> None:
                 messenger_id = (request.headers.get("X-Messenger-Id") or "").strip()
                 if need_user and not _valid_id(messenger_id):
                     return jsonify({"error": "messenger_id_required"}), 400
+                if need_user:
+                    # Любой запрос с идентификатором — знак, что человек сейчас в приложении.
+                    _touch_presence(messenger_id)
                 return view(messenger_id, *args, **kwargs)
 
             return wrapped

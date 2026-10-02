@@ -268,7 +268,7 @@
           {% if current and not compose and not report %}
             <div class="ticket-head">
               <h1>{{ current.user_name or "Без имени" }}</h1>
-              <form method="post" class="status-form" id="status-form">
+              <form method="post" class="status-form">
                 <input type="hidden" name="id" value="{{ current.id }}" />
                 <input type="hidden" name="action" value="status" />
                 <label>

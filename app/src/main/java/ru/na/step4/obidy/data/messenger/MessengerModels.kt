@@ -27,7 +27,12 @@ data class MessengerChat(
     /** У группы есть свои подгруппы: она открывается их списком, а не общей лентой. */
     val hasTopics: Boolean = false,
     /** В группе включён режим анонимности: сообщения можно писать от лица «Анонимный». */
-    val anonymous: Boolean = false
+    val anonymous: Boolean = false,
+    /** Сколько человек в чате и сколько из них сейчас в сети. */
+    val members: Int = 0,
+    val online: Int = 0,
+    /** Для личного диалога: собеседник сейчас в сети. */
+    val peerOnline: Boolean = false
 ) {
     val isGroup: Boolean get() = kind == "group"
     val isAlerts: Boolean get() = kind == AppAlerts.KIND || id == AppAlerts.CHAT_ID

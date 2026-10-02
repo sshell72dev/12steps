@@ -550,6 +550,7 @@ private fun GhostChip(item: LifeItem, target: String?, modifier: Modifier = Modi
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        CallBell(item = item, modifier = Modifier.padding(end = 6.dp), tint = Amber)
         Text(
             item.title,
             modifier = Modifier.weight(1f, fill = false),
@@ -573,19 +574,29 @@ private fun GhostChip(item: LifeItem, target: String?, modifier: Modifier = Modi
 @Composable
 private fun GrainChip(item: LifeItem, onClick: () -> Unit) {
     val done = item.status == LifeStatus.DONE
-    Text(
-        item.title,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(if (done) Forest.copy(alpha = 0.85f) else Sand)
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 3.dp),
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (done) Sand else Forest,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-    )
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            item.title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (done) Sand else Forest,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        CallBell(
+            item = item,
+            modifier = Modifier.padding(start = 6.dp),
+            tint = if (done) Sand.copy(alpha = 0.7f) else Amber
+        )
+    }
 }
 
 @Composable
@@ -627,6 +638,11 @@ private fun EventChip(
             color = if (done) Sand else Forest,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
+        )
+        CallBell(
+            item = item,
+            modifier = Modifier.padding(start = 6.dp),
+            tint = if (done) Sand.copy(alpha = 0.7f) else Forest
         )
         if (done) {
             Text(
