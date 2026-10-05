@@ -18,7 +18,8 @@ internal class VoiceHandsListener(
     context: Context,
     private val onFinal: (String) -> Unit,
     private val onPartial: (String) -> Unit = {},
-    private val onState: (listening: Boolean) -> Unit = {}
+    private val onState: (listening: Boolean) -> Unit = {},
+    private val onMicDenied: () -> Unit = {}
 ) {
     private enum class Mode { Idle, Once, Loop }
 
@@ -139,6 +140,7 @@ internal class VoiceHandsListener(
                 SpeechRecognizer.ERROR_CLIENT -> 2_400L
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
                     mode = Mode.Idle
+                    onMicDenied()
                     finishSession(restartIfLoop = false, delayMs = 0)
                     return
                 }

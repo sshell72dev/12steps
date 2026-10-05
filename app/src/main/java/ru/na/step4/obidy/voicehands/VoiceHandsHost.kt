@@ -31,7 +31,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,19 +103,21 @@ fun VoiceHandsHost(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) settings.setEnabled(true)
+        if (granted) controller.startVoice() else controller.reportMicDenied()
     }
+    fun hasMicPermission(): Boolean = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
     /** Кнопка в углу включает режим помощника: разрешение на микрофон спрашиваем здесь же. */
     fun enableAssistant() {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-        if (granted) settings.setEnabled(true)
+        if (hasMicPermission()) controller.startVoice()
         else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
     // Карточка снизу нужна только во время работы; в тихом ожидании её заменяет микрофон в углу.
-    val showOverlay = ui.phase != VoiceHandsPhase.Off && ui.phase != VoiceHandsPhase.Standby
+    // Исключение — сообщение об ошибке: его показываем всегда, иначе причина молчания не видна.
+    val showOverlay = (ui.phase != VoiceHandsPhase.Off && ui.phase != VoiceHandsPhase.Standby) ||
+        !ui.error.isNullOrBlank()
     Box(modifier.fillMaxSize()) {
         if (showOverlay) {
             VoiceHandsOverlay(
@@ -127,8 +131,8 @@ fun VoiceHandsHost(
             // Микрофон есть только у включённого режима: выключенный не занимает экран.
             SmallFloatingActionButton(
                 onClick = {
-                    // Кнопка включает режим помощника; когда он уже ждёт — сразу начинает слушать.
-                    if (ui.phase == VoiceHandsPhase.Off) enableAssistant() else controller.listenNow()
+                    // Разрешение могли отозвать после включения режима — тогда спрашиваем снова.
+                    if (hasMicPermission()) controller.startVoice() else enableAssistant()
                 },
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -155,10 +159,12 @@ fun VoiceHandsSettingsPanel(
     val context = LocalContext.current
     val settings = (context.applicationContext as Step4App).voiceHandsSettings
     val enabled by settings.enabled.collectAsStateWithLifecycle()
+    var micDenied by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         settings.setEnabled(granted)
+        micDenied = !granted
     }
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -178,6 +184,7 @@ fun VoiceHandsSettingsPanel(
             Switch(
                 checked = enabled,
                 onCheckedChange = { on ->
+                    micDenied = false
                     if (!on) {
                         settings.setEnabled(false)
                         return@Switch
@@ -190,6 +197,13 @@ fun VoiceHandsSettingsPanel(
                     else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 },
                 colors = SwitchDefaults.colors(checkedTrackColor = Forest)
+            )
+        }
+        if (micDenied) {
+            Text(
+                VoiceHandsRu.needMic,
+                color = Amber,
+                style = MaterialTheme.typography.bodySmall
             )
         }
         Text(

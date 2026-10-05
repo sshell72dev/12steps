@@ -46,7 +46,8 @@ class VoiceHandsController(
                     showListenButton = VoiceHandsRu.canTapListen(phase) && !listening && !speaking
                 )
             }
-        }
+        },
+        onMicDenied = { onMicDenied() }
     )
 
     private val _ui = MutableStateFlow(VoiceHandsUi())
@@ -134,6 +135,34 @@ class VoiceHandsController(
                 startListen(phase)
             }
         }
+    }
+
+    /**
+     * Тап по микрофону: включаем режим помощника и сразу начинаем запись — как обещает подсказка.
+     * Если движка распознавания нет, enterEnabled оставит фазу Off с текстом ошибки.
+     * Повторное `settings.setEnabled(true)` не подходит: флаг уже true, поток не эмитит
+     * новое значение, и режим молча остался бы в Off.
+     */
+    fun startVoice() {
+        scope.launch {
+            mutex.withLock {
+                if (!settings.enabled.value) {
+                    settings.setEnabled(true)
+                    return@withLock
+                }
+                if (!foreground) return@withLock
+                if (_ui.value.phase != VoiceHandsPhase.Standby) enterEnabled()
+                if (_ui.value.phase == VoiceHandsPhase.Standby) beginRecord()
+            }
+        }
+    }
+
+    fun reportMicDenied() {
+        onMicDenied()
+    }
+
+    private fun onMicDenied() {
+        publish { copy(error = VoiceHandsRu.needMic, listening = false) }
     }
 
     fun disable() {
