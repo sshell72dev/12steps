@@ -5,8 +5,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,7 +37,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Mic
@@ -48,6 +53,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -64,7 +71,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -75,8 +85,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.alerts.AppAlerts
 import ru.na.step4.obidy.data.messenger.MessengerAnon
+import ru.na.step4.obidy.data.messenger.MessengerAttachments
+import ru.na.step4.obidy.data.messenger.MessengerImage
 import ru.na.step4.obidy.data.messenger.MessengerMessage
 import ru.na.step4.obidy.data.messenger.MessengerRu
+import ru.na.step4.obidy.data.messenger.formatFileSize
 import ru.na.step4.obidy.data.messenger.formatVoiceDuration
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
@@ -114,6 +127,8 @@ fun MessengerChatScreen(
     var forwardIds by remember { mutableStateOf<List<Long>>(emptyList()) }
     var selecting by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var attachMenu by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<MessengerMessage?>(null) }
     val myName by viewModel.repository.displayName.collectAsStateWithLifecycle()
     val chats by viewModel.repository.chats.collectAsStateWithLifecycle(emptyList())
     /** Чат из списка: оттуда берём число участников и кто из них сейчас в сети.
@@ -125,6 +140,8 @@ fun MessengerChatScreen(
     val pinned = pinnedMessage.takeIf { pinnedChatId == chatId }
     val isAdmin = viewModel.repository.isAdmin
     val context = LocalContext.current
+    val snack = remember { SnackbarHostState() }
+    val attachScope = rememberCoroutineScope()
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val listState = rememberLazyListState()
     /** Нажатие на шапку закрепа прокручивает ленту к этому сообщению. */
@@ -170,9 +187,11 @@ fun MessengerChatScreen(
             PackageManager.PERMISSION_GRANTED
     }
 
-    /** Текст строки «ответ на…»: у голосового и удалённого сообщения своего текста нет. */
+    /** Текст строки «ответ на…»: у вложения и удалённого сообщения своего текста нет. */
     fun draftPreview(message: MessengerMessage): String = when {
         message.isVoice -> MessengerRu.voiceMessage
+        message.isPhoto -> MessengerRu.photoMessage
+        message.isFile -> message.fileName.ifBlank { MessengerRu.fileMessage }
         message.deleted -> MessengerRu.messageDeleted
         else -> message.body
     }
@@ -202,6 +221,118 @@ fun MessengerChatScreen(
         draft = ""
         replyTo = null
         viewModel.sendText(chatId, text, replyId, anonChat && anonymous)
+    }
+
+    /** Вложение в чат: фото уходит сжатым, выбранный файл — как есть. */
+    fun sendAttachment(uri: Uri?, photo: Boolean) {
+        if (uri == null) return
+        val replyId = replyTo?.id ?: 0L
+        val name = if (photo) {
+            "photo_${System.currentTimeMillis()}.jpg"
+        } else {
+            MessengerAttachments.displayName(context, uri)
+        }
+        attachScope.launch {
+            val file = if (photo) {
+                MessengerImage.prepare(context, uri)
+            } else {
+                MessengerAttachments.copyToCache(context, uri, name)
+            }
+            if (file == null) {
+                snack.showSnackbar(
+                    if (photo) MessengerRu.photoBadFormat else MessengerRu.fileOpenFailed
+                )
+                return@launch
+            }
+            if (file.length() > MessengerAttachments.MAX_BYTES) {
+                file.delete()
+                snack.showSnackbar(MessengerRu.fileTooLarge)
+                return@launch
+            }
+            val mime = if (photo) {
+                MessengerImage.mimeType
+            } else {
+                MessengerAttachments.mimeType(context, uri)
+            }
+            replyTo = null
+            viewModel.sendFile(chatId, file, name, mime, replyId)
+        }
+    }
+
+    /** Тап по вложению: фото открываем во весь экран, файл отдаём системе. */
+    fun openAttachment(message: MessengerMessage) {
+        attachScope.launch {
+            val file = viewModel.attachmentFile(message)
+            if (file == null) {
+                snack.showSnackbar(MessengerRu.fileOpenFailed)
+                return@launch
+            }
+            if (message.isPhoto) {
+                viewing = message
+            } else if (!MessengerAttachments.open(context, file, message.fileMime)) {
+                snack.showSnackbar(MessengerRu.fileOpenFailed)
+            }
+        }
+    }
+
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        sendAttachment(uri, photo = true)
+    }
+    val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        sendAttachment(uri, photo = false)
+    }
+
+    if (attachMenu) {
+        AlertDialog(
+            onDismissRequest = { attachMenu = false },
+            title = { Text(MessengerRu.attach) },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        attachMenu = false
+                        photoLauncher.launch("image/*")
+                    }) {
+                        Text(MessengerRu.attachPhoto, color = Forest)
+                    }
+                    TextButton(onClick = {
+                        attachMenu = false
+                        fileLauncher.launch(arrayOf("*/*"))
+                    }) {
+                        Text(MessengerRu.attachFile, color = Forest)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { attachMenu = false }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
+    }
+
+    viewing?.let { target ->
+        AlertDialog(
+            onDismissRequest = { viewing = null },
+            title = { Text(MessengerRu.photoMessage) },
+            text = {
+                val image = rememberPhoto(target, viewModel)
+                if (image != null) {
+                    Image(
+                        bitmap = image,
+                        contentDescription = MessengerRu.photoMessage,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    Text(MessengerRu.fileLoading)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewing = null }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
     }
 
     menuFor?.let { target ->
@@ -247,7 +378,7 @@ fun MessengerChatScreen(
                             forwardIds = listOf(target.id)
                             menuFor = null
                         }) { Text(MessengerRu.messageForward, color = Forest) }
-                        if (!target.isVoice) {
+                        if (!target.isVoice && !target.isAttachment) {
                             TextButton(onClick = {
                                 copyTexts(listOf(target.id))
                                 menuFor = null
@@ -277,7 +408,7 @@ fun MessengerChatScreen(
                         selected = setOf(target.id)
                         menuFor = null
                     }) { Text(MessengerRu.messageSelect, color = Forest) }
-                    if (target.mine && !target.deleted && !target.isVoice) {
+                    if (target.mine && !target.deleted && !target.isVoice && !target.isAttachment) {
                         TextButton(onClick = {
                             editDraft = target.body
                             editFor = target
@@ -388,6 +519,7 @@ fun MessengerChatScreen(
 
     Scaffold(
         containerColor = Sand,
+        snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
                 title = {
@@ -455,10 +587,13 @@ fun MessengerChatScreen(
                                 color = Forest
                             )
                             Text(
-                                if (pinnedItem.isVoice) {
-                                    MessengerRu.voiceMessage
-                                } else {
-                                    pinnedItem.body
+                                when {
+                                    pinnedItem.isVoice -> MessengerRu.voiceMessage
+                                    pinnedItem.isPhoto -> MessengerRu.photoMessage
+                                    pinnedItem.isFile -> pinnedItem.fileName.ifBlank {
+                                        MessengerRu.fileMessage
+                                    }
+                                    else -> pinnedItem.body
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -485,9 +620,11 @@ fun MessengerChatScreen(
                             message = message,
                             playing = playingId == message.id,
                             showName = (groupId.isNotBlank() || alertsChat) && !message.mine,
+                            viewModel = viewModel,
                             selected = selecting && message.id in selected,
                             onPlay = { viewModel.playVoice(message) },
                             onReaction = { emoji -> viewModel.toggleReaction(message.id, emoji) },
+                            onOpenAttachment = { openAttachment(message) },
                             onOpen = if (alertsChat &&
                                 AppAlerts.resolveTarget(
                                     message.senderId,
@@ -625,6 +762,12 @@ fun MessengerChatScreen(
                         .padding(8.dp),
                     verticalAlignment = Alignment.Bottom
                 ) {
+                    IconButton(
+                        onClick = { attachMenu = true },
+                        enabled = !recording
+                    ) {
+                        Icon(Icons.Outlined.AttachFile, MessengerRu.attach, tint = Forest)
+                    }
                     VoiceOutlinedTextField(
                         value = draft,
                         onValueChange = { draft = it },
@@ -701,9 +844,11 @@ private fun MessageBubble(
     message: MessengerMessage,
     playing: Boolean,
     showName: Boolean,
+    viewModel: MessengerViewModel,
     onPlay: () -> Unit,
     selected: Boolean = false,
     onReaction: (String) -> Unit = {},
+    onOpenAttachment: () -> Unit = {},
     onOpen: (() -> Unit)? = null,
     onTap: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null
@@ -807,6 +952,69 @@ private fun MessageBubble(
                         color = if (mine) Sand else Forest
                     )
                 }
+            } else if (message.isAttachment) {
+                if (message.isPhoto) {
+                    val image = rememberPhoto(message, viewModel)
+                    if (image != null) {
+                        Image(
+                            bitmap = image,
+                            contentDescription = MessengerRu.photoMessage,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .widthIn(max = 240.dp)
+                                .heightIn(max = 280.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable(onClick = onOpenAttachment)
+                        )
+                    } else {
+                        Box(
+                            Modifier
+                                .size(160.dp, 120.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable(onClick = onOpenAttachment),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                MessengerRu.fileLoading,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (mine) Sand else Forest
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onOpenAttachment),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.Description,
+                            MessengerRu.fileMessage,
+                            tint = if (mine) Sand else Forest
+                        )
+                        Column(Modifier.padding(start = 8.dp)) {
+                            Text(
+                                message.fileName.ifBlank { MessengerRu.fileMessage },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (mine) Sand else Forest,
+                                maxLines = 2
+                            )
+                            val size = formatFileSize(message.fileSize)
+                            if (size.isNotBlank()) {
+                                Text(
+                                    size,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (mine) {
+                                        Sand.copy(alpha = 0.7f)
+                                    } else {
+                                        Forest.copy(alpha = 0.7f)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
             } else {
                 Text(
                     message.body,
@@ -872,4 +1080,20 @@ private fun MessageBubble(
             )
         }
     }
+}
+
+/** Фото вложения: байты качаются один раз, дальше берутся из кэша файлов. */
+@Composable
+private fun rememberPhoto(
+    message: MessengerMessage,
+    viewModel: MessengerViewModel
+): ImageBitmap? {
+    var image by remember(message.id) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(message.id) {
+        val file = viewModel.attachmentFile(message) ?: return@LaunchedEffect
+        image = runCatching {
+            BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+        }.getOrNull()
+    }
+    return image
 }

@@ -10,7 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -221,18 +222,33 @@ fun SpeakIconButton(
     val plugin = LocalVoicePlugin.current
     val idle = remember { MutableStateFlow(false) }
     val speaking by (plugin?.speaker?.speaking ?: idle).collectAsStateWithLifecycle()
+    val paused by (plugin?.speaker?.paused ?: idle).collectAsStateWithLifecycle()
+    // Продолжаем и ставим на паузу только свой текст: у другого кнопка запустит его заново.
+    val listening = (speaking || paused) && plugin?.speaker?.matches(text) == true
     IconButton(
         onClick = {
             if (plugin == null) return@IconButton
-            if (speaking) plugin.stopSpeaking() else plugin.speak(text)
+            when {
+                speaking && listening -> plugin.pauseSpeaking()
+                paused && listening -> plugin.resumeSpeaking()
+                else -> plugin.speak(text)
+            }
         },
-        enabled = enabled && (plugin != null) && (speaking || text.isNotBlank()),
+        enabled = enabled && (plugin != null) && (listening || text.isNotBlank()),
         modifier = modifier.size(32.dp)
     ) {
         Icon(
-            imageVector = if (speaking) Icons.Outlined.StopCircle else Icons.Outlined.VolumeUp,
-            contentDescription = if (speaking) VoiceRu.stop else VoiceRu.speak,
-            tint = if (speaking) Color(0xFFB8893D) else tint,
+            imageVector = when {
+                paused && listening -> Icons.Outlined.PlayArrow
+                speaking && listening -> Icons.Outlined.Pause
+                else -> Icons.Outlined.VolumeUp
+            },
+            contentDescription = when {
+                paused && listening -> VoiceRu.resume
+                speaking && listening -> VoiceRu.pause
+                else -> VoiceRu.speak
+            },
+            tint = if (listening) Color(0xFFB8893D) else tint,
             modifier = Modifier.size(24.dp)
         )
     }

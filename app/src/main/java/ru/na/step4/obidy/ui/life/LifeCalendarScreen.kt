@@ -57,6 +57,7 @@ import ru.na.step4.obidy.data.life.LifeBoardRu
 import ru.na.step4.obidy.data.life.LifeBoardStore
 import ru.na.step4.obidy.data.life.LifeItem
 import ru.na.step4.obidy.data.life.LifeKind
+import ru.na.step4.obidy.data.life.LifeRepeat
 import ru.na.step4.obidy.data.life.LifeStatus
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
@@ -172,9 +173,9 @@ fun LifeCalendarScreen(
                     initial = editing,
                     dateDefault = selectedDay,
                     onDismiss = { composing = false; editing = null },
-                    onSave = { id, title, body, status, dueAt, timeSet, callOn ->
+                    onSave = { id, title, body, status, dueAt, timeSet, callOn, repeat ->
                         if (title.isNotBlank() || body.isNotBlank()) {
-                            viewModel.save(id, title, body, status, dueAt, timeSet, callOn)
+                            viewModel.save(id, title, body, status, dueAt, timeSet, callOn, repeat)
                             dueAt?.let { day -> selectedDay = LifeBoardStore.startOfDay(day) }
                             composing = false
                             editing = null
@@ -296,6 +297,13 @@ private fun LifeEventView(item: LifeItem, onEdit: () -> Unit, onDismiss: () -> U
                         )
                         Text(
                             LifeBoardRu.callAlarm,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Amber
+                        )
+                    }
+                    if (item.repeat != LifeRepeat.NONE) {
+                        Text(
+                            "${LifeBoardRu.repeatMark}: ${LifeRepeat.everyLabel(item.repeat)}",
                             style = MaterialTheme.typography.labelLarge,
                             color = Amber
                         )

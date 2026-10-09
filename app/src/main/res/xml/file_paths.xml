@@ -3,4 +3,7 @@
     <cache-path
         name="updates"
         path="updates/" />
+    <cache-path
+        name="messenger_files"
+        path="messenger_files/" />
 </paths>

@@ -27,6 +27,16 @@ class VoicePlugin(context: Context) {
 
     fun stopSpeaking() = speaker.stop()
 
+    fun pauseSpeaking() = speaker.pause()
+
+    fun resumeSpeaking() = speaker.resume()
+
+    /** Перемотка прослушки на [delta] минут от текущего места. */
+    fun skipSpeakingMinutes(delta: Int) = speaker.skipMinutes(delta)
+
+    /** Прослушать с минуты [minute] (1 — с начала). */
+    fun seekSpeakingMinute(minute: Int) = speaker.seekToMinute(minute)
+
     suspend fun sync(baseUrl: String, token: String): Boolean = withContext(Dispatchers.IO) {
         if (baseUrl.isBlank() || token.isBlank()) return@withContext false
         val url = "${baseUrl.trimEnd('/')}/api/v1/voice/config"

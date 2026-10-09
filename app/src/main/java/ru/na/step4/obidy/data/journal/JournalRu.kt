@@ -70,6 +70,8 @@ object JournalRu {
     val pickFromTable: String get() = I18n.t("journal.pickFromTable", "Выбрать из таблицы")
     val pickFeelings: String get() = I18n.t("journal.pickFeelings", "Чувства")
     val pickThoughts: String get() = I18n.t("journal.pickThoughts", "Мысли")
+    val feelingsTable: String get() = I18n.t("journal.feelingsTable", "Таблица чувств")
+    val wordCopied: String get() = I18n.t("journal.wordCopied", "Слово скопировано")
     val pickSearch: String get() = I18n.t("journal.pickSearch", "Поиск")
     val pickSelected: String get() = I18n.t("journal.pickSelected", "Выбрано: %1\$d")
     val pickGestureHint: String get() = I18n.t(

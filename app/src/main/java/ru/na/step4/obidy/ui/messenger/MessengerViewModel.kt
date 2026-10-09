@@ -183,6 +183,19 @@ class MessengerViewModel(
         viewModelScope.launch { repository.sendVoice(chatId, file, durationMs, replyToId) }
     }
 
+    /** Вложение: фото и файлы уходят одним путём, имя файла видно в пузыре. */
+    fun sendFile(
+        chatId: String,
+        file: File,
+        fileName: String,
+        mimeType: String,
+        replyToId: Long = 0L
+    ) {
+        viewModelScope.launch {
+            repository.sendFile(chatId, file, fileName, mimeType, replyToId)
+        }
+    }
+
     fun forwardMessage(chatId: String, messageId: Long) {
         viewModelScope.launch { repository.forwardMessage(chatId, messageId) }
     }
@@ -349,6 +362,10 @@ class MessengerViewModel(
     }
 
     suspend fun avatarBytes(url: String): ByteArray? = repository.avatarBytes(url)
+
+    /** Файл вложения: из него рисуем фото в ленте и его же отдаём системе открыть. */
+    suspend fun attachmentFile(message: MessengerMessage): File? =
+        repository.attachmentFile(message)
 
     fun rotateGroupQr(groupId: String) {
         viewModelScope.launch {

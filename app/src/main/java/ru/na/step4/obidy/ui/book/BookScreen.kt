@@ -23,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,6 +68,11 @@ fun BookScreen(
     var appliedTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(bookId) { viewModel.open(bookId) }
+
+    // Текст главы пишется в базу сам; при уходе с экрана дописываем последние правки.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.flushDraft() }
+    }
 
     LaunchedEffect(appliedTick) {
         if (appliedTick > 0) snack.showSnackbar(BookRu.fixDone)

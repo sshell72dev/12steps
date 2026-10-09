@@ -69,9 +69,21 @@ data class MessengerMessage(
     val replyVoiceMs: Int = 0,
     val replyDeleted: Boolean = false,
     val forwardFrom: String = "",
+    val fileName: String = "",
+    val fileMime: String = "",
+    val fileSize: Long = 0L,
     val reactions: List<MessengerReaction> = emptyList()
 ) {
     val isVoice: Boolean get() = kind == "voice"
+
+    /** Фото показывается картинкой прямо в ленте. */
+    val isPhoto: Boolean get() = kind == "photo" && !deleted
+
+    /** Обычный файл показывается карточкой с именем и размером. */
+    val isFile: Boolean get() = kind == "file" && !deleted
+
+    /** Вложение: у него нет текста, но есть имя файла и размер. */
+    val isAttachment: Boolean get() = isPhoto || isFile
 
     /** Реакции-эмодзи показываются чипами под текстом сообщения. */
     val hasReactions: Boolean get() = reactions.isNotEmpty()
@@ -92,6 +104,8 @@ data class MessengerMessage(
     fun replyPreview(): String = when {
         replyDeleted -> MessengerRu.messageDeleted
         replyKind == "voice" -> MessengerRu.voiceMessage
+        replyKind == "photo" -> MessengerRu.photoMessage
+        replyKind == "file" -> MessengerRu.fileMessage
         else -> replyBody
     }
 }

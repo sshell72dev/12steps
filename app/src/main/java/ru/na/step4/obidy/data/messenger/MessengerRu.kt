@@ -31,6 +31,21 @@ object MessengerRu {
     val members: String get() = I18n.t("messenger.members", "Участники")
     val addToGroup: String get() = I18n.t("messenger.addToGroup", "Добавить из друзей")
     val messageHint: String get() = I18n.t("messenger.messageHint", "Сообщение")
+    val attach: String get() = I18n.t("messenger.attach", "Прикрепить")
+    val attachPhoto: String get() = I18n.t("messenger.attachPhoto", "Фото из галереи")
+    val attachFile: String get() = I18n.t("messenger.attachFile", "Файл")
+    val photoMessage: String get() = I18n.t("messenger.photoMessage", "Фото")
+    val fileMessage: String get() = I18n.t("messenger.fileMessage", "Файл")
+    val fileTooLarge: String get() = I18n.t(
+        "messenger.fileTooLarge",
+        "Файл больше 10 МБ — такой не отправить."
+    )
+    val fileOpenFailed: String get() = I18n.t(
+        "messenger.fileOpenFailed",
+        "Не получилось открыть файл. Попробуйте ещё раз."
+    )
+    val fileLoading: String get() = I18n.t("messenger.fileLoading", "Загружаю…")
+    val photoOpen: String get() = I18n.t("messenger.photoOpen", "Открыть фото")
     val voiceMessage: String get() = I18n.t("messenger.voiceMessage", "Голосовое сообщение")
     val updateNow: String get() = I18n.t("messenger.updateNow", "Обновить приложение")
     val recording: String get() = I18n.t("messenger.recording", "Запись… отпустите, чтобы отправить")

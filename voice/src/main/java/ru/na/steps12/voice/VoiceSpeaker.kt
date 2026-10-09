@@ -9,10 +9,16 @@ import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.Locale
+import kotlinx.coroutines.launch
 
 class VoiceSpeaker(
     context: Context,
@@ -24,6 +30,16 @@ class VoiceSpeaker(
     private var pendingChunks = 0
     private var speakGen = 0
     private var focusRequest: AudioFocusRequest? = null
+
+    /**
+     * Порции текущего текста. Номер порции — это позиция прослушивания: у TTS нет
+     * своей шкалы, поэтому пауза и перемотка опираются на порции и оценку времени.
+     */
+    private var chunks: List<String> = emptyList()
+    private var chunkIndex = 0
+    private var chunkStartedAt = 0L
+    private val ticker = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var tickerJob: Job? = null
 
     private val audioAttrs = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -42,6 +58,19 @@ class VoiceSpeaker(
     private val _speaking = MutableStateFlow(false)
     val speaking: StateFlow<Boolean> = _speaking.asStateFlow()
 
+    /** Прослушивание стоит на паузе: текст никуда не делся, продолжение — с того же места. */
+    private val _paused = MutableStateFlow(false)
+    val paused: StateFlow<Boolean> = _paused.asStateFlow()
+
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
+
+    private val _durationMs = MutableStateFlow(0L)
+    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+
+    private val speed: Float
+        get() = store.snapshot.speed.coerceIn(0.5f, 1.8f)
+
     fun ensureReady() {
         if (engine != null) return
         engine = TextToSpeech(app) { status ->
@@ -51,22 +80,30 @@ class VoiceSpeaker(
                 applyVoice()
                 pending?.let { text ->
                     pending = null
-                    doSpeak(text)
+                    speak(text)
                 }
             }
         }.also { tts ->
             tts.setAudioAttributes(audioAttrs)
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
+                    val index = utteranceIndex(utteranceId)
+                    if (index != null) {
+                        chunkIndex = index
+                        chunkStartedAt = System.currentTimeMillis()
+                    }
                     markSpeaking(true)
                 }
+
                 override fun onDone(utteranceId: String?) {
                     onChunkFinished(utteranceId)
                 }
+
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
                     onChunkFinished(utteranceId)
                 }
+
                 override fun onError(utteranceId: String?, errorCode: Int) {
                     onChunkFinished(utteranceId)
                 }
@@ -74,38 +111,121 @@ class VoiceSpeaker(
         }
     }
 
+    private fun utteranceIndex(utteranceId: String?): Int? =
+        utteranceId?.removePrefix("voice-")?.substringAfter("-", "")?.toIntOrNull()
+
+    private fun utteranceGen(utteranceId: String?): Int? =
+        utteranceId?.removePrefix("voice-")?.substringBefore("-")?.toIntOrNull()
+
     private fun onChunkFinished(utteranceId: String?) {
-        val gen = utteranceId?.substringAfter("voice-", "")?.substringBefore("-")?.toIntOrNull()
+        val gen = utteranceGen(utteranceId)
         val left = synchronized(this) {
             if (gen != null && gen != speakGen) return
             pendingChunks = (pendingChunks - 1).coerceAtLeast(0)
             pendingChunks
         }
-        if (left == 0) markSpeaking(false)
+        if (left == 0) {
+            stopTicker()
+            // Текст дочитан до конца: панель прослушивания закрывается, следующее
+            // включение начнётся сначала.
+            chunks = emptyList()
+            chunkIndex = 0
+            _paused.value = false
+            _positionMs.value = _durationMs.value
+            markSpeaking(false)
+        }
     }
 
     var speakingListener: ((Boolean, String) -> Unit)? = null
     private var lastPreview: String = ""
+    private var lastText: String = ""
+
+    /** Совпадает ли текст с тем, что сейчас прослушивается: иначе кнопка начнёт его заново. */
+    fun matches(text: String): Boolean = lastText.isNotBlank() && lastText == text.trim()
 
     fun speak(text: String) {
         val clean = text.trim()
         if (clean.isBlank()) return
+        lastText = clean
         lastPreview = clean.replace('\n', ' ').take(120)
         ensureReady()
+        val spoken = stripForSpeech(clean)
+        if (spoken.isBlank()) return
+        chunks = speechChunks(spoken)
+        chunkIndex = 0
+        chunkStartedAt = System.currentTimeMillis()
+        _durationMs.value = (chunks.sumOf { chunkSeconds(it, speed) } * 1000).toLong()
+        _positionMs.value = 0L
+        _paused.value = false
         if (!_ready.value) {
             pending = clean
             return
         }
-        doSpeak(clean)
+        playFrom(0)
+    }
+
+    /** Пауза: запоминает место и замолкает, текст остаётся для продолжения. */
+    fun pause() {
+        if (!_speaking.value) return
+        syncPosition()
+        silenced()
+        _paused.value = true
+        markSpeaking(false)
+    }
+
+    /** Продолжение с места паузы — с начала порции, на которой остановились. */
+    fun resume() {
+        if (!_paused.value) return
+        if (chunks.isEmpty()) {
+            _paused.value = false
+            return
+        }
+        ensureReady()
+        if (!_ready.value) return
+        _paused.value = false
+        playFrom(chunkIndex)
+    }
+
+    fun pauseOrResume() {
+        when {
+            _speaking.value -> pause()
+            _paused.value -> resume()
+        }
+    }
+
+    /** Перемотка на [delta] минут от текущей позиции: −1 — минута назад, 1 — вперёд. */
+    fun skipMinutes(delta: Int) {
+        if (chunks.isEmpty()) return
+        val target = _positionMs.value / 1000.0 + delta * 60.0
+        seekToSeconds(target)
+    }
+
+    /** Начать с минуты [minute] (1 — первая минута). */
+    fun seekToMinute(minute: Int) {
+        if (chunks.isEmpty()) return
+        seekToSeconds((minute.coerceAtLeast(1) - 1) * 60.0)
+    }
+
+    fun seekToSeconds(seconds: Double) {
+        if (chunks.isEmpty()) return
+        val index = chunkAtSeconds(chunks, seconds.coerceAtLeast(0.0), speed)
+        chunkIndex = index
+        chunkStartedAt = System.currentTimeMillis()
+        _positionMs.value = (secondsBefore(chunks, index, speed) * 1000).toLong()
+        ensureReady()
+        if (!_ready.value) return
+        _paused.value = false
+        playFrom(index)
     }
 
     fun stop() {
         pending = null
-        synchronized(this) {
-            speakGen += 1
-            pendingChunks = 0
-        }
-        engine?.stop()
+        silenced()
+        chunks = emptyList()
+        chunkIndex = 0
+        _positionMs.value = 0L
+        _durationMs.value = 0L
+        _paused.value = false
         markSpeaking(false)
     }
 
@@ -115,6 +235,7 @@ class VoiceSpeaker(
 
     fun release() {
         stop()
+        tickerJob?.cancel()
         engine?.shutdown()
         engine = null
         _ready.value = false
@@ -136,36 +257,77 @@ class VoiceSpeaker(
             }
     }
 
-    private fun doSpeak(text: String) {
+    /** Запуск озвучки с порции [index]: очередь TTS пересобирается с этого места. */
+    private fun playFrom(index: Int) {
         val tts = engine ?: return
-        applyVoice()
-        val spoken = stripForSpeech(text)
-        if (spoken.isBlank()) return
-        val limit = runCatching { TextToSpeech.getMaxSpeechInputLength() }
-            .getOrDefault(4000)
-            .coerceIn(800, 4000) - 80
-        val chunks = chunkForSpeech(spoken, limit)
         if (chunks.isEmpty()) return
+        applyVoice()
+        val start = index.coerceIn(0, chunks.size - 1)
+        chunkIndex = start
+        chunkStartedAt = System.currentTimeMillis()
+        _positionMs.value = (secondsBefore(chunks, start, speed) * 1000).toLong()
         val gen = synchronized(this) {
             speakGen += 1
-            pendingChunks = chunks.size
+            pendingChunks = chunks.size - start
             speakGen
         }
         markSpeaking(true)
+        startTicker()
         val params = Bundle().apply {
             putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC)
         }
-        chunks.forEachIndexed { index, chunk ->
-            val mode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-            val code = tts.speak(chunk, mode, params, "voice-$gen-$index")
+        for (i in start until chunks.size) {
+            val mode = if (i == start) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            val code = tts.speak(chunks[i], mode, params, "voice-$gen-$i")
             if (code != TextToSpeech.SUCCESS) {
                 synchronized(this) {
                     if (gen == speakGen) pendingChunks = 0
                 }
+                stopTicker()
+                _paused.value = false
                 markSpeaking(false)
                 return
             }
         }
+    }
+
+    /** Глушит TTS и сбрасывает очередь, не трогая нарезанный текст. */
+    private fun silenced() {
+        synchronized(this) {
+            speakGen += 1
+            pendingChunks = 0
+        }
+        runCatching { engine?.stop() }
+        stopTicker()
+    }
+
+    private fun startTicker() {
+        stopTicker()
+        tickerJob = ticker.launch {
+            while (true) {
+                delay(500)
+                syncPosition()
+            }
+        }
+    }
+
+    private fun stopTicker() {
+        tickerJob?.cancel()
+        tickerJob = null
+    }
+
+    /** Оценка текущей позиции: пройденные порции плюс время на текущей. */
+    private fun syncPosition() {
+        if (chunks.isEmpty()) return
+        val before = secondsBefore(chunks, chunkIndex, speed)
+        val elapsed = if (_speaking.value) {
+            (System.currentTimeMillis() - chunkStartedAt) / 1000.0
+        } else {
+            0.0
+        }
+        val current = chunks.getOrElse(chunkIndex) { "" }
+        val inChunk = elapsed.coerceIn(0.0, chunkSeconds(current, speed))
+        _positionMs.value = ((before + inChunk) * 1000).toLong()
     }
 
     private fun markSpeaking(on: Boolean) {
@@ -203,38 +365,6 @@ class VoiceSpeaker(
             .replace("*", "")
             .replace(Regex("[ \\t]+"), " ")
             .trim()
-
-    private fun chunkForSpeech(text: String, max: Int): List<String> {
-        if (text.length <= max) return listOf(text)
-        val parts = mutableListOf<String>()
-        val buf = StringBuilder()
-        fun flush() {
-            val piece = buf.toString().trim()
-            if (piece.isNotEmpty()) parts += piece
-            buf.clear()
-        }
-        text.split(Regex("\\n+")).forEach { paragraph ->
-            if (paragraph.length > max) {
-                flush()
-                var rest = paragraph
-                while (rest.length > max) {
-                    var cut = rest.lastIndexOf(' ', max)
-                    if (cut < max / 3) cut = max
-                    parts += rest.substring(0, cut).trim()
-                    rest = rest.substring(cut).trim()
-                }
-                if (rest.isNotBlank()) buf.append(rest)
-            } else if (buf.length + paragraph.length + 1 > max) {
-                flush()
-                buf.append(paragraph)
-            } else {
-                if (buf.isNotEmpty()) buf.append('\n')
-                buf.append(paragraph)
-            }
-        }
-        flush()
-        return parts.ifEmpty { listOf(text.take(max)) }
-    }
 
     private fun applyVoice() {
         val tts = engine ?: return

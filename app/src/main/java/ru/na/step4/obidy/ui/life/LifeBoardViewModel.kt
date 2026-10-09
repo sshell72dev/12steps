@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.life.LifeItem
 import ru.na.step4.obidy.data.life.LifeKind
+import ru.na.step4.obidy.data.life.LifeRepeat
 import ru.na.step4.obidy.data.life.LifeStatus
 import ru.na.step4.obidy.data.life.LifeBoardStore
 import ru.na.step4.obidy.data.support.SupportRepository
@@ -49,10 +50,11 @@ class LifeBoardViewModel(
         status: String,
         dueAt: Long?,
         timeSet: Boolean = false,
-        callOn: Boolean = false
+        callOn: Boolean = false,
+        repeat: String = LifeRepeat.NONE
     ) {
         viewModelScope.launch {
-            store.upsert(id, kind, title, body, status, dueAt, timeSet, callOn)
+            store.upsert(id, kind, title, body, status, dueAt, timeSet, callOn, repeat)
         }
     }
 

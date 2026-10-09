@@ -164,7 +164,11 @@ private fun FixRow(fix: BookFix, checked: Boolean, onCheckedChange: () -> Unit) 
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "${BookRu.fixBecame}: ${fix.new}",
+                    if (fix.new.isBlank()) {
+                        "${BookRu.fixBecame}: ${BookRu.fixRemoved}"
+                    } else {
+                        "${BookRu.fixBecame}: ${fix.new}"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = Forest
                 )

@@ -94,3 +94,12 @@ fun formatVoiceDuration(ms: Int): String {
     val s = total % 60
     return "%d:%02d".format(m, s)
 }
+
+/** Размер вложения для карточки файла: «12 КБ», «3,4 МБ». */
+fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0L) return ""
+    if (bytes < 1024L) return "$bytes Б"
+    val kb = bytes / 1024.0
+    if (kb < 1024.0) return "${kb.toInt().coerceAtLeast(1)} КБ"
+    return "%.1f МБ".format(kb / 1024.0).replace('.', ',')
+}

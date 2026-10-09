@@ -20,7 +20,7 @@ import ru.na.step4.obidy.Step4App
 
 /**
  * Звонок по событию календаря: точный будильник, сигнал и уведомление телефона.
- * Событие звонит один раз — в своё время, если в нём включён «Звонок».
+ * Событие звонит в своё время, а с повтором — ежедневно, раз в неделю или раз в месяц.
  */
 object LifeCallAlarms {
     const val EXTRA_ID = "life_call_id"
@@ -41,7 +41,8 @@ object LifeCallAlarms {
         val app = context.applicationContext
         val wanted = items
             .filter { it.kind == LifeKind.EVENT && it.callOn && it.timeSet }
-            .filter { it.status != LifeStatus.DONE && (it.dueAt ?: 0L) > System.currentTimeMillis() }
+            // Повторяющееся событие звонит и после своей даты: смотрим на ближайшее срабатывание.
+            .filter { nextTrigger(it) != null }
             .associateBy { it.id }
         loadIds(app).forEach { id ->
             if (!wanted.containsKey(id)) cancel(app, id)
@@ -58,9 +59,26 @@ object LifeCallAlarms {
         }
     }
 
+    /** Ближайшее время звонка: у повторяющегося события прошедшая дата продолжается по правилу. */
+    fun nextTrigger(item: LifeItem, from: Long = System.currentTimeMillis()): Long? {
+        if (!item.callOn || !item.timeSet || item.status == LifeStatus.DONE) return null
+        val base = item.dueAt ?: return null
+        if (item.repeat == LifeRepeat.NONE) return base.takeIf { it > from }
+        return LifeRepeat.next(item.repeat, base, from)
+    }
+
     fun schedule(context: Context, item: LifeItem) {
-        val due = item.dueAt ?: return
-        if (!item.callOn || !item.timeSet || due <= System.currentTimeMillis()) {
+        val due = nextTrigger(item)
+        if (due == null) {
+            cancel(context, item.id)
+            return
+        }
+        scheduleAt(context, item, due)
+    }
+
+    /** Ставит будильник на конкретное время: сюда приходит и следующий срок повтора. */
+    fun scheduleAt(context: Context, item: LifeItem, due: Long) {
+        if (!item.callOn || !item.timeSet || item.status == LifeStatus.DONE) {
             cancel(context, item.id)
             return
         }
@@ -82,6 +100,14 @@ object LifeCallAlarms {
             runCatching { manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pending) }
         }
         remember(context, item.id)
+    }
+
+    /** Повторяющееся событие звонит снова: ставим следующий будильник по правилу повтора. */
+    fun reschedule(context: Context, item: LifeItem) {
+        if (item.repeat == LifeRepeat.NONE) return
+        val base = item.dueAt ?: return
+        val next = LifeRepeat.next(item.repeat, base, maxOf(base, System.currentTimeMillis()))
+        scheduleAt(context, item, next)
     }
 
     fun cancel(context: Context, id: String) {
@@ -246,6 +272,8 @@ class LifeCallReceiver : BroadcastReceiver() {
             return
         }
         LifeCallAlarms.notifyAndRing(app, id, item.title, item.body)
+        // Повторяющееся событие звонит снова: заранее ставим следующий будильник.
+        LifeCallAlarms.reschedule(app, item)
     }
 }
 

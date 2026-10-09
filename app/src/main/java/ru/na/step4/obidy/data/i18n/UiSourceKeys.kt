@@ -443,6 +443,8 @@ object UiSourceKeys {
         "journal.pickFromTable",
         "journal.pickFeelings",
         "journal.pickThoughts",
+        "journal.feelingsTable",
+        "journal.wordCopied",
         "journal.pickSearch",
         "journal.pickSelected",
         "journal.pickGestureHint",
@@ -827,6 +829,13 @@ object UiSourceKeys {
         "life.openLink",
         "life.callAlarm",
         "life.callAlarmHint",
+        "life.repeatDaily",
+        "life.repeatWeekly",
+        "life.repeatMonthly",
+        "life.repeatEveryDay",
+        "life.repeatEveryWeek",
+        "life.repeatEveryMonth",
+        "life.repeatMark",
         "life.callChannel",
         "life.callChannelHint",
         "life.callBody",
@@ -876,6 +885,12 @@ object UiSourceKeys {
         "voice.preview",
         "voice.notConfigured",
         "voice.previewText",
+        "voice.pause",
+        "voice.resume",
+        "voice.minuteBack",
+        "voice.minuteForward",
+        "voice.minuteFrom",
+        "voice.minuteStart",
     )
 
     private val messengerKeys: Set<String> = setOf(
@@ -981,6 +996,15 @@ object UiSourceKeys {
         "messenger.messageDeleteQuestion",
         "messenger.messageEdited",
         "messenger.messageDeleted",
+        "messenger.attach",
+        "messenger.attachPhoto",
+        "messenger.attachFile",
+        "messenger.photoMessage",
+        "messenger.fileMessage",
+        "messenger.fileTooLarge",
+        "messenger.fileOpenFailed",
+        "messenger.fileLoading",
+        "messenger.photoOpen",
     )
 
     /** Раздел «Моя книга» живёт внутри мессенджера и переводится вместе с ним. */
@@ -1001,6 +1025,7 @@ object UiSourceKeys {
         "book.chapterText",
         "book.save",
         "book.saved",
+        "book.draftSaved",
         "book.chapterDefault",
         "book.emptyText",
         "book.bookMissing",
@@ -1020,6 +1045,7 @@ object UiSourceKeys {
         "book.fixError",
         "book.fixWas",
         "book.fixBecame",
+        "book.fixRemoved",
     )
 
     val messenger: Set<String> get() = messengerKeys + book

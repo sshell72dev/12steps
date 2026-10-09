@@ -27,6 +27,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
@@ -41,9 +43,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.journal.EmotionCatalog
 import ru.na.step4.obidy.data.journal.JournalFieldKind
@@ -95,7 +101,8 @@ fun WordPickerScreen(
     onDictate: (String) -> Unit,
     onBack: () -> Unit,
     initialPage: Int = 0,
-    onPageChange: (Int) -> Unit = {}
+    onPageChange: (Int) -> Unit = {},
+    viewOnly: Boolean = false
 ) {
     val columns = EmotionCatalog.columns(kind)
     var query by remember { mutableStateOf("") }
@@ -107,23 +114,44 @@ fun WordPickerScreen(
     val scope = rememberCoroutineScope()
     val q = query.trim()
     val searching = q.isNotBlank()
-
-    LaunchedEffect(pagerState.currentPage) {
-        onPageChange(pagerState.currentPage)
-    }
-    LaunchedEffect(initialPage, columns.size) {
-        val target = initialPage.coerceIn(0, (columns.size - 1).coerceAtLeast(0))
-        if (pagerState.currentPage != target && columns.isNotEmpty()) {
-            pagerState.scrollToPage(target)
+    val clipboard = LocalClipboardManager.current
+    val snackbar = remember { SnackbarHostState() }
+    // В просмотре слово копируется: таблицей можно пользоваться, ничего не записывая,
+    // а жест диктовки в справочнике ни к чему не привязан.
+    val pick: (String) -> Unit = { word ->
+        if (viewOnly) {
+            clipboard.setText(AnnotatedString(word))
+            scope.launch { snackbar.showSnackbar(JournalRu.wordCopied) }
+        } else {
+            onPick(word)
         }
+    }
+    val dictate: (String) -> Unit = { word -> if (!viewOnly) onDictate(word) }
+
+    // Вкладку запоминаем по остановившемуся пейджеру: во время жеста и анимации
+    // состояние наверху не меняется. Начальную страницу задаёт initialPage при
+    // создании пейджера — прокручивать его снаружи нельзя, такая доводка
+    // перебивает жест и таблица начинает перескакивать между вкладками.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page -> onPageChange(page) }
+    }
+
+    // Кнопка «дальше» и системный возврат закрывают таблицу, поэтому текущую
+    // вкладку сохраняем здесь же: анимация перехода могла ещё не завершиться.
+    val close = {
+        onPageChange(pagerState.currentPage)
+        onBack()
     }
 
     Scaffold(
         containerColor = Sand,
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(title, color = Forest) },
-                navigationIcon = { AppNavIcon(onBack = onBack) },
+                navigationIcon = { AppNavIcon(onBack = close) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Sand.copy(alpha = 0.92f))
             )
         }
@@ -154,17 +182,19 @@ fun WordPickerScreen(
                         cursorColor = Forest
                     )
                 )
-                Text(
-                    JournalRu.pickSelected.format(selected.size),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Forest
-                )
-                if (selected.isEmpty()) {
+                if (!viewOnly) {
                     Text(
-                        JournalRu.pickGestureHint,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Moss
+                        JournalRu.pickSelected.format(selected.size),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Forest
                     )
+                    if (selected.isEmpty()) {
+                        Text(
+                            JournalRu.pickGestureHint,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Moss
+                        )
+                    }
                 }
                 if (searching) {
                     val grouped = EmotionCatalog.allWords(kind)
@@ -191,8 +221,8 @@ fun WordPickerScreen(
                                             WordChip(
                                                 word = word,
                                                 selected = selected.any { it.equals(word, ignoreCase = true) },
-                                                onClick = { onPick(word) },
-                                                onLongClick = { onDictate(word) }
+                                                onClick = { pick(word) },
+                                                onLongClick = { dictate(word) }
                                             )
                                         }
                                     }
@@ -230,12 +260,14 @@ fun WordPickerScreen(
                         WordColumnPage(
                             column = columns[page],
                             selected = selected,
-                            onPick = onPick,
-                            onDictate = onDictate
+                            onPick = pick,
+                            onDictate = dictate
                         )
                     }
                 }
-                JournalButton(JournalRu.pickApply, onBack, filled = true)
+                if (!viewOnly) {
+                    JournalButton(JournalRu.pickApply, close, filled = true)
+                }
             }
         }
     }

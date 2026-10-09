@@ -49,6 +49,13 @@ object LifeBoardRu {
         "life.callAlarmHint",
         "В момент события телефон зазвонит и покажет напоминание."
     )
+    val repeatDaily: String get() = I18n.t("life.repeatDaily", "Повторять ежедневно")
+    val repeatWeekly: String get() = I18n.t("life.repeatWeekly", "Повторять раз в неделю")
+    val repeatMonthly: String get() = I18n.t("life.repeatMonthly", "Повторять раз в месяц")
+    val repeatEveryDay: String get() = I18n.t("life.repeatEveryDay", "ежедневно")
+    val repeatEveryWeek: String get() = I18n.t("life.repeatEveryWeek", "раз в неделю")
+    val repeatEveryMonth: String get() = I18n.t("life.repeatEveryMonth", "раз в месяц")
+    val repeatMark: String get() = I18n.t("life.repeatMark", "Повторяется")
     val callChannel: String get() = I18n.t("life.callChannel", "Звонки календаря")
     val callChannelHint: String get() = I18n.t(
         "life.callChannelHint",

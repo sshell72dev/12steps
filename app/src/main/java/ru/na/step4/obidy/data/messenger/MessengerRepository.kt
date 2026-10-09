@@ -313,6 +313,32 @@ class MessengerRepository(
         }
     }
 
+    /** Вложение в чат: фото и файлы отправляются одним запросом, отличается только тип. */
+    suspend fun sendFile(
+        chatId: String,
+        file: File,
+        fileName: String,
+        mimeType: String,
+        replyToId: Long = 0L
+    ): Boolean = withContext(Dispatchers.IO) {
+        when (val result = client.sendFile(chatId, file, fileName, mimeType, replyToId)) {
+            is MessengerResult.Ok -> {
+                dao.upsertMessages(listOf(result.value.toRow()))
+                file.delete()
+                refreshChats()
+                true
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                false
+            }
+            is MessengerResult.Err -> {
+                _error.value = result.message.ifBlank { MessengerRu.error }
+                false
+            }
+        }
+    }
+
     suspend fun editMessage(messageId: Long, body: String): Boolean = withContext(Dispatchers.IO) {
         when (val result = client.editMessage(messageId, body)) {
             is MessengerResult.Ok -> {
@@ -799,6 +825,25 @@ class MessengerRepository(
         }
     }
 
+    /** Файл вложения из кэша: скачивается один раз, дальше открывается с диска. */
+    suspend fun attachmentFile(message: MessengerMessage): File? = withContext(Dispatchers.IO) {
+        val dir = File(appContext.cacheDir, "messenger_files").apply { mkdirs() }
+        val ext = message.fileName.substringAfterLast('.', "").take(8)
+        val file = File(dir, if (ext.isBlank()) "${message.id}" else "${message.id}.$ext")
+        if (file.isFile && file.length() > 0) return@withContext file
+        when (val result = client.downloadFile(message.id)) {
+            is MessengerResult.Ok -> {
+                runCatching { file.writeBytes(result.value) }
+                file.takeIf { it.isFile && it.length() > 0 }
+            }
+            is MessengerResult.Disabled -> {
+                applyEnabled(false)
+                null
+            }
+            is MessengerResult.Err -> null
+        }
+    }
+
     fun postAlert(body: String, target: String = "") {
         val text = body.trim()
         if (text.isBlank()) return
@@ -969,6 +1014,9 @@ class MessengerRepository(
         replyVoiceMs = replyVoiceMs,
         replyDeleted = replyDeleted,
         forwardFrom = forwardFrom,
+        fileName = fileName,
+        fileMime = fileMime,
+        fileSize = fileSize,
         reactions = encodeReactions(reactions)
     )
 
@@ -991,6 +1039,9 @@ class MessengerRepository(
         replyVoiceMs = replyVoiceMs,
         replyDeleted = replyDeleted,
         forwardFrom = forwardFrom,
+        fileName = fileName,
+        fileMime = fileMime,
+        fileSize = fileSize,
         reactions = decodeReactions(reactions)
     )
 }

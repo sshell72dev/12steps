@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Mood
 import androidx.compose.material.icons.outlined.Notes
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Forum
@@ -69,6 +70,7 @@ import ru.na.step4.obidy.ui.analysis.AnalysisSessionViewModel
 import ru.na.step4.obidy.ui.analysis.AnalysisSettingsScreen
 import ru.na.step4.obidy.ui.components.LocalNotesRepository
 import ru.na.step4.obidy.ui.i18n.EnsureTranslations
+import ru.na.step4.obidy.ui.journal.FeelingsTableScreen
 import ru.na.step4.obidy.ui.journal.JournalAiMode
 import ru.na.step4.obidy.ui.journal.JournalAiScreen
 import ru.na.step4.obidy.ui.journal.JournalEntriesScreen
@@ -138,6 +140,7 @@ private object Routes {
     const val JOURNAL_SUPPORT = "journal/support"
     const val JOURNAL_VERSION = "journal/version"
     const val JOURNAL_PRO = "journal/pro"
+    const val JOURNAL_FEELINGS = "journal/feelings"
     const val JOURNAL_WORDS = "journal/words/{fieldId}/{kind}"
     const val LIFE = "life/{kind}"
     const val MESSENGER = "messenger"
@@ -306,6 +309,13 @@ fun Step4Nav() {
             add(AppMenuItem(Routes.life(LifeKind.NOTE), LifeBoardRu.notes, Icons.Outlined.Notes))
             add(AppMenuItem(Routes.ACTIVITY_STATS, ActivityRu.title, Icons.Outlined.Insights))
             add(AppMenuItem(Routes.JOURNAL, Ru.sectionSteps, Icons.Outlined.AutoStories))
+            add(
+                AppMenuItem(
+                    Routes.JOURNAL_FEELINGS,
+                    JournalRu.feelingsTable,
+                    Icons.Outlined.Mood
+                )
+            )
             add(AppMenuItem(Routes.ANALYSIS, Ru.sectionAnalysis, Icons.Outlined.SelfImprovement))
             add(AppMenuItem(Routes.PSYCH, Ru.sectionPsych, Icons.Outlined.Psychology))
             add(AppMenuItem(Routes.JOURNAL_SETTINGS, JournalRu.settings, Icons.Outlined.Settings))
@@ -621,6 +631,11 @@ fun Step4Nav() {
                     else navController.navigate(Routes.journalAnalyzeEntry(id))
                 }
             )
+        }
+        composable(Routes.JOURNAL_FEELINGS) {
+            EnsureTranslations(ScreenBundle.JOURNAL) {
+                FeelingsTableScreen(onBack = { navController.popBackStack() })
+            }
         }
         composable(
             route = Routes.JOURNAL_ENTRY,
@@ -989,6 +1004,7 @@ private fun drawerSelection(route: String?): String {
         r.startsWith("messenger") -> Routes.MESSENGER
         r.startsWith("life/") -> r
         r == Routes.JOURNAL_SETTINGS -> Routes.JOURNAL_SETTINGS
+        r == Routes.JOURNAL_FEELINGS -> Routes.JOURNAL_FEELINGS
         r.startsWith("journal") -> Routes.JOURNAL
         r.startsWith("analysis") -> Routes.ANALYSIS
         r.startsWith("psych") -> Routes.PSYCH

@@ -45,6 +45,13 @@ class BookRepository(private val dao: BookDao) {
         dao.chapter(chapterId)?.let { dao.touchBook(it.bookId, now) }
     }
 
+    /** Автосохранение черновика: обновляет только текст, не трогая название главы. */
+    suspend fun saveChapterText(chapterId: Long, text: String) {
+        val now = System.currentTimeMillis()
+        dao.updateChapterText(chapterId, text, now)
+        dao.chapter(chapterId)?.let { dao.touchBook(it.bookId, now) }
+    }
+
     suspend fun book(id: Long): Book? = dao.book(id)?.toModel()
 
     suspend fun chapter(id: Long): BookChapter? = dao.chapter(id)?.toModel()

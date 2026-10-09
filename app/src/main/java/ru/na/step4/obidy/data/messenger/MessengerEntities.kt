@@ -51,6 +51,9 @@ data class MessengerMessageRow(
     val replyVoiceMs: Int = 0,
     val replyDeleted: Boolean = false,
     val forwardFrom: String = "",
+    val fileName: String = "",
+    val fileMime: String = "",
+    val fileSize: Long = 0L,
     val reactions: String = ""
 )
 

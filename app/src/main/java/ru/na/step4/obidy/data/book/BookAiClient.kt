@@ -13,13 +13,21 @@ data class BookFix(
     val reason: String
 )
 
-/** Исправления выбранных правок: заменяем каждый фрагмент на его исправление. */
+/**
+ * Исправления выбранных правок: правки идут по порядку текста, поэтому каждую
+ * следующую ищем после предыдущей замены — так одинаковые фрагменты не путаются,
+ * а удаление фрагмента (пустое new) работает как есть.
+ */
 fun applyBookFixes(text: String, fixes: List<BookFix>): String {
     var result = text
+    var cursor = 0
     fixes.forEach { fix ->
-        if (fix.old.isNotBlank() && fix.old != fix.new) {
-            result = result.replaceFirst(fix.old, fix.new)
-        }
+        if (fix.old.isBlank() || fix.old == fix.new) return@forEach
+        val at = result.indexOf(fix.old, cursor).takeIf { it >= 0 }
+            ?: result.indexOf(fix.old)
+        if (at < 0) return@forEach
+        result = result.substring(0, at) + fix.new + result.substring(at + fix.old.length)
+        cursor = at + fix.new.length
     }
     return result
 }
@@ -55,7 +63,8 @@ object BookAiClient {
             val item = arr.optJSONObject(i) ?: continue
             val old = item.optString("old")
             val new = item.optString("new")
-            if (old.isBlank() || new.isBlank() || old == new) continue
+            // Пустое new — это удаление фрагмента: редактор убирает оговорку или повтор.
+            if (old.isBlank() || old == new) continue
             fixes.add(BookFix(old = old, new = new, reason = item.optString("reason").trim()))
         }
         return Result.Ok(fixes)

@@ -12,6 +12,12 @@ object VoiceRu {
     val voiceLabel: String get() = VoiceI18n.t("voice.voiceLabel", "Голос по умолчанию")
     val speedLabel: String get() = VoiceI18n.t("voice.speedLabel", "Скорость воспроизведения")
     val preview: String get() = VoiceI18n.t("voice.preview", "Прослушать")
+    val pause: String get() = VoiceI18n.t("voice.pause", "Пауза")
+    val resume: String get() = VoiceI18n.t("voice.resume", "Продолжить")
+    val minuteBack: String get() = VoiceI18n.t("voice.minuteBack", "−1 мин")
+    val minuteForward: String get() = VoiceI18n.t("voice.minuteForward", "+1 мин")
+    val minuteFrom: String get() = VoiceI18n.t("voice.minuteFrom", "С какой минуты")
+    val minuteStart: String get() = VoiceI18n.t("voice.minuteStart", "Начать")
     val notConfigured: String get() = VoiceI18n.t("voice.notConfigured", "Ключ Vapi ещё не задан. Админ может указать его на сайте, вкладка «Голос».")
     val previewText: String get() = VoiceI18n.t("voice.previewText", "Это проверка выбранного голоса и скорости. Текст можно вводить голосом в любом поле.")
 }

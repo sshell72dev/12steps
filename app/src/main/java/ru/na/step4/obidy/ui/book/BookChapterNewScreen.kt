@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -16,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -25,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import ru.na.step4.obidy.data.book.BookAiClient
 import ru.na.step4.obidy.data.book.BookRu
@@ -40,6 +43,7 @@ import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 /**
  * Новая глава: название и текст, «Сохранить» закрывает экран,
  * «Новая глава» сохраняет написанное и оставляет поля пустыми для следующей.
+ * Черновик пишется в базу сам, пока текст набирается, — написанное не пропадает.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,13 +55,19 @@ fun BookChapterNewScreen(
 ) {
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    var title by remember { mutableStateOf("") }
-    var text by remember { mutableStateOf("") }
+    val draft by viewModel.newChapter.collectAsStateWithLifecycle()
     var session by remember { mutableStateOf<BookFixSession?>(null) }
     var fixing by remember { mutableStateOf(false) }
     var appliedTick by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(bookId) { viewModel.open(bookId) }
+    LaunchedEffect(bookId) {
+        viewModel.open(bookId)
+        viewModel.startNewChapter(bookId)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { viewModel.saveNewChapterNow() }
+    }
 
     LaunchedEffect(appliedTick) {
         if (appliedTick > 0) snack.showSnackbar(BookRu.fixDone)
@@ -69,12 +79,12 @@ fun BookChapterNewScreen(
             session = review,
             onToggle = { index -> session = review.toggled(index) },
             onAcceptAll = {
-                text = applyBookFixes(review.source, review.fixes)
+                viewModel.updateNewChapterText(applyBookFixes(review.source, review.fixes))
                 session = null
                 appliedTick += 1
             },
             onAcceptMarked = {
-                text = review.preview
+                viewModel.updateNewChapterText(review.preview)
                 session = null
                 appliedTick += 1
             },
@@ -104,35 +114,38 @@ fun BookChapterNewScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 VoiceOutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it.take(120) },
+                    value = draft.title,
+                    onValueChange = viewModel::updateNewChapterTitle,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(BookRu.chapterTitle) },
                     singleLine = true,
                     speakEnabled = false
                 )
                 VoiceOutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
+                    value = draft.text,
+                    onValueChange = viewModel::updateNewChapterText,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(BookRu.chapterText) },
                     minLines = 12,
                     maxLines = 40
                 )
+                if (draft.chapterId != null) {
+                    Text(
+                        BookRu.draftSaved,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 JournalButton(
                     label = BookRu.save,
-                    onClick = {
-                        viewModel.createChapter(bookId, title, text) { id ->
-                            if (id != null) onSaved()
-                        }
-                    },
+                    onClick = { viewModel.finishNewChapter { ok -> if (ok) onSaved() } },
                     filled = true,
-                    enabled = text.isNotBlank()
+                    enabled = draft.text.isNotBlank()
                 )
                 JournalButton(
                     label = if (fixing) BookRu.fixChecking else BookRu.fixErrors,
                     onClick = {
-                        val source = text
+                        val source = draft.text
                         fixing = true
                         scope.launch {
                             when (val result = BookAiClient.fixText(source)) {
@@ -143,20 +156,16 @@ fun BookChapterNewScreen(
                             fixing = false
                         }
                     },
-                    enabled = text.isNotBlank() && !fixing
+                    enabled = draft.text.isNotBlank() && !fixing
                 )
                 JournalButton(
                     label = BookRu.newChapter,
                     onClick = {
-                        viewModel.createChapter(bookId, title, text) { id ->
-                            if (id != null) {
-                                title = ""
-                                text = ""
-                                scope.launch { snack.showSnackbar(BookRu.saved) }
-                            }
+                        viewModel.finishNewChapter { ok ->
+                            if (ok) scope.launch { snack.showSnackbar(BookRu.saved) }
                         }
                     },
-                    enabled = text.isNotBlank()
+                    enabled = draft.text.isNotBlank()
                 )
             }
         }

@@ -28,6 +28,7 @@ object BookRu {
     val chapterText: String get() = I18n.t("book.chapterText", "Текст главы")
     val save: String get() = I18n.t("book.save", "Сохранить")
     val saved: String get() = I18n.t("book.saved", "Сохранено")
+    val draftSaved: String get() = I18n.t("book.draftSaved", "Черновик сохраняется сам")
     val chapterDefault: String get() = I18n.t("book.chapterDefault", "Глава %1\$d")
     val emptyText: String get() = I18n.t("book.emptyText", "Текст пока пустой")
     val bookMissing: String get() = I18n.t("book.bookMissing", "Книга не найдена.")
@@ -47,6 +48,7 @@ object BookRu {
     val fixError: String get() = I18n.t("book.fixError", "Не удалось проверить текст. Попробуйте ещё раз.")
     val fixWas: String get() = I18n.t("book.fixWas", "Было")
     val fixBecame: String get() = I18n.t("book.fixBecame", "Стало")
+    val fixRemoved: String get() = I18n.t("book.fixRemoved", "удалено")
 
     fun chapterName(order: Int): String = chapterDefault.format(order)
 }

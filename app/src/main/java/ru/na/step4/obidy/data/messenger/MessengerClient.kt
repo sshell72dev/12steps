@@ -140,6 +140,30 @@ class MessengerClient(private val messengerId: () -> String) {
         }
     }
 
+    /** Вложение: фото уходит сжатым, файлы — как есть; имя показывается в пузыре. */
+    fun sendFile(
+        chatId: String,
+        file: File,
+        fileName: String,
+        mimeType: String,
+        replyToId: Long = 0L
+    ): MessengerResult<MessengerMessage> {
+        val fields = buildMap { if (replyToId > 0L) put("reply_to_id", replyToId.toString()) }
+        return map(
+            MessengerHttp.postFile(
+                path = "/api/v1/messenger/chats/$chatId/files",
+                messengerId = messengerId(),
+                file = file,
+                fieldName = "file",
+                fileName = fileName,
+                mimeType = mimeType,
+                extraFields = fields
+            )
+        ) { obj ->
+            parseMessage(obj.optJSONObject("message"))
+        }
+    }
+
     fun markRead(chatId: String, lastId: Long): MessengerResult<Unit> {
         val payload = JSONObject().put("last_id", lastId)
         return map(
@@ -391,6 +415,11 @@ class MessengerClient(private val messengerId: () -> String) {
         return MessengerHttp.getBytes("/api/v1/messenger/voice/$messageId", messengerId())
     }
 
+    /** Байты вложения: фото в ленте и файл для открытия приходят одним запросом. */
+    fun downloadFile(messageId: Long): MessengerResult<ByteArray> {
+        return MessengerHttp.getBytes("/api/v1/messenger/files/$messageId", messengerId())
+    }
+
     private fun <T> map(
         raw: MessengerResult<MessengerHttp.Response>,
         parse: (JSONObject) -> T
@@ -416,6 +445,7 @@ class MessengerClient(private val messengerId: () -> String) {
             "self_invite" -> MessengerRu.selfInvite
             "invite_not_found", "bad_token" -> MessengerRu.badQr
             "file_too_large" -> MessengerRu.photoTooLarge
+            "attachment_too_large" -> MessengerRu.fileTooLarge
             "bad_image" -> MessengerRu.photoBadFormat
             "challenge_locked" -> MessengerRu.groupLocked
             "owner_immutable" -> MessengerRu.ownerImmutable
@@ -581,6 +611,9 @@ class MessengerClient(private val messengerId: () -> String) {
             replyVoiceMs = reply?.optInt("voice_duration_ms") ?: 0,
             replyDeleted = reply?.optBoolean("deleted") ?: false,
             forwardFrom = row.optString("forward_from"),
+            fileName = row.optString("file_name"),
+            fileMime = row.optString("file_mime"),
+            fileSize = row.optLong("file_size"),
             reactions = parseReactions(row.optJSONArray("reactions"))
         )
     }

@@ -22,6 +22,9 @@ MAX_TEXT = 4000
 MAX_VOICE_BYTES = 1_048_576
 MAX_VOICE_MS = 60_000
 MAX_AVATAR_BYTES = 2_097_152
+# Вложения в чате: фото уходит сжатым на клиенте, файлы — как есть. Лимит общий.
+MAX_FILE_BYTES = 10_485_760
+MAX_FILE_NAME = 120
 SETTING_KEY = "messenger_enabled"
 # Присутствие: клиент опрашивает сервер каждые 2.5–8 секунд, поэтому 90 секунд без
 # запросов означают «вышел», а отметку пишем не чаще раза в минуту.
@@ -377,6 +380,20 @@ def _ensure_media_schema(cur) -> None:
         cur.execute(
             "ALTER TABLE messenger_messages ADD COLUMN anonymous TINYINT(1) NOT NULL DEFAULT 0"
         )
+    if not _has_column(cur, "messenger_messages", "file_path"):
+        # Вложение: путь к файлу на диске, имя, тип и размер для показа в пузыре.
+        cur.execute(
+            "ALTER TABLE messenger_messages ADD COLUMN file_path VARCHAR(255) NOT NULL DEFAULT ''"
+        )
+        cur.execute(
+            "ALTER TABLE messenger_messages ADD COLUMN file_name VARCHAR(255) NOT NULL DEFAULT ''"
+        )
+        cur.execute(
+            "ALTER TABLE messenger_messages ADD COLUMN file_mime VARCHAR(80) NOT NULL DEFAULT ''"
+        )
+        cur.execute(
+            "ALTER TABLE messenger_messages ADD COLUMN file_size BIGINT NOT NULL DEFAULT 0"
+        )
     if not _has_column(cur, "messenger_chats", "pinned_message_id"):
         cur.execute("ALTER TABLE messenger_chats ADD COLUMN pinned_message_id BIGINT NULL")
     if not _has_column(cur, "messenger_chats", "topic_id"):
@@ -480,13 +497,19 @@ def _is_group_member(cur, group_id: str, user_id: str) -> bool:
 
 
 def _drop_chat(cur, chat_id: str) -> None:
-    """Удалить чат вместе с лентой, голосовыми файлами и участниками."""
+    """Удалить чат вместе с лентой, голосовыми и вложениями."""
     cur.execute(
         "SELECT id FROM messenger_messages WHERE chat_id = %s AND kind = 'voice'",
         (chat_id,),
     )
     for row in cur.fetchall():
         _drop_voice_file(int(row["id"]))
+    cur.execute(
+        "SELECT id FROM messenger_messages WHERE chat_id = %s AND kind IN ('photo', 'file')",
+        (chat_id,),
+    )
+    for row in cur.fetchall():
+        _drop_file(int(row["id"]))
     cur.execute(
         """
         DELETE FROM messenger_reactions
@@ -529,7 +552,7 @@ def _topic_json(
         _add_chat_member(cur, chat_id, me)
         cur.execute(
             """
-            SELECT kind, body, UNIX_TIMESTAMP(created_at) AS created_unix
+            SELECT kind, body, file_name, UNIX_TIMESTAMP(created_at) AS created_unix
             FROM messenger_messages
             WHERE chat_id = %s AND deleted = 0
             ORDER BY id DESC LIMIT 1
@@ -542,6 +565,10 @@ def _topic_json(
         last_at = _ms(last, "created_unix")
         if last_kind == "voice":
             last_body = "Голосовое сообщение"
+        elif last_kind == "photo":
+            last_body = "Фото"
+        elif last_kind == "file":
+            last_body = (last.get("file_name") or "").strip() or "Файл"
         cur.execute(
             "SELECT last_read_id FROM messenger_chat_members WHERE chat_id = %s AND user_id = %s",
             (chat_id, me),
@@ -1251,7 +1278,7 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
         has_topics = int((cur.fetchone() or {}).get("total") or 0) > 0
     cur.execute(
         """
-        SELECT id, kind, body, sender_id,
+        SELECT id, kind, body, sender_id, file_name,
                UNIX_TIMESTAMP(created_at) AS created_unix
         FROM messenger_messages
         WHERE chat_id = %s AND deleted = 0
@@ -1271,6 +1298,10 @@ def _chat_json(cur, chat: dict, me: str) -> dict:
     last_kind = last.get("kind") or ""
     if last_kind == "voice":
         preview = "Голосовое сообщение"
+    elif last_kind == "photo":
+        preview = "Фото"
+    elif last_kind == "file":
+        preview = (last.get("file_name") or "").strip() or "Файл"
     avatar_url = _avatar_url("user", peer_id) if kind == "direct" else _avatar_url("group", group_id)
     unread = _unread(cur, chat["id"], me, last_read)
     if has_topics:
@@ -1347,6 +1378,10 @@ def _message_json(
         "kind": kind,
         "body": "" if deleted else (row.get("body") or ""),
         "voice_duration_ms": 0 if deleted else int(row.get("voice_duration_ms") or 0),
+        # Вложение удалённого сообщения не отдаём: файл с диска уже стёрт.
+        "file_name": "" if deleted else (row.get("file_name") or ""),
+        "file_mime": "" if deleted else (row.get("file_mime") or ""),
+        "file_size": 0 if deleted else int(row.get("file_size") or 0),
         "created_at": _ms(row, "created_unix"),
         "mine": sender == me,
         "edited_at": _ms(row, "edited_unix"),
@@ -1403,6 +1438,7 @@ def _reactions_for(cur, message_ids: list[int], me: str) -> dict[int, list[dict]
 MESSAGE_SELECT = """
     SELECT m.id, m.chat_id, m.sender_id, m.kind, m.body, m.voice_duration_ms, m.deleted,
            m.reply_to_id, m.forward_from, m.anonymous,
+           m.file_path, m.file_name, m.file_mime, m.file_size,
            UNIX_TIMESTAMP(m.created_at) AS created_unix,
            UNIX_TIMESTAMP(m.edited_at) AS edited_unix,
            r.sender_id AS reply_sender_id, r.kind AS reply_kind, r.body AS reply_body,
@@ -1423,14 +1459,18 @@ def _insert_message(
     reply_to_id: int = 0,
     forward_from: str = "",
     anonymous: int = 0,
+    file_name: str = "",
+    file_mime: str = "",
+    file_size: int = 0,
 ) -> int:
     now = db.utc_now()
     cur.execute(
         """
         INSERT INTO messenger_messages
             (chat_id, sender_id, kind, body, voice_path, voice_duration_ms,
-             created_at, reply_to_id, forward_from, anonymous)
-        VALUES (%s, %s, %s, %s, '', %s, %s, %s, %s, %s)
+             created_at, reply_to_id, forward_from, anonymous,
+             file_path, file_name, file_mime, file_size)
+        VALUES (%s, %s, %s, %s, '', %s, %s, %s, %s, %s, '', %s, %s, %s)
         """,
         (
             chat_id,
@@ -1442,6 +1482,9 @@ def _insert_message(
             reply_to_id or None,
             forward_from,
             1 if anonymous else 0,
+            file_name,
+            file_mime,
+            file_size,
         ),
     )
     message_id = int(cur.lastrowid)
@@ -1495,6 +1538,68 @@ def _drop_voice_file(message_id: int) -> None:
         (UPLOAD_DIR / f"{message_id}.m4a").unlink()
     except OSError:
         pass
+
+
+def _clean_file_name(raw: str) -> str:
+    """Имя вложения от клиента: только имя без пути и без служебных символов."""
+    name = (raw or "").replace("\\", "/").split("/")[-1].strip()
+    name = re.sub(r"[\x00-\x1f\x7f]", "", name)
+    return name[:MAX_FILE_NAME]
+
+
+def _file_ext(name: str) -> str:
+    """Расширение для файла на диске. Незнакомое заменяем на .bin."""
+    ext = Path(name).suffix.lower()
+    if not re.fullmatch(r"\.[a-z0-9]{1,8}", ext or ""):
+        return ".bin"
+    return ext
+
+
+def _attachment_path(row: dict, message_id: int) -> Path | None:
+    """Файл вложения: сначала запись из базы, затем поиск файла по номеру сообщения."""
+    stored = (row.get("file_path") or "").strip()
+    if stored:
+        alt = Path(__file__).resolve().parent.parent / stored.replace("/", os.sep)
+        if alt.is_file():
+            return alt
+    for candidate in sorted(UPLOAD_DIR.glob(f"{message_id}.*")):
+        # Голосовое лежит рядом с тем же номером — его отдаёт отдельный адрес.
+        if candidate.is_file() and candidate.suffix.lower() != ".m4a":
+            return candidate
+    return None
+
+
+def _drop_file(message_id: int) -> None:
+    """Файлы вложения носят номер сообщения в имени: зачищаем по номеру."""
+    for candidate in UPLOAD_DIR.glob(f"{message_id}.*"):
+        # Голосовое того же номера чистит _drop_voice_file.
+        if candidate.is_file() and candidate.suffix.lower() != ".m4a":
+            try:
+                candidate.unlink()
+            except OSError:
+                pass
+
+
+def _copy_attachment(cur, source_id: int, message_id: int) -> bool:
+    """Пересылка вложения копирует файл: он привязан к своему сообщению."""
+    cur.execute(
+        "SELECT file_path FROM messenger_messages WHERE id = %s",
+        (source_id,),
+    )
+    row = cur.fetchone() or {}
+    source = _attachment_path(row, source_id)
+    if source is None:
+        return False
+    target = UPLOAD_DIR / f"{message_id}{source.suffix.lower()}"
+    try:
+        shutil.copyfile(source, target)
+    except OSError:
+        return False
+    cur.execute(
+        "UPDATE messenger_messages SET file_path = %s WHERE id = %s",
+        (f"uploads/messenger/{target.name}", message_id),
+    )
+    return True
 
 
 def broadcast_support_update(version_name: str, version_code: int) -> dict:
@@ -2107,10 +2212,14 @@ def register(app, login_required, api_ok) -> None:
             forward_from = ""
             kind = "text"
             duration_ms = 0
+            file_name = ""
+            file_mime = ""
+            file_size = 0
             if forward_id:
                 cur.execute(
                     """
-                    SELECT chat_id, sender_id, kind, body, voice_duration_ms, deleted, anonymous
+                    SELECT chat_id, sender_id, kind, body, voice_duration_ms, deleted, anonymous,
+                           file_name, file_mime, file_size
                     FROM messenger_messages WHERE id = %s
                     """,
                     (forward_id,),
@@ -2132,6 +2241,13 @@ def register(app, login_required, api_ok) -> None:
                     kind = "voice"
                     body = ""
                     duration_ms = int(source.get("voice_duration_ms") or 0)
+                elif source_kind in ("photo", "file"):
+                    # Вложение пересылается копией файла, подпись берётся из данных оригинала.
+                    kind = source_kind
+                    body = ""
+                    file_name = _clean_file_name(source.get("file_name") or "")
+                    file_mime = (source.get("file_mime") or "").strip()[:80]
+                    file_size = int(source.get("file_size") or 0)
                 else:
                     body = (source.get("body") or "")[:MAX_TEXT]
                     if not body:
@@ -2146,6 +2262,9 @@ def register(app, login_required, api_ok) -> None:
                 reply_to_id,
                 forward_from,
                 anonymous,
+                file_name,
+                file_mime,
+                file_size,
             )
             if kind == "voice":
                 if not _copy_voice(forward_id, message_id):
@@ -2155,6 +2274,10 @@ def register(app, login_required, api_ok) -> None:
                     "UPDATE messenger_messages SET voice_path = %s WHERE id = %s",
                     (f"uploads/messenger/{message_id}.m4a", message_id),
                 )
+            elif kind in ("photo", "file"):
+                if not _copy_attachment(cur, forward_id, message_id):
+                    cur.execute("DELETE FROM messenger_messages WHERE id = %s", (message_id,))
+                    return jsonify({"error": "store_failed"}), 500
             ticket_id = _ideas_ticket_for_chat(cur, chat_id)
             row = _load_message(cur, message_id)
             names = _names_for(
@@ -2235,6 +2358,81 @@ def register(app, login_required, api_ok) -> None:
         if not path.is_file():
             return jsonify({"error": "not_found"}), 404
         return send_file(path, mimetype="audio/mp4", as_attachment=False, download_name=f"{message_id}.m4a")
+
+    @app.post("/api/v1/messenger/chats/<chat_id>/files")
+    @guard(need_user=True)
+    def api_messenger_send_file(messenger_id: str, chat_id: str):
+        """Вложение в чат: фото уходит сжатым на клиенте, файлы — как есть."""
+        if not _valid_id(chat_id):
+            return jsonify({"error": "not_found"}), 404
+        upload = request.files.get("file")
+        if upload is None:
+            return jsonify({"error": "file_required"}), 400
+        raw = upload.read(MAX_FILE_BYTES + 1)
+        if not raw or len(raw) > MAX_FILE_BYTES:
+            return jsonify({"error": "attachment_too_large"}), 400
+        name = _clean_file_name(upload.filename)
+        if not name:
+            return jsonify({"error": "file_required"}), 400
+        mime = (upload.mimetype or "").strip()[:80]
+        kind = "photo" if mime.startswith("image/") else "file"
+        reply_to_id = _int_value(request.form.get("reply_to_id"))
+        is_admin = _admin_ok(request.headers.get("X-Admin-Code") or "")
+        with db.cursor() as cur:
+            if not _is_member(cur, chat_id, messenger_id, admin=is_admin):
+                return jsonify({"error": "forbidden"}), 403
+            reply_to_id = _reply_target(cur, chat_id, reply_to_id)
+            message_id = _insert_message(
+                cur,
+                chat_id,
+                messenger_id,
+                kind,
+                "",
+                0,
+                reply_to_id,
+                "",
+                0,
+                name,
+                mime,
+                len(raw),
+            )
+            filename = f"{message_id}{_file_ext(name)}"
+            path = UPLOAD_DIR / filename
+            try:
+                path.write_bytes(raw)
+            except OSError:
+                cur.execute("DELETE FROM messenger_messages WHERE id = %s", (message_id,))
+                return jsonify({"error": "store_failed"}), 500
+            cur.execute(
+                "UPDATE messenger_messages SET file_path = %s WHERE id = %s",
+                (f"uploads/messenger/{filename}", message_id),
+            )
+            row = _load_message(cur, message_id)
+            names = _names_for(
+                cur, [messenger_id, (row or {}).get("reply_sender_id") or ""]
+            )
+        return jsonify({"message": _message_json(row, messenger_id, names)})
+
+    @app.get("/api/v1/messenger/files/<int:message_id>")
+    @guard(need_user=True)
+    def api_messenger_file(messenger_id: str, message_id: int):
+        """Скачивание вложения: имя и тип берём из записи сообщения."""
+        with db.cursor() as cur:
+            cur.execute(
+                "SELECT id, chat_id, kind, file_path, file_name, file_mime FROM messenger_messages WHERE id = %s",
+                (message_id,),
+            )
+            row = cur.fetchone()
+            if not row or row.get("kind") not in ("photo", "file"):
+                return jsonify({"error": "not_found"}), 404
+            if not _is_member(cur, row["chat_id"], messenger_id):
+                return jsonify({"error": "forbidden"}), 403
+        path = _attachment_path(row, message_id)
+        if path is None:
+            return jsonify({"error": "not_found"}), 404
+        name = (row.get("file_name") or "").strip() or f"file-{message_id}"
+        mime = (row.get("file_mime") or "").strip() or "application/octet-stream"
+        return send_file(path, mimetype=mime, as_attachment=False, download_name=name)
 
     @app.post("/api/v1/messenger/chats/<chat_id>/read")
     @guard(need_user=True)
@@ -2531,8 +2729,15 @@ def register(app, login_required, api_ok) -> None:
                 return jsonify({"error": "forbidden"}), 403
             if row["kind"] == "voice":
                 _drop_voice_file(message_id)
+            if row["kind"] in ("photo", "file"):
+                _drop_file(message_id)
             cur.execute(
-                "UPDATE messenger_messages SET deleted = 1, body = '', voice_path = '' WHERE id = %s",
+                """
+                UPDATE messenger_messages
+                SET deleted = 1, body = '', voice_path = '',
+                    file_path = '', file_name = '', file_mime = '', file_size = 0
+                WHERE id = %s
+                """,
                 (message_id,),
             )
             cur.execute("DELETE FROM messenger_reactions WHERE message_id = %s", (message_id,))
