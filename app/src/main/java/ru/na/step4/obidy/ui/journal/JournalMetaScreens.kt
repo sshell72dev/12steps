@@ -149,6 +149,7 @@ fun JournalSettingsScreen(
     var settingsTab by remember { mutableStateOf(0) }
     var literatureLength by remember { mutableStateOf(journalPrefs.literatureLength) }
     var adviceLength by remember { mutableStateOf(journalPrefs.adviceLength) }
+    var challengeSteps by remember { mutableStateOf(journalPrefs.challengeEnabled) }
     val openJson = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -253,6 +254,27 @@ fun JournalSettingsScreen(
                 ) {
                     if (settingsTab == 0) {
                 DarkThemeRow()
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            JournalRu.settingsChallengeSteps,
+                            color = Forest,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            JournalRu.settingsChallengeStepsHint,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = challengeSteps,
+                        onCheckedChange = { checked ->
+                            challengeSteps = checked
+                            journalPrefs.challengeEnabled = checked
+                        }
+                    )
+                }
                 Text(JournalRu.settingsLiterature, color = Amber, style = MaterialTheme.typography.labelMedium)
                 AiLengthRow(
                     current = literatureLength,

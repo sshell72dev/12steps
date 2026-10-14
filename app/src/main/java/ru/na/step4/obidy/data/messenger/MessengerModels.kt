@@ -20,6 +20,8 @@ data class MessengerChat(
     val lastKind: String = "",
     val lastAt: Long = 0L,
     val unread: Int = 0,
+    /** Чат закрепил сам пользователь: такие чаты всегда идут первыми в списке. */
+    val isPinned: Boolean = false,
     val pinnedId: Long = 0L,
     val pinnedKind: String = "",
     val pinnedBody: String = "",
@@ -165,6 +167,18 @@ data class MessengerTopic(
 data class MessengerTopics(
     val items: List<MessengerTopic> = emptyList(),
     val canCreate: Boolean = false
+)
+
+/**
+ * Непрочитанные сообщения одной подгруппы: основной экран группы собирает их
+ * из всех тем в одну ленту, чтобы не открывать темы по одной.
+ */
+data class MessengerTopicUnread(
+    val topicId: String = "",
+    val name: String = "",
+    val chatId: String = "",
+    val unread: Int = 0,
+    val messages: List<MessengerMessage> = emptyList()
 )
 
 data class MessengerJoinResult(

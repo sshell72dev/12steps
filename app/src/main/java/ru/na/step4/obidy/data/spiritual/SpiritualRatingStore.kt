@@ -102,6 +102,7 @@ class SpiritualRatingStore(context: Context) {
             SpiritualSource.ANALYSIS -> SpiritualRu.reasonAnalysis
             SpiritualSource.JOURNAL -> SpiritualRu.reasonJournal
             SpiritualSource.PSYCH -> SpiritualRu.reasonPsych
+            SpiritualSource.INVENTORY -> SpiritualRu.reasonInventory
             SpiritualSource.SUPPORT -> SpiritualRu.reasonSupport
             else -> SpiritualEconomy.sourceLabel(source)
         }
@@ -197,6 +198,7 @@ class SpiritualRatingStore(context: Context) {
             .putBoolean(FLAG_JOURNAL, false)
             .putBoolean(FLAG_PSYCH, false)
             .putBoolean(FLAG_SUPPORT, false)
+            .putBoolean(FLAG_INVENTORY, false)
             .apply()
     }
 
@@ -205,6 +207,7 @@ class SpiritualRatingStore(context: Context) {
         SpiritualSource.JOURNAL -> FLAG_JOURNAL
         SpiritualSource.PSYCH -> FLAG_PSYCH
         SpiritualSource.SUPPORT -> FLAG_SUPPORT
+        SpiritualSource.INVENTORY -> FLAG_INVENTORY
         else -> null
     }
 
@@ -236,6 +239,7 @@ class SpiritualRatingStore(context: Context) {
             .putBoolean(FLAG_JOURNAL, false)
             .putBoolean(FLAG_PSYCH, false)
             .putBoolean(FLAG_SUPPORT, false)
+            .putBoolean(FLAG_INVENTORY, false)
             .apply()
     }
 
@@ -303,6 +307,7 @@ class SpiritualRatingStore(context: Context) {
         private const val FLAG_JOURNAL = "did_journal"
         private const val FLAG_PSYCH = "did_psych"
         private const val FLAG_SUPPORT = "did_support"
+        private const val FLAG_INVENTORY = "did_inventory"
         private const val MAX_EVENTS = 50
         private const val MAX_AI_IDS = 200
     }

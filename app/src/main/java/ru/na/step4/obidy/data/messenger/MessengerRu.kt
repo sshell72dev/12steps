@@ -12,6 +12,13 @@ object MessengerRu {
     val nicknameHint: String get() = I18n.t("messenger.nicknameHint", "Никнейм")
     val continueLabel: String get() = I18n.t("messenger.continue", "Продолжить")
     val emptyChats: String get() = I18n.t("messenger.emptyChats", "Пока нет чатов. Покажите свой QR другу или отсканируйте его код.")
+    val chatPin: String get() = I18n.t("messenger.chatPin", "Закрепить чат")
+    val chatUnpin: String get() = I18n.t("messenger.chatUnpin", "Открепить чат")
+    val chatPinned: String get() = I18n.t("messenger.chatPinned", "Закреплён")
+    val chatPinHint: String get() = I18n.t(
+        "messenger.chatPinHint",
+        "Закреплённые чаты всегда вверху списка. Нажмите и удерживайте чат, чтобы закрепить или открепить его."
+    )
     val myQr: String get() = I18n.t("messenger.myQr", "Мой QR")
     val scanQr: String get() = I18n.t("messenger.scanQr", "Сканировать")
     val newGroup: String get() = I18n.t("messenger.newGroup", "Новая группа")
@@ -100,6 +107,12 @@ object MessengerRu {
         "messenger.topicsScreenHint",
         "Подгруппы группы: у каждой своя лента сообщений."
     )
+    val topicUnreadTitle: String get() = I18n.t("messenger.topicUnreadTitle", "Новые сообщения в темах")
+    val topicUnreadHint: String get() = I18n.t(
+        "messenger.topicUnreadHint",
+        "Непрочитанное из всех тем группы — собрано здесь, чтобы не открывать темы по одной."
+    )
+    val topicUnreadOpen: String get() = I18n.t("messenger.topicUnreadOpen", "Открыть тему")
     val topicGeneral: String get() = I18n.t("messenger.topicGeneral", "Общий")
     val topicCreate: String get() = I18n.t("messenger.topicCreate", "Новая тема")
     val topicRename: String get() = I18n.t("messenger.topicRename", "Переименовать тему")

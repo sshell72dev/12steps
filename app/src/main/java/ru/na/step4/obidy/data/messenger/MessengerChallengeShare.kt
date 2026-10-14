@@ -10,9 +10,12 @@ class MessengerChallengeShare(
     private val messenger: MessengerRepository,
     private val journalStreak: JournalStreakStore,
     private val analysisStreak: AnalysisStreakStore,
-    private val spiritual: SpiritualRatingStore
+    private val spiritual: SpiritualRatingStore,
+    private val stepsChallengeEnabled: () -> Boolean = { true },
+    private val analysisChallengeEnabled: () -> Boolean = { true }
 ) {
     suspend fun shareJournal(pointName: String) {
+        if (!stepsChallengeEnabled()) return
         runCatching {
             val name = pointName.trim()
             if (name.isBlank()) return
@@ -25,6 +28,7 @@ class MessengerChallengeShare(
     }
 
     suspend fun shareAnalysis(analysisTitle: String) {
+        if (!analysisChallengeEnabled()) return
         runCatching {
             val name = analysisTitle.trim()
             if (name.isBlank()) return
@@ -43,6 +47,7 @@ class MessengerChallengeShare(
      */
     suspend fun shareInventory(): Boolean = runCatching {
         journalStreak.recordCompletion()
+        if (!stepsChallengeEnabled()) return@runCatching true
         val streak = journalStreak.label() ?: Ru.analysisStreak
         messenger.shareChallenge(
             MessengerChallengeKeys.STEPS,

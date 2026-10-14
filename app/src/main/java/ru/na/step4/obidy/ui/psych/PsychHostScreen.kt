@@ -153,11 +153,11 @@ fun PsychHostScreen(
         when (ui.page) {
             PsychPage.Hub, is PsychPage.Onboarding -> onLeaveAppHome()
             PsychPage.Settings, PsychPage.Record, is PsychPage.ViewPeriod,
-            is PsychPage.Paywall, is PsychPage.SessionList -> viewModel.goHub()
+            is PsychPage.Paywall, is PsychPage.SessionList -> viewModel.goHubKeepingPlace()
             PsychPage.Profile, PsychPage.AiSettings, PsychPage.Topics, PsychPage.Reminders ->
                 viewModel.goSettings()
             is PsychPage.TopicDetail -> viewModel.goTopics()
-            else -> viewModel.goHub()
+            else -> viewModel.goHubKeepingPlace()
         }
     }
     BackHandler(onBack = onBack)

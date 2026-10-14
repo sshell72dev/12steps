@@ -198,6 +198,10 @@ class VoiceHandsController(
             }
             return
         }
+        // Движок TTS поднимается при включении голосового режима, а не при старте
+        // приложения: в hands-free ответ должен звучать сразу, обычному запуску
+        // прогретый движок не нужен.
+        speaker.ensureReady()
         enterStandby()
     }
 

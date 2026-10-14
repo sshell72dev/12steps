@@ -48,14 +48,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ru.na.step4.obidy.data.messenger.MessengerMessage
 import ru.na.step4.obidy.data.messenger.MessengerRu
 import ru.na.step4.obidy.data.messenger.MessengerTopic
+import ru.na.step4.obidy.data.messenger.MessengerTopicUnread
 import ru.na.step4.obidy.ui.AppNavIcon
 import ru.na.step4.obidy.ui.components.AtmosphereBackground
 import ru.na.step4.obidy.ui.components.imeScaffoldContent
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
 import ru.na.step4.obidy.ui.theme.Sand
+import ru.na.step4.obidy.ui.theme.SandDeep
 import ru.na.steps12.voice.ui.VoiceOutlinedTextField
 
 /**
@@ -73,6 +76,7 @@ fun MessengerTopicsScreen(
 ) {
     val info by viewModel.groupInfo.collectAsStateWithLifecycle()
     val topics by viewModel.topics.collectAsStateWithLifecycle()
+    val unread by viewModel.topicUnread.collectAsStateWithLifecycle()
     val refresh by viewModel.groupRefresh.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     var createDraft by remember { mutableStateOf("") }
@@ -90,14 +94,18 @@ fun MessengerTopicsScreen(
     LaunchedEffect(groupId, refresh) {
         viewModel.loadGroup(groupId)
         viewModel.loadTopics(groupId)
+        viewModel.loadTopicUnread(groupId)
     }
 
-    fun openTopic(topic: MessengerTopic) {
-        if (topic.chatId.isBlank()) return
+    /** Открывает ленту темы: так же открываются сообщения из общей ленты новых. */
+    fun openTopicChat(chatId: String, name: String) {
+        if (chatId.isBlank()) return
         val groupName = info?.name.orEmpty()
-        val chatTitle = listOf(groupName, topic.name).filter { it.isNotBlank() }.joinToString(" · ")
-        onOpenTopic(topic.chatId, chatTitle)
+        val chatTitle = listOf(groupName, name).filter { it.isNotBlank() }.joinToString(" · ")
+        onOpenTopic(chatId, chatTitle)
     }
+
+    fun openTopic(topic: MessengerTopic) = openTopicChat(topic.chatId, topic.name)
 
     Scaffold(
         containerColor = Sand,
@@ -169,6 +177,12 @@ fun MessengerTopicsScreen(
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        UnreadTopicsBlock(
+                            items = unread,
+                            onOpen = { chatId, name -> openTopicChat(chatId, name) }
+                        )
+                    }
                     item {
                         Text(
                             MessengerRu.topicsScreenHint,
@@ -281,6 +295,77 @@ fun MessengerTopicsScreen(
             }
         )
     }
+}
+
+/**
+ * Новые сообщения всех тем группы: группа с темами открывается этим экраном,
+ * поэтому непрочитанное из её тем собирается здесь — не нужно открывать темы
+ * по одной. Нажатие на сообщение открывает его тему.
+ */
+@Composable
+private fun UnreadTopicsBlock(
+    items: List<MessengerTopicUnread>,
+    onOpen: (String, String) -> Unit
+) {
+    if (items.isEmpty()) return
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(SandDeep)
+            .padding(vertical = 10.dp)
+    ) {
+        Text(
+            MessengerRu.topicUnreadTitle,
+            modifier = Modifier.padding(horizontal = 12.dp),
+            style = MaterialTheme.typography.titleSmall,
+            color = Forest
+        )
+        Text(
+            MessengerRu.topicUnreadHint,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        items.forEach { group ->
+            group.messages.forEach { message ->
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpen(group.chatId, group.name) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        group.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Amber,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        topicMessagePreview(message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Forest,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Строка сообщения в общей ленте: у вложения своего текста нет. */
+private fun topicMessagePreview(message: MessengerMessage): String {
+    val text = when {
+        message.isVoice -> MessengerRu.voiceMessage
+        message.isPhoto -> MessengerRu.photoMessage
+        message.isFile -> message.fileName.ifBlank { MessengerRu.fileMessage }
+        else -> message.body
+    }
+    val author = message.senderName.trim()
+    return if (author.isBlank()) text else "$author: $text"
 }
 
 @Composable

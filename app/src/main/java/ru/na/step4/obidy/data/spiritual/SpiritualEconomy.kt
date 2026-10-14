@@ -5,6 +5,7 @@ object SpiritualEconomy {
     const val BASE_JOURNAL = 3
     const val BASE_PSYCH = 4
     const val BASE_SUPPORT = 2
+    const val BASE_INVENTORY = 4
     const val FICTITIOUS_PENALTY = -3
 
     const val RATE_MIN = 0.50f
@@ -63,6 +64,7 @@ object SpiritualEconomy {
         SpiritualSource.JOURNAL -> SpiritualRu.srcJournal
         SpiritualSource.PSYCH -> SpiritualRu.srcPsych
         SpiritualSource.SUPPORT -> SpiritualRu.srcSupport
+        SpiritualSource.INVENTORY -> SpiritualRu.srcInventory
         SpiritualSource.AI -> SpiritualRu.srcAi
         SpiritualSource.MISS -> SpiritualRu.srcMiss
     }
@@ -72,6 +74,7 @@ object SpiritualEconomy {
         SpiritualSource.JOURNAL -> BASE_JOURNAL
         SpiritualSource.PSYCH -> BASE_PSYCH
         SpiritualSource.SUPPORT -> BASE_SUPPORT
+        SpiritualSource.INVENTORY -> BASE_INVENTORY
         else -> 0
     }
 }

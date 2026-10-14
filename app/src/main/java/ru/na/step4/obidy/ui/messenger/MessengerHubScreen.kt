@@ -1,7 +1,9 @@
 package ru.na.step4.obidy.ui.messenger
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.GroupAdd
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -29,11 +33,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,6 +84,7 @@ fun MessengerHubScreen(
     val chats by viewModel.chats.collectAsStateWithLifecycle()
     val challenges by viewModel.challenges.collectAsStateWithLifecycle()
     val openChallenges = challenges.filterNot { it.joined }
+    var pinTarget by remember { mutableStateOf<MessengerChat?>(null) }
     DisposableEffect(Unit) {
         viewModel.startHubPolling()
         onDispose { viewModel.stopHubPolling() }
@@ -144,12 +153,42 @@ fun MessengerHubScreen(
                         }
                     }
                     items(chats, key = { it.id }) { chat ->
-                        ChatRow(chat = chat, viewModel = viewModel, onClick = { onOpenChat(chat) })
+                        ChatRow(
+                            chat = chat,
+                            viewModel = viewModel,
+                            onClick = { onOpenChat(chat) },
+                            onLongClick = { pinTarget = chat }
+                        )
                     }
                     item { Spacer(Modifier.height(72.dp)) }
                 }
             }
         }
+    }
+
+    pinTarget?.let { chat ->
+        AlertDialog(
+            onDismissRequest = { pinTarget = null },
+            title = { Text(if (chat.isPinned) MessengerRu.chatUnpin else MessengerRu.chatPin) },
+            text = { Text(MessengerRu.chatPinHint) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val pin = !chat.isPinned
+                    pinTarget = null
+                    viewModel.setChatPinned(chat.id, pin)
+                }) {
+                    Text(
+                        if (chat.isPinned) MessengerRu.chatUnpin else MessengerRu.chatPin,
+                        color = Forest
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pinTarget = null }) {
+                    Text(MessengerRu.confirmNo, color = Forest)
+                }
+            }
+        )
     }
 }
 
@@ -188,8 +227,14 @@ private fun ChallengeJoinCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChatRow(chat: MessengerChat, viewModel: MessengerViewModel, onClick: () -> Unit) {
+private fun ChatRow(
+    chat: MessengerChat,
+    viewModel: MessengerViewModel,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
     val preview = if (chat.lastKind == "voice" && chat.lastBody.isBlank()) {
         MessengerRu.voiceMessage
     } else {
@@ -198,7 +243,7 @@ private fun ChatRow(chat: MessengerChat, viewModel: MessengerViewModel, onClick:
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -219,13 +264,25 @@ private fun ChatRow(chat: MessengerChat, viewModel: MessengerViewModel, onClick:
             )
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(
-                chat.title.ifBlank { MessengerRu.title },
-                style = MaterialTheme.typography.titleMedium,
-                color = Forest,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    chat.title.ifBlank { MessengerRu.title },
+                    modifier = Modifier.weight(1f, fill = false),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Forest,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (chat.isPinned) {
+                    Spacer(Modifier.size(6.dp))
+                    Icon(
+                        Icons.Outlined.PushPin,
+                        contentDescription = MessengerRu.chatPinned,
+                        tint = Amber,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
             if (preview.isNotBlank()) {
                 Text(
                     preview,

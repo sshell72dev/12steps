@@ -223,6 +223,21 @@ class PsychSettings(
         get() = prefs.getString(KEY_ACTIVE_UID, "") ?: ""
         set(value) { prefs.edit().putString(KEY_ACTIVE_UID, value).apply() }
 
+    /** Сессия, на экран которой надо вернуть человека при следующем входе в раздел. */
+    var lastSessionUid: String
+        get() = prefs.getString(KEY_LAST_UID, "") ?: ""
+        set(value) { prefs.edit().putString(KEY_LAST_UID, value).apply() }
+
+    /** Вид последнего экрана раздела: dialogue, work, review, done или result:<kind>. */
+    var lastScreen: String
+        get() = prefs.getString(KEY_LAST_SCREEN, "") ?: ""
+        set(value) { prefs.edit().putString(KEY_LAST_SCREEN, value).apply() }
+
+    /** Заданный, но ещё не отвеченный вопрос диалога — чтобы вернуть его как был. */
+    var pendingQuestion: String
+        get() = prefs.getString(KEY_PENDING_Q, "") ?: ""
+        set(value) { prefs.edit().putString(KEY_PENDING_Q, value).apply() }
+
     var pendingReadMoreKey: String
         get() = prefs.getString(KEY_READ_MORE, "") ?: ""
         set(value) { prefs.edit().putString(KEY_READ_MORE, value).apply() }
@@ -306,6 +321,9 @@ class PsychSettings(
         private const val KEY_IDLE = "idle_minutes"
         private const val KEY_LAST_Q = "last_question_at"
         private const val KEY_ACTIVE_UID = "active_session_uid"
+        private const val KEY_LAST_UID = "last_session_uid"
+        private const val KEY_LAST_SCREEN = "last_screen"
+        private const val KEY_PENDING_Q = "pending_question"
         private const val KEY_READ_MORE = "pending_read_more"
         const val DEFAULT_DIALOGUE_EXTRA = 5
         const val DEFAULT_WORK_Q = 5

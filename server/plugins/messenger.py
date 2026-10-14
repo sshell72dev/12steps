@@ -2929,6 +2929,85 @@ def register(app, login_required, api_ok) -> None:
                 items.append(item)
         return jsonify({"topics": items, "is_admin": is_admin, "can_create": can_create})
 
+    @app.get("/api/v1/messenger/groups/<group_id>/unread")
+    @guard(need_user=True)
+    def api_messenger_group_unread(messenger_id: str, group_id: str):
+        """Непрочитанные сообщения всех подгрупп группы.
+
+        У группы с подгруппами своей ленты нет, поэтому основной экран группы
+        собирает новые сообщения из всех тем в один список. Прочтение здесь не
+        отмечается: сообщение остаётся непрочитанным, пока участник не откроет
+        саму тему.
+        """
+        if not _valid_id(group_id):
+            return jsonify({"error": "not_found"}), 404
+        with db.cursor() as cur:
+            group = _group_row(cur, group_id)
+            if not group:
+                return jsonify({"error": "not_found"}), 404
+            challenge_key = group.get("challenge_key") or ""
+            is_ideas = challenge_key == IDEAS_KEY
+            if is_ideas:
+                _ensure_ideas_membership(cur, messenger_id)
+            elif challenge_key == ANON_KEY:
+                _ensure_anon_membership(cur, messenger_id)
+            if not _is_group_member(cur, group_id, messenger_id):
+                return jsonify({"error": "forbidden"}), 403
+            # В группе обращений участник видит только свои темы — считаем ровно их.
+            author_filter = "AND t.author_id = %s" if is_ideas else ""
+            params: tuple = (
+                (messenger_id, group_id, messenger_id) if is_ideas else (messenger_id, group_id)
+            )
+            cur.execute(
+                f"""
+                SELECT t.id AS topic_id, t.name AS topic_name, c.id AS chat_id,
+                       COALESCE(m.last_read_id, 0) AS last_read
+                FROM messenger_topics t
+                JOIN messenger_chats c ON c.topic_id = t.id AND c.kind = 'topic'
+                LEFT JOIN messenger_chat_members m ON m.chat_id = c.id AND m.user_id = %s
+                WHERE t.group_id = %s {author_filter}
+                ORDER BY t.created_at ASC, t.id ASC
+                """,
+                params,
+            )
+            topics = []
+            for row in cur.fetchall():
+                chat_id = row["chat_id"]
+                last_read = int(row["last_read"] or 0)
+                unread = _unread(cur, chat_id, messenger_id, last_read)
+                if not unread:
+                    continue
+                cur.execute(
+                    f"""
+                    {MESSAGE_SELECT}
+                    WHERE m.chat_id = %s AND m.id > %s AND m.sender_id <> %s
+                    ORDER BY m.id DESC
+                    LIMIT 20
+                    """,
+                    (chat_id, last_read, messenger_id),
+                )
+                rows = list(reversed(cur.fetchall()))
+                names = _names_for(cur, [r["sender_id"] for r in rows])
+                reactions = _reactions_for(cur, [int(r["id"]) for r in rows], messenger_id)
+                topics.append(
+                    {
+                        "topic_id": row["topic_id"],
+                        "name": row["topic_name"],
+                        "chat_id": chat_id,
+                        "unread": unread,
+                        "messages": [
+                            _message_json(r, messenger_id, names, reactions.get(int(r["id"])))
+                            for r in rows
+                        ],
+                    }
+                )
+        # Свежие темы — первыми: сверху ленты то, что пришло последним.
+        topics.sort(
+            key=lambda item: item["messages"][-1]["created_at"] if item["messages"] else 0,
+            reverse=True,
+        )
+        return jsonify({"topics": topics})
+
     @app.post("/api/v1/messenger/groups/<group_id>/topics")
     @guard(need_user=True)
     def api_messenger_create_topic(messenger_id: str, group_id: str):

@@ -106,6 +106,14 @@ class AnalysisSettings(context: Context) {
             bump()
         }
 
+    /** Челлендж самоанализа: по умолчанию включён, публикует результат в подгруппу мессенджера. */
+    var challengeEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CHALLENGE_ENABLED, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_CHALLENGE_ENABLED, value).apply()
+            bump()
+        }
+
     fun overrides(): Map<String, CatalogEntry> {
         val raw = prefs.getString(KEY_OVERRIDES, null) ?: return emptyMap()
         return runCatching {
@@ -238,6 +246,7 @@ class AnalysisSettings(context: Context) {
         private const val PREFS = "self_analysis"
         private const val KEY_CLEAN_LONG = "clean_day_long"
         private const val KEY_REVIEW_LENGTH = "review_length"
+        private const val KEY_CHALLENGE_ENABLED = "challenge_enabled"
         const val REVIEW_SHORT = "short"
         const val REVIEW_STANDARD = "standard"
         const val REVIEW_LONG = "long"

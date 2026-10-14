@@ -32,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -227,6 +228,7 @@ fun AnalysisSettingsScreen(
     var tab by remember { mutableStateOf(0) }
     var cleanLong by remember { mutableStateOf(settings.cleanDayLong) }
     var reviewLength by remember { mutableStateOf(settings.reviewLength) }
+    var challengeEnabled by remember { mutableStateOf(settings.challengeEnabled) }
 
     Scaffold(
         containerColor = Sand,
@@ -367,6 +369,31 @@ fun AnalysisSettingsScreen(
                                     containerColor = SandDeep,
                                     labelColor = Forest
                                 )
+                            )
+                        }
+                        Spacer(Modifier.height(22.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    Ru.analysisChallenge,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Forest
+                                )
+                                Text(
+                                    Ru.analysisChallengeHint,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Moss
+                                )
+                            }
+                            Switch(
+                                checked = challengeEnabled,
+                                onCheckedChange = { checked ->
+                                    challengeEnabled = checked
+                                    settings.challengeEnabled = checked
+                                }
                             )
                         }
                         Spacer(Modifier.height(16.dp))

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,15 +14,17 @@ import ru.na.steps12.voice.VoicePlugin
 
 val LocalVoicePlugin = staticCompositionLocalOf<VoicePlugin?> { null }
 
+/**
+ * Панель прослушки живёт поверх любого экрана, но движок TTS здесь не поднимается:
+ * `TextToSpeech` биндится к системному сервису и добавлял секунды к холодному старту,
+ * хотя большинство запусков ничего не слушает. `speaker.speak()` сам создаёт движок
+ * при первом воспроизведении.
+ */
 @Composable
 fun VoiceHost(
     plugin: VoicePlugin,
     content: @Composable () -> Unit
 ) {
-    DisposableEffect(plugin) {
-        plugin.speaker.ensureReady()
-        onDispose { }
-    }
     CompositionLocalProvider(LocalVoicePlugin provides plugin) {
         Box(Modifier.fillMaxSize()) {
             content()

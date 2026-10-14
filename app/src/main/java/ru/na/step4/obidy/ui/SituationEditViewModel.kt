@@ -31,7 +31,8 @@ import ru.na.step4.obidy.data.journal.JournalRu
 import ru.na.step4.obidy.data.life.LifeBoardPrompts
 import ru.na.step4.obidy.data.life.LifeBoardStore
 import ru.na.step4.obidy.data.messenger.MessengerChallengeShare
-import ru.na.step4.obidy.data.profile.PersonalityAiClient
+import ru.na.step4.obidy.data.spiritual.SpiritualRatingStore
+import ru.na.step4.obidy.data.spiritual.SpiritualSource
 import ru.na.step4.obidy.data.activity.ActivityLog
 
 data class SituationEditUiState(
@@ -99,7 +100,8 @@ class SituationEditViewModel(
     private val lifeBoard: LifeBoardStore? = null,
     private val aiCache: InventoryAiCache,
     private val activityLog: ActivityLog? = null,
-    private val challenges: MessengerChallengeShare? = null
+    private val challenges: MessengerChallengeShare? = null,
+    private val spiritual: SpiritualRatingStore? = null
 ) : ViewModel() {
     private val form = MutableStateFlow(SituationEditUiState(id = situationId, isPro = prefs.isPro, isAdmin = prefs.isAdmin))
     val uiState: StateFlow<SituationEditUiState> = form.asStateFlow()
@@ -252,7 +254,8 @@ class SituationEditViewModel(
                     program = program,
                     premium = prefs.isPro || prefs.isAdmin,
                     admin = prefs.isAdmin,
-                    maxTokens = if (fullMode) 8000 else 4000
+                    maxTokens = if (fullMode) 8192 else 6000,
+                    questionnaire = questionnaire
                 )
             }
             activityLog?.aiDone(aiKey, snap.title.ifBlank { snap.target })
@@ -294,9 +297,6 @@ class SituationEditViewModel(
                         aiNotice = result.message
                     )
                 }
-            }
-            if (fullMode && result is JournalAiClient.Result.Ok && result.text.isNotBlank()) {
-                refreshPersonality(snap, target, result.text.trim())
             }
         }
     }
@@ -377,7 +377,7 @@ class SituationEditViewModel(
                     program = context.third,
                     premium = prefs.isPro || prefs.isAdmin,
                     admin = prefs.isAdmin,
-                    maxTokens = 4000
+                    maxTokens = 8192
                 )
             }
             form.update { current ->
@@ -436,7 +436,7 @@ class SituationEditViewModel(
                     program = context.third,
                     premium = prefs.isPro || prefs.isAdmin,
                     admin = prefs.isAdmin,
-                    maxTokens = 900
+                    maxTokens = 4000
                 )
             }
             form.update { current ->
@@ -477,29 +477,9 @@ class SituationEditViewModel(
             val id = repository.saveSituation(form.value.toSituation().trimmed())
             val savedId = if (id > 0) id else form.value.id
             if (savedId != form.value.id) form.update { it.copy(id = savedId) }
+            spiritual?.applyTask(SpiritualSource.INVENTORY)
             shareInventoryChallenge()
             onSaved(savedId)
-        }
-    }
-
-    /**
-     * Портрет «Моя личность» — отдельный запрос после полного разбора обиды.
-     * В материал уходит только разбор ассистента, без текста самой ситуации.
-     */
-    private suspend fun refreshPersonality(snap: SituationEditUiState, target: String, review: String) {
-        if (!prefs.personalityEnabled) return
-        withContext(Dispatchers.IO) {
-            PersonalityAiClient.updateAndSave(
-                profile = prefs.profile,
-                material = buildString {
-                    appendLine("РАЗБОР РАБОТЫ ПО ОБИДЕ (4 шаг): ${snap.title.ifBlank { target }}")
-                    appendLine()
-                    appendLine(review)
-                },
-                source = PersonalityAiClient.Source.INVENTORY,
-                premium = prefs.isPro || prefs.isAdmin,
-                admin = prefs.isAdmin
-            )
         }
     }
 
@@ -507,8 +487,11 @@ class SituationEditViewModel(
     private suspend fun shareInventoryChallenge() {
         if (challengeShared) return
         val share = challenges ?: return
-        // Флаг ставим только после успешной отправки: иначе запись теряется безвозвратно.
-        if (share.shareInventory()) challengeShared = true
+        val snapshot = form.value
+        val name = snapshot.title.trim().ifBlank { snapshot.target.trim() }
+        if (name.isBlank()) return
+        challengeShared = true
+        share.shareInventory()
     }
 
     fun save(onSaved: () -> Unit) = saveThen { onSaved() }
@@ -594,11 +577,12 @@ class SituationEditViewModel(
             lifeBoard: LifeBoardStore? = null,
             aiCache: InventoryAiCache,
             activityLog: ActivityLog? = null,
-            challenges: MessengerChallengeShare? = null
+            challenges: MessengerChallengeShare? = null,
+            spiritual: SpiritualRatingStore? = null
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                SituationEditViewModel(repository, id, prefs, lifeBoard, aiCache, activityLog, challenges) as T
+                SituationEditViewModel(repository, id, prefs, lifeBoard, aiCache, activityLog, challenges, spiritual) as T
         }
     }
 }

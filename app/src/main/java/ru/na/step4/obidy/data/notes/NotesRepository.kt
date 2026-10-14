@@ -2,10 +2,14 @@ package ru.na.step4.obidy.data.notes
 
 import android.content.Context
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -19,9 +23,31 @@ class NotesRepository(
     private val prefs: JournalPrefs
 ) {
     private val file = File(context.applicationContext.filesDir, FILE_NAME)
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
-    private val _notes = MutableStateFlow(readFile())
+    private val _notes = MutableStateFlow<Map<String, NoteOverride>>(emptyMap())
     val notes: StateFlow<Map<String, NoteOverride>> = _notes.asStateFlow()
+
+    /**
+     * Кэш заметок читается в фоне: разбор JSON на главном потоке задерживал
+     * первый кадр. До конца чтения кэш не меняется, поэтому [sync] и [save]
+     * ждут [loaded].
+     */
+    private val loaded = CompletableDeferred<Unit>()
+
+    init {
+        ioScope.launch {
+            val parsed = readFile()
+            mutex.withLock {
+                if (_notes.value.isEmpty()) _notes.value = parsed
+            }
+            loaded.complete(Unit)
+        }
+    }
+
+    private suspend fun awaitLoaded() {
+        if (!loaded.isCompleted) loaded.await()
+    }
 
     private val _isAdmin = MutableStateFlow(prefs.isAdmin)
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
@@ -43,6 +69,7 @@ class NotesRepository(
     }
 
     suspend fun sync() {
+        awaitLoaded()
         val since = prefs.notesSyncedAt
         val path = if (since.isBlank()) "/api/v1/notes" else "/api/v1/notes?since=${java.net.URLEncoder.encode(since, "UTF-8")}"
         when (val result = withContext(Dispatchers.IO) { AiHttp.get(path) }) {
@@ -97,6 +124,7 @@ class NotesRepository(
     }
 
     suspend fun save(id: String, title: String, text: String, mode: NoteMode, showTitle: Boolean): Boolean {
+        awaitLoaded()
         val local = NoteOverride(
             id = id,
             title = title.trim(),
@@ -136,6 +164,7 @@ class NotesRepository(
     }
 
     private suspend fun pushDirty() {
+        awaitLoaded()
         val code = prefs.adminCode
         if (code.isBlank()) return
         val dirty = _notes.value.values.filter { it.dirty }

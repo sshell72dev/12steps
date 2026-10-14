@@ -354,6 +354,13 @@ class MessengerClient(private val messengerId: () -> String) {
         }
     }
 
+    /** Непрочитанные сообщения всех тем группы — для общей ленты на её экране. */
+    fun groupUnread(groupId: String): MessengerResult<List<MessengerTopicUnread>> {
+        return map(
+            MessengerHttp.get("/api/v1/messenger/groups/$groupId/unread", messengerId())
+        ) { obj -> parseTopicUnread(obj.optJSONArray("topics")) }
+    }
+
     fun createTopic(groupId: String, name: String): MessengerResult<MessengerTopic> {
         val payload = JSONObject().put("name", name)
         return map(
@@ -543,6 +550,24 @@ class MessengerClient(private val messengerId: () -> String) {
             avatarUrl = row.optString("avatar_url"),
             canManage = row.optBoolean("can_manage")
         )
+    }
+
+    private fun parseTopicUnread(arr: JSONArray?): List<MessengerTopicUnread> {
+        if (arr == null) return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val row = arr.optJSONObject(i) ?: continue
+                add(
+                    MessengerTopicUnread(
+                        topicId = row.optString("topic_id"),
+                        name = row.optString("name"),
+                        chatId = row.optString("chat_id"),
+                        unread = row.optInt("unread"),
+                        messages = parseMessages(row.optJSONArray("messages"))
+                    )
+                )
+            }
+        }
     }
 
     private fun parseChats(arr: JSONArray?): List<MessengerChat> {

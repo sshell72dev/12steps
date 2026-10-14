@@ -3,10 +3,14 @@ package ru.na.step4.obidy.data.life
 import android.content.Context
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -15,9 +19,31 @@ import org.json.JSONObject
 
 class LifeBoardStore(context: Context) {
     private val file = File(context.applicationContext.filesDir, FILE_NAME)
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
-    private val _items = MutableStateFlow(readFile())
+    private val _items = MutableStateFlow<List<LifeItem>>(emptyList())
     val items: StateFlow<List<LifeItem>> = _items.asStateFlow()
+
+    /**
+     * Доска читается в фоне: разбор JSON на главном потоке задерживал первый кадр
+     * приложения, а список растёт вместе с целями, событиями и заметками.
+     */
+    private val loaded = CompletableDeferred<Unit>()
+
+    init {
+        ioScope.launch {
+            val parsed = readFile()
+            mutex.withLock {
+                if (_items.value.isEmpty()) _items.value = parsed
+            }
+            loaded.complete(Unit)
+        }
+    }
+
+    /** Ждёт окончания чтения с диска: до этого список ещё пуст. */
+    suspend fun awaitLoaded() {
+        if (!loaded.isCompleted) loaded.await()
+    }
 
     fun ofKind(kind: String): List<LifeItem> =
         _items.value.filter { it.kind == LifeKind.normalize(kind) }
@@ -57,6 +83,7 @@ class LifeBoardStore(context: Context) {
         repeat: String = LifeRepeat.NONE,
         sourceId: String = ""
     ): LifeItem? {
+        awaitLoaded()
         val split = splitText(title, body)
         if (split.first.isBlank()) return null
         val now = System.currentTimeMillis()
@@ -115,6 +142,7 @@ class LifeBoardStore(context: Context) {
     }
 
     suspend fun addIdea(text: String, sourceId: String = ""): LifeItem? {
+        awaitLoaded()
         val split = splitText("", text)
         if (split.first.isBlank()) return null
         mutex.withLock {
@@ -145,6 +173,7 @@ class LifeBoardStore(context: Context) {
     }
 
     suspend fun setStatus(id: String, status: String) {
+        awaitLoaded()
         mutex.withLock {
             val next = _items.value.map { item ->
                 if (item.id != id) item
@@ -159,6 +188,7 @@ class LifeBoardStore(context: Context) {
 
     /** Перетаскивание в шкале дня: событие получает выбранное время. */
     suspend fun setTime(id: String, millis: Long, timeSet: Boolean = true) {
+        awaitLoaded()
         mutex.withLock {
             val next = _items.value.map { item ->
                 if (item.id != id) item
@@ -175,6 +205,7 @@ class LifeBoardStore(context: Context) {
     /** Перетаскивание события на другое: времена меняются местами. */
     suspend fun swapTimes(firstId: String, secondId: String) {
         if (firstId == secondId) return
+        awaitLoaded()
         mutex.withLock {
             val first = _items.value.find { it.id == firstId } ?: return@withLock
             val second = _items.value.find { it.id == secondId } ?: return@withLock
@@ -199,6 +230,7 @@ class LifeBoardStore(context: Context) {
     }
 
     suspend fun delete(id: String) {
+        awaitLoaded()
         mutex.withLock {
             persist(_items.value.filterNot { it.id == id })
         }

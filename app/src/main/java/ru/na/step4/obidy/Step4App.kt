@@ -166,13 +166,20 @@ class Step4App : Application() {
             messengerRepository,
             journalStreak,
             analysisStreak,
-            spiritualRating
+            spiritualRating,
+            stepsChallengeEnabled = { journalPrefs.challengeEnabled },
+            analysisChallengeEnabled = { analysisSettings.challengeEnabled }
         )
         voiceHandsSettings = VoiceHandsSettings(this)
         bookRepository = BookRepository(db.bookDao())
         activityLog = ActivityLog(db.activityDao(), appScope)
         // Звонки по событиям календаря пересобираются при любом изменении расписания.
-        appScope.launch { lifeBoard.items.collect { LifeCallAlarms.sync(this@Step4App, it) } }
+        appScope.launch {
+            // Доска читается в фоне: пока список пуст, пересборка сняла бы уже
+            // поставленные звонки.
+            lifeBoard.awaitLoaded()
+            lifeBoard.items.collect { LifeCallAlarms.sync(this@Step4App, it) }
+        }
         voicePlugin.speaker.speakingListener = { on, preview ->
             activityLog.speakingChanged(on, preview)
         }
@@ -197,7 +204,6 @@ class Step4App : Application() {
             ru.na.step4.obidy.data.i18n.LocaleHelper.speechTag(profileStore.languageCode)
         this.i18nController = i18n
 
-        spiritualRating.refreshMissPenalties()
         if (voicePlugin.snapshot.publicKey.isBlank() && BuildConfig.VAPI_PUBLIC_KEY.isNotBlank()) {
             voicePlugin.store.snapshot = voicePlugin.snapshot.copy(
                 publicKey = BuildConfig.VAPI_PUBLIC_KEY,
@@ -210,6 +216,8 @@ class Step4App : Application() {
             BackupAutoWorker.schedule(this)
         }
         appScope.launch {
+            // Разбор истории пропусков не должен задерживать первый кадр.
+            spiritualRating.refreshMissPenalties()
             repository.ensureDefaultCategories()
             notesRepository.sync()
             ru.na.step4.obidy.data.analysis.AnalysisCatalogSync.sync(

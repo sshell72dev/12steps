@@ -210,6 +210,8 @@ object Ru {
     val analysisIntro: String get() = I18n.t("ui.analysisIntro", "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043e\u0434\u0438\u043d \u0441\u0430\u043c\u043e\u0430\u043d\u0430\u043b\u0438\u0437. \u0412\u043e\u043f\u0440\u043e\u0441\u044b \u0438\u0434\u0443\u0442 \u043f\u043e \u043e\u0434\u043d\u043e\u043c\u0443, \u043a\u0430\u043a \u0432 \u0431\u043e\u0442\u0435. \u041d\u0435 \u0437\u0430\u043c\u0435\u043d\u044f\u0435\u0442 \u0441\u043f\u043e\u043d\u0441\u043e\u0440\u0430, \u0433\u0440\u0443\u043f\u043f\u0443 \u0438 \u043b\u0438\u0442\u0435\u0440\u0430\u0442\u0443\u0440\u0443 \u0410\u041d.")
     val analysisHistory: String get() = I18n.t("ui.analysisHistory", "\u041c\u043e\u0438 \u0441\u0430\u043c\u043e\u0430\u043d\u0430\u043b\u0438\u0437\u044b")
     val analysisSettings: String get() = I18n.t("ui.analysisSettings", "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438")
+    val analysisChallenge: String get() = I18n.t("ui.analysisChallenge", "Челлендж самоанализа")
+    val analysisChallengeHint: String get() = I18n.t("ui.analysisChallengeHint", "Публиковать пройденный самоанализ в подгруппу челленджей мессенджера.")
     val analysisStart: String get() = I18n.t("ui.analysisStart", "\u041d\u0430\u0447\u0430\u0442\u044c")
     val analysisAnswerCta: String get() = I18n.t("ui.analysisAnswerCta", "\u041e\u0442\u0432\u0435\u0442\u0438\u0442\u044c")
     val analysisReroll: String get() = I18n.t("ui.analysisReroll", "\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0437\u0430\u043d\u043e\u0432\u043e")

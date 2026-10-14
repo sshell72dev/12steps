@@ -209,6 +209,8 @@ object SourceBootstrap {
         SourceCatalog.put("ui.analysisIntro", "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043e\u0434\u0438\u043d \u0441\u0430\u043c\u043e\u0430\u043d\u0430\u043b\u0438\u0437. \u0412\u043e\u043f\u0440\u043e\u0441\u044b \u0438\u0434\u0443\u0442 \u043f\u043e \u043e\u0434\u043d\u043e\u043c\u0443, \u043a\u0430\u043a \u0432 \u0431\u043e\u0442\u0435. \u041d\u0435 \u0437\u0430\u043c\u0435\u043d\u044f\u0435\u0442 \u0441\u043f\u043e\u043d\u0441\u043e\u0440\u0430, \u0433\u0440\u0443\u043f\u043f\u0443 \u0438 \u043b\u0438\u0442\u0435\u0440\u0430\u0442\u0443\u0440\u0443 \u0410\u041d.")
         SourceCatalog.put("ui.analysisHistory", "\u041c\u043e\u0438 \u0441\u0430\u043c\u043e\u0430\u043d\u0430\u043b\u0438\u0437\u044b")
         SourceCatalog.put("ui.analysisSettings", "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438")
+        SourceCatalog.put("ui.analysisChallenge", "Челлендж самоанализа")
+        SourceCatalog.put("ui.analysisChallengeHint", "Публиковать пройденный самоанализ в подгруппу челленджей мессенджера.")
         SourceCatalog.put("ui.analysisStart", "\u041d\u0430\u0447\u0430\u0442\u044c")
         SourceCatalog.put("ui.analysisAnswerCta", "\u041e\u0442\u0432\u0435\u0442\u0438\u0442\u044c")
         SourceCatalog.put("ui.analysisReroll", "\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0437\u0430\u043d\u043e\u0432\u043e")
@@ -472,6 +474,11 @@ object SourceBootstrap {
         SourceCatalog.put("journal.fieldsSplit", "Поля")
         SourceCatalog.put("journal.fieldsSingle", "Одно поле")
         SourceCatalog.put("journal.settingsGeneral", "Общие")
+        SourceCatalog.put("journal.settingsChallengeSteps", "Челлендж шагов")
+        SourceCatalog.put(
+            "journal.settingsChallengeStepsHint",
+            "Публиковать записи дневника и работу по 4 шагу в подгруппу челленджей мессенджера."
+        )
         SourceCatalog.put("journal.settingsEntries", "Записи")
         SourceCatalog.put("journal.settingsAnalysis", "Самоанализ")
         SourceCatalog.put("journal.settingsData", "Данные")
@@ -934,12 +941,14 @@ object SourceBootstrap {
         SourceCatalog.put("spiritual.srcAnalysis", "самоанализ")
         SourceCatalog.put("spiritual.srcJournal", "дневник")
         SourceCatalog.put("spiritual.srcPsych", "психолог")
+        SourceCatalog.put("spiritual.srcInventory", "работа по обидам")
         SourceCatalog.put("spiritual.srcSupport", "сообщение об ошибке")
         SourceCatalog.put("spiritual.srcAi", "оценка ИИ")
         SourceCatalog.put("spiritual.srcMiss", "пропуск")
         SourceCatalog.put("spiritual.reasonAnalysis", "Завершён самоанализ")
         SourceCatalog.put("spiritual.reasonJournal", "Запись в дневнике")
         SourceCatalog.put("spiritual.reasonPsych", "Проработка у психолога")
+        SourceCatalog.put("spiritual.reasonInventory", "Проработка ситуации обид")
         SourceCatalog.put("spiritual.reasonSupport", "Сообщение об ошибке")
         SourceCatalog.put("spiritual.reasonMiss", "День без практики")
         SourceCatalog.put("spiritual.reasonFictitious", "Фиктивная или поверхностная проработка")
@@ -1034,6 +1043,22 @@ object SourceBootstrap {
         SourceCatalog.put(
             "messenger.topicsScreenHint",
             "Темы — подгруппы внутри группы: у каждой своя лента. «Общий» — лента всей группы."
+        )
+        SourceCatalog.put(
+            "messenger.topicUnreadTitle",
+            "Новые сообщения в темах"
+        )
+        SourceCatalog.put(
+            "messenger.topicUnreadHint",
+            "Непрочитанное из всех тем группы — собрано здесь, чтобы не открывать темы по одной."
+        )
+        SourceCatalog.put("messenger.topicUnreadOpen", "Открыть тему")
+        SourceCatalog.put("messenger.chatPin", "Закрепить чат")
+        SourceCatalog.put("messenger.chatUnpin", "Открепить чат")
+        SourceCatalog.put("messenger.chatPinned", "Закреплён")
+        SourceCatalog.put(
+            "messenger.chatPinHint",
+            "Закреплённые чаты всегда вверху списка. Нажмите и удерживайте чат, чтобы закрепить или открепить его."
         )
         SourceCatalog.put("messenger.topicGeneral", "Общий")
         SourceCatalog.put("messenger.topicCreate", "Новая тема")

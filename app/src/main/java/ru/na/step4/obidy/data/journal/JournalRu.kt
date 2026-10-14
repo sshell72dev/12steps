@@ -21,6 +21,8 @@ object JournalRu {
     val aiLengthLong: String get() = I18n.t("journal.aiLengthLong", "Длинный")
     val settingsLiterature: String get() = I18n.t("journal.settingsLiterature", "Настройка литературы к вопросу")
     val settingsAdvice: String get() = I18n.t("journal.settingsAdvice", "Настройка рекомендаций для тебя")
+    val settingsChallengeSteps: String get() = I18n.t("journal.settingsChallengeSteps", "Челлендж шагов")
+    val settingsChallengeStepsHint: String get() = I18n.t("journal.settingsChallengeStepsHint", "Публиковать записи дневника и работу по 4 шагу в подгруппу челленджей мессенджера.")
     val privacyNotice: String get() = I18n.t(
         "journal.privacyNotice",
         "Ответ строится только по вопросу и программе: имя, анкета и личные данные не передаются. Термины — по вашей программе."

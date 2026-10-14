@@ -14,8 +14,11 @@ class AnalysisProgressStore(context: Context) {
     val revision: StateFlow<Int> = _revision.asStateFlow()
 
     fun lastActiveId(): String? = synchronized(lock) {
-        val id = read().optString(KEY_LAST_ACTIVE).ifBlank { return@synchronized null }
-        if (session(id) == null) null else id
+        // Файл читается один раз за вызов: этот метод вызывается на старте
+        // приложения, до первого кадра.
+        val root = read()
+        val id = root.optString(KEY_LAST_ACTIVE).ifBlank { return@synchronized null }
+        if (root.optJSONObject(KEY_SESSIONS)?.has(id) != true) null else id
     }
 
     fun session(catalogId: String): JSONObject? = synchronized(lock) {

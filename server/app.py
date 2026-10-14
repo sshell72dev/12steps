@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hmac
 import json
-import re
 import secrets
 import string
 import urllib.error
@@ -22,7 +21,6 @@ from flask import (
     session,
     url_for,
 )
-from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import config
@@ -33,7 +31,6 @@ import translate
 import yookassa
 from plugins import voice as voice_plugin
 from plugins import messenger as messenger_plugin
-from plugins import backups as backups_plugin
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -58,15 +55,6 @@ except Exception:
     pass
 
 
-@app.errorhandler(Exception)
-def _unhandled_error(exc):
-    """Необработанный сбой: отдаём JSON с причиной, чтобы приложение показало её пользователю."""
-    if isinstance(exc, HTTPException):
-        return exc
-    app.logger.exception("Unhandled error on %s", request.path)
-    return jsonify({"error": "server", "detail": f"{type(exc).__name__}: {exc}"}), 500
-
-
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -87,7 +75,6 @@ def _api_ok() -> bool:
 
 voice_plugin.register(app, login_required, _api_ok)
 messenger_plugin.register(app, login_required, _api_ok)
-backups_plugin.register(app, login_required, _api_ok)
 
 
 def _as_bool(value) -> bool:
@@ -663,11 +650,15 @@ def api_analyze():
         questionnaire=str(payload.get("questionnaire") or "").strip(),
         personality=str(payload.get("personality") or "").strip(),
         name=str(payload.get("name") or "").strip(),
+        collect_personality=bool(payload.get("collect_personality")),
         language=language,
         review_length=review_length,
     )
     system = roles.system_for_chat("analysis.review", "", psych.anketa_block(payload)) or SYSTEM_PROMPT
+    collect = bool(payload.get("collect_personality"))
     max_tokens = {"short": 4000, "standard": 6000, "long": 8192}[review_length]
+    if collect:
+        max_tokens += 1300
     try:
         text = _deepseek_chat(
             api_key,
@@ -678,9 +669,7 @@ def api_analyze():
             ],
             max_tokens=max_tokens,
             timeout=180,
-            # Размышления включаем только на тарифе Premium: иначе reasoning съедает
-            # бюджет токенов и разбор приходит обрезанным.
-            thinking=_payload_premium(payload),
+            thinking=model == MODEL_PREMIUM,
         )
     except Exception as exc:
         return jsonify({"error": "upstream", "detail": str(exc)}), 502
@@ -692,154 +681,6 @@ def api_analyze():
     if payload.get("admin"):
         result["prompt"] = f"SYSTEM:\n{system}\n\nUSER:\n{user_prompt}"
     return jsonify(result)
-
-
-BOOK_FIX_SYSTEM = (
-    "Ты — литературный редактор книги. Готовишь надиктованный голосом текст к печати: "
-    "расставляешь знаки препинания, исправляешь орфографию, опечатки и согласование слов, "
-    "делишь поток речи на предложения и абзацы, убираешь оговорки, случайные повторы "
-    "и смысловые аномалии, восстанавливаешь пропущенные по смыслу слова и имена.\n"
-    "Текст надиктован голосом, поэтому:\n"
-    "— произнесённые вслух названия знаков («точка», «запятая», «вопросительный знак», "
-    "«восклицательный знак», «тире», «двоеточие», «кавычки», «с новой строки», "
-    "«новый абзац», «открыть скобку») заменяй настоящими знаками — но только там, "
-    "где они и означают знак, а не часть фразы;\n"
-    "— пропущенное слово или имя восстанавливай по смыслу, если он однозначен "
-    "из контекста; если смысл неочевиден — оставь как есть и не выдумывай;\n"
-    "— смысловые обрывы и потерянные при диктовке места выправляй так, чтобы фраза "
-    "читалась связно и не меняла того, что автор хотел сказать.\n"
-    "Правь и структуру: предложения — законченные и грамотно построенные, абзацы — "
-    "по смыслу, прямая речь — с новой строки с тире. Стиль — спокойная литературная "
-    "проза, как в настоящей книге; голос и манеру автора сохраняй.\n"
-    "Смысл, факты и порядок изложения автора сохраняешь: ничего не добавляешь от себя, "
-    "новых событий и лиц не придумываешь, содержание не сокращаешь.\n"
-    "Каждая правка — непрерывный фрагмент текста: знак, слово, предложение или абзац "
-    "целиком. Чтобы перестроить предложение или абзац, заменяй фрагмент целиком — "
-    "так, как он должен выглядеть после редактуры.\n"
-    "Правки идут в порядке их следования в тексте и не перекрывают друг друга; "
-    "одна и та же правка не повторяется.\n"
-    "Ответ — только JSON указанного вида, без пояснений и без markdown:\n"
-    '{"edits": [{"old": "<фрагмент точно как в тексте>", '
-    '"new": "<тот же фрагмент после редактуры>", '
-    '"reason": "<коротко: что исправлено>"}]}\n'
-    "Поле old должно буквально встречаться в тексте, со всеми пробелами и переносами "
-    "строк; переводы строк внутри JSON экранируй как \\n. Пустое new означает удаление "
-    "фрагмента. Не более 120 правок. "
-    'Если править нечего, верни {"edits": []}.'
-)
-
-BOOK_FIX_MAX_CHARS = 20000
-
-
-def _locate_fragment(text: str, fragment: str) -> tuple[int, str]:
-    """Ищет фрагмент правки так, как он записан в тексте.
-
-    Модель часто переписывает в поле old пробелы и переносы строк: строгое
-    сравнение такие правки теряло бы. Если точного совпадения нет, ищем по
-    тексту, считая любую серию пробельных символов одним разделителем, и
-    возвращаем найденный кусок буквально из текста — иначе клиент не сможет
-    применить правку.
-    """
-    direct = text.find(fragment)
-    if direct >= 0:
-        return direct, fragment
-    parts = [re.escape(part) for part in fragment.split()]
-    if not parts:
-        return -1, ""
-    match = re.search(r"\s+".join(parts), text)
-    if not match:
-        return -1, ""
-    return match.start(), match.group(0)
-
-
-def _extract_json_object(raw: str) -> dict:
-    """Достаёт первый JSON-объект из ответа модели (может быть обёрнут в текст или ```)."""
-    text = (raw or "").strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        return {}
-    try:
-        parsed = json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
-
-
-@app.post("/api/v1/book/fix")
-def api_book_fix():
-    if not _api_ok():
-        return jsonify({"error": "unauthorized"}), 401
-
-    payload = request.get_json(silent=True) or {}
-    text = str(payload.get("text") or "").strip()
-    if not text:
-        return jsonify({"error": "text_required"}), 400
-    if len(text) > BOOK_FIX_MAX_CHARS:
-        return jsonify({"error": "text_too_long", "limit": BOOK_FIX_MAX_CHARS}), 400
-
-    api_key = db.get_setting("deepseek_api_key", "")
-    if not api_key:
-        return jsonify({"error": "not_configured"}), 503
-    model = _model_for_user(_payload_premium(payload))
-    language = psych.resolve_response_language(
-        str(payload.get("language") or payload.get("language_code") or "ru"),
-        text,
-    )
-    user_prompt = (
-        f"Язык текста: {language}.\n"
-        "Это глава книги, надиктованная голосом. Отредактируй весь текст как редактор книги "
-        "и верни только JSON со списком исправлений.\n\n"
-        f"ТЕКСТ:\n{text}"
-    )
-    try:
-        raw = _deepseek_chat(
-            api_key,
-            model,
-            [
-                {"role": "system", "content": BOOK_FIX_SYSTEM},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=8192,
-            timeout=180,
-        )
-    except Exception as exc:
-        return jsonify({"error": "upstream", "detail": str(exc)}), 502
-
-    data = _extract_json_object(raw)
-    if not data:
-        # Пустой разбор нельзя показывать как «ошибок нет»: ответ модели не разобрался.
-        return jsonify({"error": "upstream", "detail": "bad_json"}), 502
-
-    found = []
-    seen = set()
-    for item in data.get("edits") or []:
-        if not isinstance(item, dict):
-            continue
-        new = str(item.get("new") or "")
-        at, old = _locate_fragment(text, str(item.get("old") or ""))
-        # Правка бесполезна, если фрагмент не найден в тексте или ничего не меняет.
-        if at < 0 or not old or old == new or old in seen:
-            continue
-        seen.add(old)
-        found.append({
-            "at": at,
-            "old": old,
-            "new": new,
-            "reason": str(item.get("reason") or "").strip(),
-        })
-
-    # Крупные правки могут перекрываться: берём их слева направо и отбрасываем
-    # вложенные, иначе клиент заменит не тот участок текста.
-    found.sort(key=lambda edit: edit["at"])
-    edits = []
-    taken_to = -1
-    for edit in found:
-        if edit["at"] < taken_to:
-            continue
-        taken_to = edit["at"] + len(edit["old"])
-        edits.append({"old": edit["old"], "new": edit["new"], "reason": edit["reason"]})
-    return jsonify({"ok": True, "edits": edits, "model": model})
 
 
 @app.post("/api/v1/psych")
@@ -883,7 +724,9 @@ def api_psych():
     }
     max_tokens = 800 if kind in {"reminder_outreach", "tts_understanding"} else 6000
     if kind in {"analyze", "recommend", "assistant"}:
-        max_tokens = 8192
+        profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
+        collect = bool(profile.get("my_personality_collect_enabled"))
+        max_tokens = 8192 + (1300 if collect else 0)
     if json_mode:
         max_tokens = 4000
     timeout = 60 if kind in {"reminder_outreach", "tts_understanding"} else 90
@@ -939,52 +782,6 @@ def api_psych():
     if payload.get("admin"):
         parsed["prompt"] = f"SYSTEM:\n{system}\n\nUSER:\n{user_prompt}"
     return jsonify(parsed)
-
-
-@app.post("/api/v1/personality")
-def api_personality():
-    """Отдельный запрос: обновление портрета «Моя личность» после проработки."""
-    if not _api_ok():
-        return jsonify({"error": "unauthorized"}), 401
-
-    payload = request.get_json(silent=True) or {}
-    profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
-    if not (bool(payload.get("collect")) or bool(profile.get("my_personality_collect_enabled"))):
-        return jsonify({"error": "disabled"}), 409
-
-    material = str(payload.get("material") or "").strip()
-    if not material:
-        return jsonify({"error": "material_required"}), 400
-
-    api_key = db.get_setting("deepseek_api_key", "")
-    model = _model_for_user(_payload_premium(payload))
-    if not api_key:
-        return jsonify({"error": "not_configured"}), 503
-
-    user_prompt = psych.build_personality_prompt(payload)
-    system = roles.system_for_personality(psych.anketa_block(payload))
-    try:
-        text = _deepseek_chat(
-            api_key,
-            model,
-            [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=2000,
-            timeout=120,
-            thinking=False,
-        )
-    except Exception as exc:
-        return jsonify({"error": "upstream", "detail": str(exc)}), 502
-
-    portrait = psych.parse_personality_output(text)
-    if not portrait:
-        return jsonify({"error": "empty"}), 502
-    result = {"personality": portrait, "model": model}
-    if payload.get("admin"):
-        result["prompt"] = f"SYSTEM:\n{system}\n\nUSER:\n{user_prompt}"
-    return jsonify(result)
 
 
 @app.post("/api/v1/translate")
@@ -1070,8 +867,7 @@ def api_chat():
             messages,
             max_tokens=max_tokens,
             timeout=180,
-            # См. api_analyze: reasoning — только для Premium, иначе ответ обрывается.
-            thinking=_payload_premium(payload),
+            thinking=model == MODEL_PREMIUM,
         )
     except Exception as exc:
         return jsonify({"error": "upstream", "detail": str(exc)}), 502
@@ -1432,36 +1228,27 @@ def support_admin():
         elif action == "complete":
             ticket = db.complete_support_ticket(ticket_id)
             if ticket:
-                # Служебная запись о завершении тоже видна в подгруппе обращения.
-                messenger_plugin.sync_support_ticket(ticket_id)
-                notice = f"Задача завершена. Статус: {db.SUPPORT_STATUS_LABELS['done']}."
+                notice = "Задача завершена. Статус: Обработано."
                 return redirect(url_for("support_admin", id=ticket_id, saved=1))
             warn = "Не удалось завершить задачу."
         elif action == "status":
             status = (request.form.get("status") or "").strip()
             ticket = db.set_support_status(ticket_id, status)
             if ticket:
-                # Смена статуса дублируется в переписку мессенджера.
-                messenger_plugin.sync_support_ticket(ticket_id)
                 notice = f"Статус: {ticket.get('status_label') or status}. Пользователь уведомлён."
                 return redirect(url_for("support_admin", id=ticket_id, saved=1))
             warn = "Не удалось изменить статус."
         elif action == "reply":
             body = (request.form.get("body") or "").strip()
-            status_choice = (request.form.get("status") or "").strip()
             complete = (request.form.get("complete") or "").strip() in {"1", "on", "true"}
             if not body:
                 warn = "Введите ответ."
             else:
-                # Статус после ответа админ выбирает сам: ждём ответа или закрываем обращение.
-                want = "done" if (complete or status_choice == "done") else "awaiting"
-                ticket = db.add_support_message(ticket_id, "admin", body, status_after=want)
-                if ticket and want == "done":
+                ticket = db.add_support_message(ticket_id, "admin", body)
+                if ticket and complete:
                     ticket = db.complete_support_ticket(ticket_id) or ticket
-                # В подгруппу попадают и ответ, и служебная запись о статусе.
-                messenger_plugin.sync_support_ticket(ticket_id)
                 if ticket:
-                    notice = f"Ответ отправлен. Статус: {ticket.get('status_label') or ''}."
+                    notice = "Ответ отправлен."
                     return redirect(url_for("support_admin", id=ticket_id, saved=1))
                 warn = "Сообщение не найдено."
     if request.args.get("saved"):
@@ -1542,11 +1329,6 @@ def api_support_create():
         )
     except ValueError:
         return jsonify({"error": "required"}), 400
-    # Обращение превращается в подгруппу «Идеи и Ошибки»: переписка продолжается в мессенджере.
-    messenger_plugin.attach_support_ticket(
-        ticket,
-        request.headers.get("X-Messenger-Id", "") or str(payload.get("messenger_id") or ""),
-    )
     return jsonify({"ok": True, "ticket": ticket})
 
 
@@ -1629,9 +1411,8 @@ def api_support_reply(ticket_id: int):
     complete = bool(payload.get("complete"))
     try:
         if _admin_code_ok(code):
-            want = "done" if complete else "awaiting"
-            ticket = db.add_support_message(ticket_id, "admin", body, status_after=want)
-            if ticket and want == "done":
+            ticket = db.add_support_message(ticket_id, "admin", body)
+            if ticket and complete:
                 ticket = db.complete_support_ticket(ticket_id) or ticket
         else:
             existing = db.get_support_ticket(ticket_id)
@@ -1640,8 +1421,6 @@ def api_support_reply(ticket_id: int):
             ticket = db.add_support_message(ticket_id, "user", body)
     except ValueError:
         return jsonify({"error": "required"}), 400
-    # И вопрос пользователя, и ответ админа, и служебные записи идут в подгруппу обращения.
-    messenger_plugin.sync_support_ticket(ticket_id)
     if not ticket:
         return jsonify({"error": "not_found"}), 404
     return jsonify({"ok": True, "ticket": ticket})
@@ -1689,8 +1468,6 @@ def api_support_complete(ticket_id: int):
     ticket = db.complete_support_ticket(ticket_id)
     if not ticket:
         return jsonify({"error": "not_found"}), 404
-    # Завершение обращения тоже видно в подгруппе мессенджера.
-    messenger_plugin.sync_support_ticket(ticket_id)
     return jsonify({"ok": True, "ticket": ticket})
 
 
@@ -1708,8 +1485,6 @@ def api_support_status(ticket_id: int):
         return jsonify({"error": "required"}), 400
     if not ticket:
         return jsonify({"error": "not_found"}), 404
-    # Смена статуса дублируется в переписку обращения.
-    messenger_plugin.sync_support_ticket(ticket_id)
     return jsonify({"ok": True, "ticket": ticket})
 
 
@@ -1780,6 +1555,7 @@ def _build_self_analysis_prompt(
     questionnaire: str = "",
     personality: str = "",
     name: str = "",
+    collect_personality: bool = False,
     language: str = "ru",
     review_length: str = "standard",
 ) -> str:
@@ -1944,9 +1720,25 @@ def _build_self_analysis_prompt(
         f"{volume}\n\n"
         f"{h['format']}\n\n"
     )
+    if collect_personality:
+        if is_ru:
+            prompt += (
+                "После основного текста и ОБЯЗАТЕЛЬНО ПЕРЕД блоком SPIRITUAL_DELTA выведи блок "
+                "«Моя личность» строго между маркерами ---МОЯ_ЛИЧНОСТЬ--- и ---КОНЕЦ_МОЯ_ЛИЧНОСТЬ---.\n"
+                "Внутри — полный обновлённый портрет: черты, ценности, реакции, ресурсы и зоны роста. "
+                "Сохрани существенное из текущего портрета выше, если он не пустой, и дополни новым из этого самоанализа.\n"
+                "Маркеры обязательны. В блоке только портрет, без оценки и рекомендаций.\n\n"
+            )
+        else:
+            prompt += (
+                "After the main text and BEFORE the SPIRITUAL_DELTA block, output a "
+                "«My personality» block strictly between markers ---МОЯ_ЛИЧНОСТЬ--- and ---КОНЕЦ_МОЯ_ЛИЧНОСТЬ---.\n"
+                "Inside — a full updated portrait. Keep what still fits from the portrait above and add new insights.\n"
+                "Markers are required. Portrait only, no scoring or recommendations.\n\n"
+            )
     prompt += (
-        "ОБЯЗАТЕЛЬНО после всего текста анализа выведи один блок SPIRITUAL_DELTA "
-        "в этом точном формате — последний блок ответа:\n"
+        "ОБЯЗАТЕЛЬНО after the personality block (if any), otherwise after the whole analysis, "
+        "output one SPIRITUAL_DELTA block in this exact format — last block of the answer:\n"
         "### SPIRITUAL_DELTA ###\n"
         "score: <integer from -5 to 10>\n"
         "quality: <high|ok|low|fictitious>\n"
@@ -1980,16 +1772,6 @@ def _model_for_user(premium: bool) -> str:
     return MODEL_PREMIUM if premium else MODEL_FLASH
 
 
-# Ответ не должен обрываться на полуслове: при упоре в лимит токенов модель
-# просят продолжить с того же места, а части склеиваются в один текст.
-_CHAT_CONTINUE_PROMPT = (
-    "Ответ оборвался на лимите длины. Продолжи ровно с того места, где оборвалось, "
-    "тем же стилем и структурой: без повторения уже написанного, без вступлений "
-    "и без служебных пояснений."
-)
-_CHAT_MAX_CONTINUES = 2
-
-
 def _deepseek_chat(
     api_key: str,
     model: str,
@@ -1998,10 +1780,10 @@ def _deepseek_chat(
     thinking: bool = False,
     timeout: int = 90,
 ) -> str:
-    def once(msgs: list[dict[str, str]], use_thinking: bool) -> tuple[str, str]:
+    def once(use_thinking: bool) -> str:
         payload: dict = {
             "model": model,
-            "messages": msgs,
+            "messages": messages,
             "max_tokens": max_tokens,
             "thinking": {"type": "enabled" if use_thinking else "disabled"},
         }
@@ -2027,37 +1809,18 @@ def _deepseek_chat(
             raise RuntimeError(f"DeepSeek HTTP {exc.code}: {detail}") from exc
         choices = data.get("choices") or []
         if not choices:
-            return "", ""
-        choice = choices[0] or {}
-        message = choice.get("message") or {}
-        content = str(message.get("content") or "").strip()
-        return content, str(choice.get("finish_reason") or "")
-
-    def collect(use_thinking: bool) -> str:
-        msgs = list(messages)
-        parts: list[str] = []
-        for _ in range(_CHAT_MAX_CONTINUES + 1):
-            content, finish = once(msgs, use_thinking)
-            if not content:
-                break
-            parts.append(content)
-            # length — модель упёрлась в потолок токенов и не договорила: просим продолжение.
-            if finish != "length":
-                break
-            msgs = msgs + [
-                {"role": "assistant", "content": content},
-                {"role": "user", "content": _CHAT_CONTINUE_PROMPT},
-            ]
-        return "".join(parts).strip()
+            return ""
+        message = (choices[0] or {}).get("message") or {}
+        return str(message.get("content") or "").strip()
 
     try:
-        text = collect(thinking)
+        text = once(thinking)
     except Exception:
         if not thinking:
             raise
         text = ""
     if not text and thinking:
-        text = collect(False)
+        text = once(False)
     if not text:
         raise RuntimeError("Пустой текст модели")
     return text

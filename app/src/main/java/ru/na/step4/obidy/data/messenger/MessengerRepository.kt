@@ -75,15 +75,26 @@ class MessengerRepository(
     private val _anonChatVisible = MutableStateFlow(prefs.anonChatEnabled)
     val anonChatVisible: StateFlow<Boolean> = _anonChatVisible.asStateFlow()
 
+    /** Чат закрепил сам участник: такие чаты держатся вверху списка. */
+    private val _pinnedChats = MutableStateFlow(prefs.pinnedChats)
+    val pinnedChats: StateFlow<Set<String>> = _pinnedChats.asStateFlow()
+
+    /**
+     * Список чатов: закреплённые сверху, затем служебные «Оповещения», остальные —
+     * по времени последнего сообщения от давних к свежим, поэтому свежие чаты внизу.
+     */
     val chats: Flow<List<MessengerChat>> = combine(
         dao.observeChats(),
-        _anonChatVisible
-    ) { rows, anonVisible ->
+        _anonChatVisible,
+        _pinnedChats
+    ) { rows, anonVisible, pinned ->
         rows.map { it.toChat() }
             .filterNot { it.isAnonQuestions && !anonVisible }
+            .map { chat -> if (chat.id in pinned) chat.copy(isPinned = true) else chat }
             .sortedWith(
-                compareByDescending<MessengerChat> { it.id == AppAlerts.CHAT_ID }
-                    .thenByDescending { it.lastAt }
+                compareByDescending<MessengerChat> { it.isPinned }
+                    .thenByDescending { it.id == AppAlerts.CHAT_ID }
+                    .thenBy { it.lastAt }
             )
     }
 
@@ -663,6 +674,23 @@ class MessengerRepository(
         }
     }
 
+    /**
+     * Непрочитанные сообщения всех тем группы: своей ленты у группы с темами нет,
+     * поэтому её основной экран собирает новые сообщения из тем в один список.
+     * Прочтение здесь не отмечается — оно происходит при открытии самой темы.
+     */
+    suspend fun unreadByTopic(groupId: String): List<MessengerTopicUnread> =
+        withContext(Dispatchers.IO) {
+            when (val result = client.groupUnread(groupId)) {
+                is MessengerResult.Ok -> result.value
+                is MessengerResult.Disabled -> {
+                    applyEnabled(false)
+                    emptyList()
+                }
+                is MessengerResult.Err -> emptyList()
+            }
+        }
+
     suspend fun createTopic(groupId: String, name: String): MessengerTopic? = withContext(Dispatchers.IO) {
         when (val result = client.createTopic(groupId, name)) {
             is MessengerResult.Ok -> {
@@ -936,6 +964,15 @@ class MessengerRepository(
     fun setAnonChatVisible(on: Boolean) {
         prefs.anonChatEnabled = on
         _anonChatVisible.value = on
+    }
+
+    /** Закрепление чата: список закреплённых хранится на устройстве. */
+    fun setChatPinned(chatId: String, pinned: Boolean) {
+        val id = chatId.trim()
+        if (id.isBlank()) return
+        val next = if (pinned) _pinnedChats.value + id else _pinnedChats.value - id
+        prefs.pinnedChats = next
+        _pinnedChats.value = next
     }
 
     /** Реакции в кэше хранятся строкой: Room не умеет списки без конвертера. */

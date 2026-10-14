@@ -3,10 +3,14 @@ package ru.na.step4.obidy.data.journal
 import android.content.Context
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -15,9 +19,32 @@ import org.json.JSONObject
 
 class JournalStore(context: Context) {
     private val file = File(context.applicationContext.filesDir, FILE_NAME)
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
-    private val _entries = MutableStateFlow(readFile())
+    private val _entries = MutableStateFlow<List<JournalEntry>>(emptyList())
     val entries: StateFlow<List<JournalEntry>> = _entries.asStateFlow()
+
+    /**
+     * Файл разбирается в фоне: дневник растёт, и синхронный разбор JSON на главном
+     * потоке задерживал первый кадр приложения. До конца загрузки записи не меняются,
+     * поэтому мутаторы ждут [loaded].
+     */
+    private val loaded = CompletableDeferred<Unit>()
+
+    init {
+        ioScope.launch {
+            val parsed = readFile()
+            mutex.withLock {
+                if (_entries.value.isEmpty()) _entries.value = parsed
+            }
+            loaded.complete(Unit)
+        }
+    }
+
+    /** Гарантирует, что данные с диска прочитаны, прежде чем менять список. */
+    private suspend fun awaitLoaded() {
+        if (!loaded.isCompleted) loaded.await()
+    }
 
     fun entriesFor(nodeId: Int): List<JournalEntry> =
         _entries.value.filter { it.nodeId == nodeId }.sortedByDescending { it.createdAt }
@@ -29,6 +56,7 @@ class JournalStore(context: Context) {
         _entries.value.find { it.id == id }
 
     suspend fun add(nodeId: Int, text: String): JournalEntry {
+        awaitLoaded()
         val now = System.currentTimeMillis()
         val entry = JournalEntry(
             id = UUID.randomUUID().toString(),
@@ -45,6 +73,7 @@ class JournalStore(context: Context) {
     }
 
     suspend fun update(id: String, text: String): JournalEntry? {
+        awaitLoaded()
         var updated: JournalEntry? = null
         mutex.withLock {
             val next = _entries.value.map { entry ->
@@ -58,6 +87,7 @@ class JournalStore(context: Context) {
     }
 
     suspend fun delete(id: String) {
+        awaitLoaded()
         mutex.withLock {
             persist(_entries.value.filterNot { it.id == id })
         }
@@ -85,6 +115,7 @@ class JournalStore(context: Context) {
     }
 
     suspend fun importFromJson(text: String): JournalFileImport {
+        awaitLoaded()
         val incoming = parseEntries(text)
         if (incoming.isEmpty()) return JournalFileImport(0, 0)
         var added = 0
@@ -243,6 +274,13 @@ class JournalPrefs(
             prefs.edit().putString(KEY_ADVICE_LENGTH, value).apply()
         }
 
+    /** Челлендж шагов: по умолчанию включён, публикует записи дневника и работу по 4 шагу. */
+    var challengeEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CHALLENGE_ENABLED, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_CHALLENGE_ENABLED, value).apply()
+        }
+
     var isPro: Boolean
         get() = prefs.getBoolean(KEY_PRO, false)
         set(value) {
@@ -386,6 +424,7 @@ class JournalPrefs(
         private const val KEY_AI_COUNT = "ai_count"
         private const val KEY_LITERATURE_LENGTH = "ai_length_literature"
         private const val KEY_ADVICE_LENGTH = "ai_length_advice"
+        private const val KEY_CHALLENGE_ENABLED = "challenge_enabled"
         const val DAILY_LIMIT = 3
     }
 }

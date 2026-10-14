@@ -24,6 +24,7 @@ import ru.na.step4.obidy.data.messenger.MessengerRepository
 import ru.na.step4.obidy.data.messenger.MessengerResult
 import ru.na.step4.obidy.data.messenger.MessengerRu
 import ru.na.step4.obidy.data.messenger.MessengerTopic
+import ru.na.step4.obidy.data.messenger.MessengerTopicUnread
 
 data class MessengerGate(
     val enabled: Boolean = true,
@@ -72,6 +73,10 @@ class MessengerViewModel(
 
     private val _topicsCanCreate = MutableStateFlow(false)
     val topicsCanCreate: StateFlow<Boolean> = _topicsCanCreate.asStateFlow()
+
+    /** Новые сообщения из всех тем группы: показываются общей лентой на её экране. */
+    private val _topicUnread = MutableStateFlow<List<MessengerTopicUnread>>(emptyList())
+    val topicUnread: StateFlow<List<MessengerTopicUnread>> = _topicUnread.asStateFlow()
 
     private val _challenges = MutableStateFlow<List<MessengerChallenge>>(emptyList())
     val challenges: StateFlow<List<MessengerChallenge>> = _challenges.asStateFlow()
@@ -124,6 +129,11 @@ class MessengerViewModel(
                 _challenges.value = repository.refreshChallenges()
             }
         }
+    }
+
+    /** Закрепить или открепить чат: закреплённые держатся вверху списка. */
+    fun setChatPinned(chatId: String, pinned: Boolean) {
+        repository.setChatPinned(chatId, pinned)
     }
 
     fun startHubPolling() {
@@ -327,6 +337,11 @@ class MessengerViewModel(
             _topics.value = topics.items
             _topicsCanCreate.value = topics.canCreate
         }
+    }
+
+    /** Собирает непрочитанные сообщения всех тем группы для её основного экрана. */
+    fun loadTopicUnread(groupId: String) {
+        viewModelScope.launch { _topicUnread.value = repository.unreadByTopic(groupId) }
     }
 
     fun createTopic(groupId: String, name: String) {

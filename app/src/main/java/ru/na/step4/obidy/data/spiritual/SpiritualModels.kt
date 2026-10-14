@@ -5,6 +5,7 @@ enum class SpiritualSource {
     JOURNAL,
     PSYCH,
     SUPPORT,
+    INVENTORY,
     AI,
     MISS
 }

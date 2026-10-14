@@ -34,11 +34,19 @@ class MessengerPrefs(context: Context) {
             prefs.edit().putBoolean(KEY_ANON_CHAT, value).apply()
         }
 
+    /** Закреплённые чаты: их список держится вверху. Хранится по устройствам. */
+    var pinnedChats: Set<String>
+        get() = prefs.getStringSet(KEY_PINNED, emptySet()).orEmpty()
+        set(value) {
+            prefs.edit().putStringSet(KEY_PINNED, value).apply()
+        }
+
     companion object {
         private const val PREFS = "messenger_prefs"
         private const val KEY_ID = "messenger_id"
         private const val KEY_NAME = "display_name"
         private const val KEY_ENABLED = "enabled_cached"
         private const val KEY_ANON_CHAT = "anon_chat_enabled"
+        private const val KEY_PINNED = "pinned_chats"
     }
 }

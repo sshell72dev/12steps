@@ -1,4 +1,4 @@
-package ru.na.step4.obidy.data.i18n
+                                            package ru.na.step4.obidy.data.i18n
 
 /** Stable UI string keys registered from *Ru catalogs. Content keys added at runtime. */
 object UiSourceKeys {
@@ -209,6 +209,8 @@ object UiSourceKeys {
         "ui.analysisIntro",
         "ui.analysisHistory",
         "ui.analysisSettings",
+        "ui.analysisChallenge",
+        "ui.analysisChallengeHint",
         "ui.analysisStart",
         "ui.analysisAnswerCta",
         "ui.analysisReroll",
@@ -430,6 +432,8 @@ object UiSourceKeys {
         "journal.fieldsSplit",
         "journal.fieldsSingle",
         "journal.settingsGeneral",
+        "journal.settingsChallengeSteps",
+        "journal.settingsChallengeStepsHint",
         "journal.settingsEntries",
         "journal.settingsAnalysis",
         "journal.settingsData",
@@ -861,12 +865,14 @@ object UiSourceKeys {
         "spiritual.srcAnalysis",
         "spiritual.srcJournal",
         "spiritual.srcPsych",
+        "spiritual.srcInventory",
         "spiritual.srcSupport",
         "spiritual.srcAi",
         "spiritual.srcMiss",
         "spiritual.reasonAnalysis",
         "spiritual.reasonJournal",
         "spiritual.reasonPsych",
+        "spiritual.reasonInventory",
         "spiritual.reasonSupport",
         "spiritual.reasonMiss",
         "spiritual.reasonFictitious",
@@ -953,6 +959,13 @@ object UiSourceKeys {
         "messenger.topicsTitle",
         "messenger.topicsEmpty",
         "messenger.topicsScreenHint",
+        "messenger.topicUnreadTitle",
+        "messenger.topicUnreadHint",
+        "messenger.topicUnreadOpen",
+        "messenger.chatPin",
+        "messenger.chatUnpin",
+        "messenger.chatPinned",
+        "messenger.chatPinHint",
         "messenger.topicGeneral",
         "messenger.topicCreate",
         "messenger.topicRename",

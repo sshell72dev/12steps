@@ -167,7 +167,9 @@ class PsychViewModel(
                 _ui.value = PsychUi(page = PsychPage.Onboarding())
             }
         }
-        viewModelScope.launch { maybeIdle() }
+        viewModelScope.launch {
+            if (!restorePlace()) maybeIdle()
+        }
         viewModelScope.launch { refreshPremiumFromServer(silent = true) }
         viewModelScope.launch { applyServerQuestionLimits() }
     }
@@ -186,7 +188,13 @@ class PsychViewModel(
 
     fun streakLabel(): String? = streak?.label()
 
-    fun goHub() = setPage(PsychPage.Hub)
+    fun goHub() {
+        forgetPlace()
+        setPage(PsychPage.Hub)
+    }
+
+    /** Возврат назад из рабочего экрана: место запоминаем, чтобы вернуться туда же. */
+    fun goHubKeepingPlace() = setPage(PsychPage.Hub)
 
     fun goRecord() = setPage(PsychPage.Record)
 
@@ -456,6 +464,7 @@ class PsychViewModel(
                 session.copy(postponed = true, status = PsychSession.STATUS_ACTIVE)
             )
             settings.activeSessionUid = ""
+            forgetPlace()
             setPage(PsychPage.Hub)
         }
     }
@@ -1379,7 +1388,155 @@ class PsychViewModel(
     }
 
     private fun setPage(page: PsychPage) {
+        rememberPlace(page)
         _ui.value = _ui.value.copy(page = page, error = null)
+    }
+
+    /**
+     * Запоминает экран, с которого человек выходит из раздела. Без этого повторный
+     * вход всегда упирается в главное меню, и разбор ситуации приходится искать заново.
+     */
+    private fun rememberPlace(page: PsychPage) {
+        when (page) {
+            is PsychPage.TopicPick -> {
+                settings.lastSessionUid = ""
+                settings.lastScreen = "$SCREEN_TOPIC:${page.situationId}"
+                settings.pendingQuestion = ""
+            }
+            is PsychPage.Dialogue -> {
+                settings.lastSessionUid = page.session.sessionUid
+                settings.lastScreen = SCREEN_DIALOGUE
+                settings.pendingQuestion = page.question
+            }
+            is PsychPage.Work -> {
+                settings.lastSessionUid = page.session.sessionUid
+                settings.lastScreen = SCREEN_WORK
+                settings.pendingQuestion = ""
+            }
+            is PsychPage.Result -> {
+                settings.lastSessionUid = page.session.sessionUid
+                settings.lastScreen = "$SCREEN_RESULT:${page.kind}"
+                settings.pendingQuestion = ""
+            }
+            is PsychPage.Review -> {
+                settings.lastSessionUid = page.session.sessionUid
+                settings.lastScreen = SCREEN_REVIEW
+                settings.pendingQuestion = ""
+            }
+            is PsychPage.Done -> {
+                settings.lastSessionUid = page.session.sessionUid
+                settings.lastScreen = SCREEN_DONE
+                settings.pendingQuestion = ""
+            }
+            else -> return
+        }
+    }
+
+    private fun forgetPlace() {
+        settings.lastSessionUid = ""
+        settings.lastScreen = ""
+        settings.pendingQuestion = ""
+    }
+
+    /**
+     * Возвращает человека в ту же точку разбора, из которой он вышел: диалог,
+     * работу над вопросами, готовый разбор или завершённую ситуацию.
+     */
+    private suspend fun restorePlace(): Boolean {
+        if (!settings.onboardingDone) return false
+        val screen = settings.lastScreen
+        if (screen.isBlank()) return false
+        if (screen.startsWith(SCREEN_TOPIC)) {
+            val id = screen.removePrefix("$SCREEN_TOPIC:").toLongOrNull() ?: return false
+            if (repository.getSituation(id) == null) return false
+            setPage(PsychPage.TopicPick(id, snippets = topicSnippets()))
+            return true
+        }
+        val uid = settings.lastSessionUid
+        if (uid.isBlank()) return false
+        val session = repository.sessionByUid(uid) ?: return false
+        if (session.status == PsychSession.STATUS_DONE && !completedRecently(session)) return false
+        val situation = repository.getSituation(session.situationId) ?: return false
+        val answers = repository.qaFor(uid)
+        if (screen.startsWith(SCREEN_RESULT)) {
+            val kind = screen.removePrefix("$SCREEN_RESULT:")
+            val text = resultText(kind, session)
+            setPage(
+                if (text.isBlank()) PsychPage.Review(situation, session, answers)
+                else resultPage(situation, session, kind, text)
+            )
+            return true
+        }
+        val active = session.status != PsychSession.STATUS_DONE
+        if (screen == SCREEN_WORK && active) {
+            val questions = PsychLogic.decodeQuestions(session.questionsJson)
+            setPage(
+                if (questions.isEmpty()) PsychPage.Review(situation, session, answers)
+                else PsychPage.Work(situation, session, questions, session.currentIndex, answers)
+            )
+            return true
+        }
+        if (screen == SCREEN_DIALOGUE && active && session.sequentialWork == PsychSession.SEQ_LIVE) {
+            val pending = settings.pendingQuestion
+            setPage(PsychPage.Dialogue(situation, session.copy(postponed = false), pending, answers))
+            if (pending.isBlank()) askDialogueQuestion(situation, session, answers)
+            return true
+        }
+        if (!active || screen == SCREEN_DONE) {
+            setPage(PsychPage.Done(situation, session, answers))
+            return true
+        }
+        setPage(PsychPage.Review(situation, session, answers))
+        return true
+    }
+
+    private fun resultText(kind: String, session: PsychSession): String = when (kind) {
+        "analyze" -> session.analyzeText
+        "recommend" -> session.recommendText
+        "assistant" -> session.assistantText
+        else -> ""
+    }
+
+    private fun resultSpeakable(kind: String, session: PsychSession): String = when (kind) {
+        "analyze" -> session.analyzeSpeakable
+        "recommend" -> session.recommendSpeakable
+        else -> session.assistantSpeakable
+    }
+
+    /** Завершённую ситуацию возвращаем только свежую: разбор ещё «в руках». */
+    private fun completedRecently(session: PsychSession): Boolean {
+        val doneAt = session.completedAt ?: return false
+        return System.currentTimeMillis() - doneAt < PLACE_TTL_MS
+    }
+
+    private fun resultPage(
+        situation: PsychSituation,
+        session: PsychSession,
+        kind: String,
+        text: String
+    ): PsychPage.Result {
+        val speakable = resultSpeakable(kind, session)
+        var shown = text
+        var teaser = false
+        var key = ""
+        if (!settings.isPro && kind != "assistant") {
+            val split = PsychLogic.splitTeaser(text)
+            if (split.second != null) {
+                teaser = true
+                shown = split.first
+                key = PsychTeaserStore.put(text, speakable)
+                settings.pendingReadMoreKey = key
+            }
+        }
+        return PsychPage.Result(
+            situation = situation,
+            session = session,
+            kind = kind,
+            text = shown,
+            speakable = speakable,
+            teaser = teaser,
+            teaserKey = key
+        )
     }
 
     private fun bump() {
@@ -1406,6 +1563,14 @@ class PsychViewModel(
     }
 
     companion object {
+        private const val SCREEN_DIALOGUE = "dialogue"
+        private const val SCREEN_TOPIC = "topic"
+        private const val SCREEN_WORK = "work"
+        private const val SCREEN_REVIEW = "review"
+        private const val SCREEN_DONE = "done"
+        private const val SCREEN_RESULT = "result"
+        private const val PLACE_TTL_MS = 24L * 60L * 60L * 1000L
+
         private val COUNTED = setOf(
             "analyze", "recommend", "questions", "questions_retry",
             "questions_next", "dialogue_question", "assistant"
