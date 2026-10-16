@@ -35,6 +35,7 @@ import ru.na.step4.obidy.data.journal.NodeType
 import ru.na.step4.obidy.data.journal.TreeCatalog
 import ru.na.step4.obidy.data.journal.TreeNode
 import ru.na.step4.obidy.data.journal.TreePath
+import ru.na.step4.obidy.data.profile.PersonalityAiClient
 import ru.na.step4.obidy.data.profile.QuestionnaireQuestion
 import ru.na.step4.obidy.data.spiritual.SpiritualSource
 import ru.na.step4.obidy.Step4App
@@ -747,15 +748,13 @@ class JournalViewModel(
                         entries.joinToString("-") { it.id }.hashCode()
                     val parsed = JournalPrompts.parsePersonality(result.text)
                     val visible = (app as Step4App).spiritualRating.consumeAiText(eventId, parsed.first)
-                    if (prefs.profile.personalityCollectEnabled && !parsed.second.isNullOrBlank()) {
-                        applyPortrait(parsed.second.orEmpty())
-                    }
+                    refreshPersonality(path, entries, visible)
                     if (entryId != null) {
                         entries.firstOrNull()?.let {
                             (app as Step4App).journalAnalyzeCache.save(it, visible)
                         }
                     }
-                    AiUi.Ready(visible, parsed.second, fromCache = false, prompt = result.prompt)
+                    AiUi.Ready(visible, null, fromCache = false, prompt = result.prompt)
                 }
                 is JournalAiClient.Result.Err -> AiUi.Error(result.message)
             }
@@ -780,6 +779,30 @@ class JournalViewModel(
             } else {
                 null
             }
+
+    /** Портрет «Моя личность» обновляется отдельным запросом — после разбора записи в дневнике. */
+    private suspend fun refreshPersonality(path: TreePath, entries: List<JournalEntry>, review: String) {
+        if (!prefs.profile.personalityEnabled) return
+        withContext(Dispatchers.IO) {
+            PersonalityAiClient.updateAndSave(
+                profile = prefs.profile,
+                material = buildString {
+                    appendLine("ВОПРОС ДНЕВНИКА: ${path.line()}")
+                    appendLine()
+                    appendLine("ЗАПИСИ ПОЛЬЗОВАТЕЛЯ:")
+                    entries.sortedBy { it.createdAt }.forEach { entry ->
+                        appendLine(entry.text)
+                        appendLine()
+                    }
+                    appendLine("РАЗБОР АССИСТЕНТА:")
+                    appendLine(review)
+                },
+                source = PersonalityAiClient.Source.JOURNAL,
+                premium = premiumActive(),
+                admin = prefs.isAdmin
+            )
+        }
+    }
 
     fun applyPortrait(text: String) {
         prefs.personality = text.trim()

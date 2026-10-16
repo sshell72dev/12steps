@@ -81,7 +81,8 @@ class MessengerRepository(
 
     /**
      * Список чатов: закреплённые сверху, затем служебные «Оповещения», остальные —
-     * по времени последнего сообщения от давних к свежим, поэтому свежие чаты внизу.
+     * по времени последнего сообщения от свежих к давним, поэтому свежие чаты вверху.
+     * Чаты, где переписки ещё не было, уходят в конец списка.
      */
     val chats: Flow<List<MessengerChat>> = combine(
         dao.observeChats(),
@@ -94,7 +95,7 @@ class MessengerRepository(
             .sortedWith(
                 compareByDescending<MessengerChat> { it.isPinned }
                     .thenByDescending { it.id == AppAlerts.CHAT_ID }
-                    .thenBy { it.lastAt }
+                    .thenByDescending { it.lastAt }
             )
     }
 

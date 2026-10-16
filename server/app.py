@@ -31,6 +31,7 @@ import translate
 import yookassa
 from plugins import voice as voice_plugin
 from plugins import messenger as messenger_plugin
+from plugins import backups as backups_plugin
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -75,6 +76,7 @@ def _api_ok() -> bool:
 
 voice_plugin.register(app, login_required, _api_ok)
 messenger_plugin.register(app, login_required, _api_ok)
+backups_plugin.register(app, login_required, _api_ok)
 
 
 def _as_bool(value) -> bool:
@@ -650,15 +652,11 @@ def api_analyze():
         questionnaire=str(payload.get("questionnaire") or "").strip(),
         personality=str(payload.get("personality") or "").strip(),
         name=str(payload.get("name") or "").strip(),
-        collect_personality=bool(payload.get("collect_personality")),
         language=language,
         review_length=review_length,
     )
     system = roles.system_for_chat("analysis.review", "", psych.anketa_block(payload)) or SYSTEM_PROMPT
-    collect = bool(payload.get("collect_personality"))
     max_tokens = {"short": 4000, "standard": 6000, "long": 8192}[review_length]
-    if collect:
-        max_tokens += 1300
     try:
         text = _deepseek_chat(
             api_key,
@@ -724,9 +722,7 @@ def api_psych():
     }
     max_tokens = 800 if kind in {"reminder_outreach", "tts_understanding"} else 6000
     if kind in {"analyze", "recommend", "assistant"}:
-        profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
-        collect = bool(profile.get("my_personality_collect_enabled"))
-        max_tokens = 8192 + (1300 if collect else 0)
+        max_tokens = 8192
     if json_mode:
         max_tokens = 4000
     timeout = 60 if kind in {"reminder_outreach", "tts_understanding"} else 90
@@ -782,6 +778,52 @@ def api_psych():
     if payload.get("admin"):
         parsed["prompt"] = f"SYSTEM:\n{system}\n\nUSER:\n{user_prompt}"
     return jsonify(parsed)
+
+
+@app.post("/api/v1/personality")
+def api_personality():
+    """Отдельный запрос: обновление портрета «Моя личность» после проработки."""
+    if not _api_ok():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
+    if not (bool(payload.get("collect")) or bool(profile.get("my_personality_collect_enabled"))):
+        return jsonify({"error": "disabled"}), 409
+
+    material = str(payload.get("material") or "").strip()
+    if not material:
+        return jsonify({"error": "material_required"}), 400
+
+    api_key = db.get_setting("deepseek_api_key", "")
+    model = _model_for_user(_payload_premium(payload))
+    if not api_key:
+        return jsonify({"error": "not_configured"}), 503
+
+    user_prompt = psych.build_personality_prompt(payload)
+    system = roles.system_for_personality(psych.anketa_block(payload))
+    try:
+        text = _deepseek_chat(
+            api_key,
+            model,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=2000,
+            timeout=120,
+            thinking=False,
+        )
+    except Exception as exc:
+        return jsonify({"error": "upstream", "detail": str(exc)}), 502
+
+    portrait = psych.parse_personality_output(text)
+    if not portrait:
+        return jsonify({"error": "empty"}), 502
+    result = {"personality": portrait, "model": model}
+    if payload.get("admin"):
+        result["prompt"] = f"SYSTEM:\n{system}\n\nUSER:\n{user_prompt}"
+    return jsonify(result)
 
 
 @app.post("/api/v1/translate")
@@ -1228,6 +1270,8 @@ def support_admin():
         elif action == "complete":
             ticket = db.complete_support_ticket(ticket_id)
             if ticket:
+                # Служебная запись о завершении тоже видна в подгруппе обращения.
+                messenger_plugin.sync_support_ticket(ticket_id)
                 notice = "Задача завершена. Статус: Обработано."
                 return redirect(url_for("support_admin", id=ticket_id, saved=1))
             warn = "Не удалось завершить задачу."
@@ -1235,6 +1279,8 @@ def support_admin():
             status = (request.form.get("status") or "").strip()
             ticket = db.set_support_status(ticket_id, status)
             if ticket:
+                # Смена статуса дублируется в переписку мессенджера.
+                messenger_plugin.sync_support_ticket(ticket_id)
                 notice = f"Статус: {ticket.get('status_label') or status}. Пользователь уведомлён."
                 return redirect(url_for("support_admin", id=ticket_id, saved=1))
             warn = "Не удалось изменить статус."
@@ -1247,6 +1293,8 @@ def support_admin():
                 ticket = db.add_support_message(ticket_id, "admin", body)
                 if ticket and complete:
                     ticket = db.complete_support_ticket(ticket_id) or ticket
+                # В подгруппу попадают и ответ, и служебная запись о статусе.
+                messenger_plugin.sync_support_ticket(ticket_id)
                 if ticket:
                     notice = "Ответ отправлен."
                     return redirect(url_for("support_admin", id=ticket_id, saved=1))
@@ -1329,6 +1377,11 @@ def api_support_create():
         )
     except ValueError:
         return jsonify({"error": "required"}), 400
+    # Обращение превращается в подгруппу «Идеи и Ошибки»: переписка продолжается в мессенджере.
+    messenger_plugin.attach_support_ticket(
+        ticket,
+        request.headers.get("X-Messenger-Id", "") or str(payload.get("messenger_id") or ""),
+    )
     return jsonify({"ok": True, "ticket": ticket})
 
 
@@ -1421,6 +1474,8 @@ def api_support_reply(ticket_id: int):
             ticket = db.add_support_message(ticket_id, "user", body)
     except ValueError:
         return jsonify({"error": "required"}), 400
+    # И вопрос пользователя, и ответ админа, и служебные записи идут в подгруппу обращения.
+    messenger_plugin.sync_support_ticket(ticket_id)
     if not ticket:
         return jsonify({"error": "not_found"}), 404
     return jsonify({"ok": True, "ticket": ticket})
@@ -1468,6 +1523,8 @@ def api_support_complete(ticket_id: int):
     ticket = db.complete_support_ticket(ticket_id)
     if not ticket:
         return jsonify({"error": "not_found"}), 404
+    # Завершение обращения тоже видно в подгруппе мессенджера.
+    messenger_plugin.sync_support_ticket(ticket_id)
     return jsonify({"ok": True, "ticket": ticket})
 
 
@@ -1485,6 +1542,8 @@ def api_support_status(ticket_id: int):
         return jsonify({"error": "required"}), 400
     if not ticket:
         return jsonify({"error": "not_found"}), 404
+    # Смена статуса дублируется в переписку обращения.
+    messenger_plugin.sync_support_ticket(ticket_id)
     return jsonify({"ok": True, "ticket": ticket})
 
 
@@ -1555,7 +1614,6 @@ def _build_self_analysis_prompt(
     questionnaire: str = "",
     personality: str = "",
     name: str = "",
-    collect_personality: bool = False,
     language: str = "ru",
     review_length: str = "standard",
 ) -> str:
@@ -1720,25 +1778,9 @@ def _build_self_analysis_prompt(
         f"{volume}\n\n"
         f"{h['format']}\n\n"
     )
-    if collect_personality:
-        if is_ru:
-            prompt += (
-                "После основного текста и ОБЯЗАТЕЛЬНО ПЕРЕД блоком SPIRITUAL_DELTA выведи блок "
-                "«Моя личность» строго между маркерами ---МОЯ_ЛИЧНОСТЬ--- и ---КОНЕЦ_МОЯ_ЛИЧНОСТЬ---.\n"
-                "Внутри — полный обновлённый портрет: черты, ценности, реакции, ресурсы и зоны роста. "
-                "Сохрани существенное из текущего портрета выше, если он не пустой, и дополни новым из этого самоанализа.\n"
-                "Маркеры обязательны. В блоке только портрет, без оценки и рекомендаций.\n\n"
-            )
-        else:
-            prompt += (
-                "After the main text and BEFORE the SPIRITUAL_DELTA block, output a "
-                "«My personality» block strictly between markers ---МОЯ_ЛИЧНОСТЬ--- and ---КОНЕЦ_МОЯ_ЛИЧНОСТЬ---.\n"
-                "Inside — a full updated portrait. Keep what still fits from the portrait above and add new insights.\n"
-                "Markers are required. Portrait only, no scoring or recommendations.\n\n"
-            )
     prompt += (
-        "ОБЯЗАТЕЛЬНО after the personality block (if any), otherwise after the whole analysis, "
-        "output one SPIRITUAL_DELTA block in this exact format — last block of the answer:\n"
+        "ОБЯЗАТЕЛЬНО после всего текста анализа выведи один блок SPIRITUAL_DELTA "
+        "в этом точном формате — последний блок ответа:\n"
         "### SPIRITUAL_DELTA ###\n"
         "score: <integer from -5 to 10>\n"
         "quality: <high|ok|low|fictitious>\n"

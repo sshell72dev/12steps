@@ -453,6 +453,45 @@ def build_prompt(kind: str, payload: dict[str, Any]) -> str:
     raise ValueError(f"unknown kind: {kind}")
 
 
+PERSONALITY_SOURCE_LABELS = {
+    "psych": "разбор ситуации с электронным психологом",
+    "analysis": "самоанализ",
+    "journal": "работа в дневнике 12 шагов",
+    "inventory": "проработка обиды (4 шаг)",
+}
+
+
+def build_personality_prompt(payload: dict[str, Any]) -> str:
+    """Промт отдельного запроса на портрет «Моя личность».
+
+    Проработка приходит готовым текстом в поле `material`: модель не разбирает
+    ситуацию заново, а только дополняет портрет тем, что в ней проявилось.
+    """
+    profile = _as_dict(payload.get("profile"))
+    current = _str(payload.get("personality")) or _str(profile.get("my_personality"))
+    material = _str(payload.get("material"))
+    label = PERSONALITY_SOURCE_LABELS.get(_str(payload.get("source")), "проработка")
+    lines = [
+        render_language(_str(payload.get("language")) or _str(profile.get("language_code")) or "ru"),
+        anketa_block(payload),
+        "",
+        "ТЕКУЩИЙ ПОРТРЕТ «МОЯ ЛИЧНОСТЬ»:",
+        current or "портрет пока не сформирован",
+        "",
+        f"СВЕЖАЯ ПРОРАБОТКА ({label}):",
+        material or "текст проработки не передан",
+        "",
+        "Верни обновлённый портрет по правилам выше: только текст портрета.",
+    ]
+    return "\n".join(lines).strip()
+
+
+def parse_personality_output(text: str) -> str:
+    """Портрет из ответа модели — без служебных маркеров, если она их добавила."""
+    cleaned, block = extract_personality(text or "")
+    return (block or cleaned).strip()
+
+
 def extract_personality(text: str) -> tuple[str, str | None]:
     match = PERSONALITY_BLOCK_RE.search(text or "")
     if not match:
