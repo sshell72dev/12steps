@@ -78,9 +78,9 @@ import ru.na.step4.obidy.ui.theme.Moss
 import ru.na.step4.obidy.ui.theme.Sand
 
 private const val MIN_PASSWORD_LENGTH = 4
-private val OnPhoto = Color(0xFFF7F1E4)
+internal val OnPhoto = Color(0xFFF7F1E4)
 private val PhotoScrim = Color(0xCC1B2E24)
-private val Glass = Color(0xB3000000)
+internal val Glass = Color(0xB3000000)
 
 @Composable
 fun AppLockGate(
@@ -449,7 +449,7 @@ private fun rememberLockMood(): LockMoodStore {
 }
 
 @Composable
-private fun LockPhoto(asset: String) {
+internal fun LockPhoto(asset: String) {
     val context = LocalContext.current
     val bitmap = remember(asset) {
         runCatching {

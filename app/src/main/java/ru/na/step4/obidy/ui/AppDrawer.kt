@@ -133,7 +133,7 @@ fun AppMenuDrawer(
                     }
                 }
             },
-            content = content
+            content = { CleanStartHost(content) }
         )
     }
 }
