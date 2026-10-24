@@ -77,6 +77,7 @@ import ru.na.step4.obidy.data.support.SupportScreens
 import ru.na.step4.obidy.data.support.SupportTicket
 import ru.na.step4.obidy.data.support.SupportTopic
 import ru.na.step4.obidy.data.support.SupportTopicStore
+import ru.na.step4.obidy.ui.LocalFeedbackRequest
 import ru.na.step4.obidy.ui.components.isImeVisible
 import ru.na.step4.obidy.ui.theme.Amber
 import ru.na.step4.obidy.ui.theme.Forest
@@ -93,6 +94,12 @@ fun FeedbackHost(
     val unread by repository.unread.collectAsStateWithLifecycle()
     var openKind by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val feedbackRequest = LocalFeedbackRequest.current
+    LaunchedEffect(feedbackRequest.value) {
+        val wanted = feedbackRequest.value ?: return@LaunchedEffect
+        feedbackRequest.value = null
+        openKind = wanted
+    }
     LaunchedEffect(Unit) {
         while (isActive) {
             repository.refreshUnread()

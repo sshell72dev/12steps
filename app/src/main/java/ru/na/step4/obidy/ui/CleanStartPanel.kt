@@ -3,13 +3,15 @@ package ru.na.step4.obidy.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,9 +28,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -57,19 +61,26 @@ import ru.na.step4.obidy.Step4App
 import ru.na.step4.obidy.data.lock.CleanTimeCalc
 import ru.na.step4.obidy.data.lock.LockMoodStore
 import ru.na.step4.obidy.data.profile.ProfileQuestionnaire
+import ru.na.step4.obidy.data.support.SupportKind
+import ru.na.step4.obidy.data.support.SupportRu
 import ru.na.step4.obidy.ui.theme.Amber
+import ru.na.step4.obidy.ui.theme.Forest
 import kotlin.math.roundToInt
 
 private val EdgeSwipeWidth = 36.dp
 private val SwipeThreshold = 48.dp
-private const val PanelWidthFraction = 0.9f
+private const val PanelWidthFraction = 1f
 
 /**
- * Стартовая страница справа: срок чистого времени и мотивационный текст без пароля.
- * Выезжает смахиванием от правого края, закрывается тапом по фону, крестиком или системным «назад».
+ * Стартовая страница справа во весь экран: срок чистого времени и мотивационный текст без пароля.
+ * Выезжает смахиванием от правого края, закрывается крестиком или системным «назад».
+ * Свайп распознаётся без перекрывающей полосы, поэтому кнопки «Ошибки» и «Идеи» остаются доступны.
  */
 @Composable
-fun CleanStartHost(content: @Composable () -> Unit) {
+fun CleanStartHost(
+    onFeedback: (String) -> Unit = {},
+    content: @Composable () -> Unit
+) {
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
@@ -81,7 +92,8 @@ fun CleanStartHost(content: @Composable () -> Unit) {
         CleanStartOverlay(
             progress = progress,
             onOpen = openPanel,
-            onClose = closePanel
+            onClose = closePanel,
+            onFeedback = onFeedback
         )
     }
 }
@@ -90,32 +102,44 @@ fun CleanStartHost(content: @Composable () -> Unit) {
 private fun CleanStartOverlay(
     progress: Animatable<Float, *>,
     onOpen: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onFeedback: (String) -> Unit
 ) {
     val density = LocalDensity.current
+    val swipeThreshold = with(density) { SwipeThreshold.toPx() }
+    val edgeWidth = with(density) { EdgeSwipeWidth.toPx() }
     val state = remember(progress) { progress.asState() }
     val open = state.value
-    var drag by remember { mutableStateOf(0f) }
-    val threshold = with(density) { SwipeThreshold.toPx() }
 
     BackHandler(enabled = open > 0.5f) { onClose() }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    if (state.value > 0.5f) return@awaitEachGesture
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    if (down.position.x < size.width - edgeWidth) return@awaitEachGesture
+                    var opened = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed || change.isConsumed) break
+                        val dragged = change.position.x - down.position.x
+                        if (!opened && dragged < -swipeThreshold) {
+                            opened = true
+                            onOpen()
+                        }
+                        // События забираем только когда панель действительно поехала:
+                        // обычные нажатия по кнопкам у правого края ниже доходят.
+                        if (opened) change.consume()
+                    }
+                }
+            }
+    ) {
         val panelWidth = maxWidth * PanelWidthFraction
         val panelWidthPx = with(density) { panelWidth.toPx() }
-
-        if (open > 0.01f) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f * open))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onClose
-                    )
-            )
-        }
 
         CleanStartPanel(
             modifier = Modifier
@@ -124,33 +148,19 @@ private fun CleanStartOverlay(
                 .fillMaxHeight()
                 .offset { IntOffset(((1f - open) * panelWidthPx).roundToInt(), 0) },
             visible = open > 0.5f,
-            onClose = onClose
+            onClose = onClose,
+            onFeedback = onFeedback
         )
-
-        if (open < 0.5f) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .width(EdgeSwipeWidth)
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures(
-                            onDragStart = { drag = 0f },
-                            onHorizontalDrag = { _, delta -> drag += delta },
-                            onDragEnd = {
-                                if (drag < -threshold) onOpen()
-                                drag = 0f
-                            },
-                            onDragCancel = { drag = 0f }
-                        )
-                    }
-            )
-        }
     }
 }
 
 @Composable
-private fun CleanStartPanel(modifier: Modifier, visible: Boolean, onClose: () -> Unit) {
+private fun CleanStartPanel(
+    modifier: Modifier,
+    visible: Boolean,
+    onClose: () -> Unit,
+    onFeedback: (String) -> Unit
+) {
     val context = LocalContext.current
     val app = context.applicationContext as Step4App
     val profile by app.profileStore.snapshot.collectAsStateWithLifecycle()
@@ -249,6 +259,46 @@ private fun CleanStartPanel(modifier: Modifier, visible: Boolean, onClose: () ->
                     color = OnPhoto,
                     textAlign = TextAlign.Center
                 )
+            }
+            Spacer(Modifier.height(18.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        onClose()
+                        onFeedback(SupportKind.IDEA)
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, OnPhoto.copy(alpha = 0.65f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = OnPhoto)
+                ) {
+                    Text(
+                        SupportRu.ideas,
+                        style = MaterialTheme.typography.titleSmall,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Button(
+                    onClick = {
+                        onClose()
+                        onFeedback(SupportKind.BUG)
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Amber,
+                        contentColor = Forest
+                    )
+                ) {
+                    Text(
+                        SupportRu.report,
+                        style = MaterialTheme.typography.titleSmall,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
             Spacer(Modifier.height(12.dp))
             IconButton(onClick = onClose, modifier = Modifier.size(44.dp)) {

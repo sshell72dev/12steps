@@ -1,11 +1,15 @@
 package ru.na.step4.obidy.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Menu
@@ -21,6 +25,9 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -35,6 +42,14 @@ import ru.na.step4.obidy.ui.theme.Sand
 import ru.na.step4.obidy.ui.theme.SandDeep
 
 val LocalOpenDrawer = staticCompositionLocalOf<() -> Unit> { {} }
+
+/**
+ * Запрос на открытие формы обратной связи из любого места приложения:
+ * сеттер кладёт тип обращения, `FeedbackHost` забирает его и сбрасывает в null.
+ */
+val LocalFeedbackRequest = staticCompositionLocalOf<MutableState<String?>> {
+    mutableStateOf<String?>(null)
+}
 
 data class AppMenuItem(
     val route: String,
@@ -75,12 +90,16 @@ fun AppMenuDrawer(
 ) {
     val scope = rememberCoroutineScope()
     val openDrawer: () -> Unit = { scope.launch { drawerState.open() } }
+    val feedbackRequest = remember { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
     }
 
-    CompositionLocalProvider(LocalOpenDrawer provides openDrawer) {
+    CompositionLocalProvider(
+        LocalOpenDrawer provides openDrawer,
+        LocalFeedbackRequest provides feedbackRequest
+    ) {
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
@@ -88,52 +107,60 @@ fun AppMenuDrawer(
                     drawerContainerColor = Sand,
                     drawerContentColor = Forest
                 ) {
-                    Spacer(Modifier.statusBarsPadding().height(8.dp))
-                    Text(
-                        Ru.homeEyebrow,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Forest.copy(alpha = 0.65f),
-                        modifier = Modifier.padding(horizontal = 28.dp)
-                    )
-                    Text(
-                        Ru.appName,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Forest,
-                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    items.forEach { item ->
-                        NavigationDrawerItem(
-                            icon = { Icon(item.icon, contentDescription = null) },
-                            label = { Text(item.label) },
-                            badge = if (item.badge > 0) {
-                                {
-                                    Badge(containerColor = Amber, contentColor = Forest) {
-                                        Text(if (item.badge > 99) "99+" else item.badge.toString())
-                                    }
-                                }
-                            } else {
-                                null
-                            },
-                            selected = selectedRoute == item.route,
-                            onClick = {
-                                scope.launch { drawerState.close() }
-                                onOpenRoute(item.route)
-                            },
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = SandDeep,
-                                selectedIconColor = Forest,
-                                selectedTextColor = Forest,
-                                unselectedContainerColor = Sand,
-                                unselectedIconColor = Forest,
-                                unselectedTextColor = Forest
-                            )
+                    Column(
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .navigationBarsPadding()
+                    ) {
+                        Spacer(Modifier.statusBarsPadding().height(8.dp))
+                        Text(
+                            Ru.homeEyebrow,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Forest.copy(alpha = 0.65f),
+                            modifier = Modifier.padding(horizontal = 28.dp)
                         )
+                        Text(
+                            Ru.appName,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Forest,
+                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        items.forEach { item ->
+                            NavigationDrawerItem(
+                                icon = { Icon(item.icon, contentDescription = null) },
+                                label = { Text(item.label) },
+                                badge = if (item.badge > 0) {
+                                    {
+                                        Badge(containerColor = Amber, contentColor = Forest) {
+                                            Text(if (item.badge > 99) "99+" else item.badge.toString())
+                                        }
+                                    }
+                                } else {
+                                    null
+                                },
+                                selected = selectedRoute == item.route,
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onOpenRoute(item.route)
+                                },
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = SandDeep,
+                                    selectedIconColor = Forest,
+                                    selectedTextColor = Forest,
+                                    unselectedContainerColor = Sand,
+                                    unselectedIconColor = Forest,
+                                    unselectedTextColor = Forest
+                                )
+                            )
+                        }
                     }
                 }
             },
-            content = { CleanStartHost(content) }
+            content = {
+                CleanStartHost(onFeedback = { feedbackRequest.value = it }, content = content)
+            }
         )
     }
 }
