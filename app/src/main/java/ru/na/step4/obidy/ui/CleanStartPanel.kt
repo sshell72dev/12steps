@@ -107,50 +107,55 @@ private fun CleanStartOverlay(
 ) {
     val density = LocalDensity.current
     val swipeThreshold = with(density) { SwipeThreshold.toPx() }
-    val edgeWidth = with(density) { EdgeSwipeWidth.toPx() }
     val state = remember(progress) { progress.asState() }
     val open = state.value
 
     BackHandler(enabled = open > 0.5f) { onClose() }
 
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    if (state.value > 0.5f) return@awaitEachGesture
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    if (down.position.x < size.width - edgeWidth) return@awaitEachGesture
-                    var opened = false
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed || change.isConsumed) break
-                        val dragged = change.position.x - down.position.x
-                        if (!opened && dragged < -swipeThreshold) {
-                            opened = true
-                            onOpen()
-                        }
-                        // События забираем только когда панель действительно поехала:
-                        // обычные нажатия по кнопкам у правого края ниже доходят.
-                        if (opened) change.consume()
-                    }
-                }
-            }
-    ) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val panelWidth = maxWidth * PanelWidthFraction
         val panelWidthPx = with(density) { panelWidth.toPx() }
 
-        CleanStartPanel(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .width(panelWidth)
-                .fillMaxHeight()
-                .offset { IntOffset(((1f - open) * panelWidthPx).roundToInt(), 0) },
-            visible = open > 0.5f,
-            onClose = onClose,
-            onFeedback = onFeedback
-        )
+        if (open > 0f) {
+            CleanStartPanel(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(panelWidth)
+                    .fillMaxHeight()
+                    .offset { IntOffset(((1f - open) * panelWidthPx).roundToInt(), 0) },
+                visible = open > 0.5f,
+                onClose = onClose,
+                onFeedback = onFeedback
+            )
+        }
+
+        // Полоса свайпа — только у правого края и без перекрытия остального экрана.
+        // До порога события не забираются, поэтому кнопки под полосой нажимаются.
+        if (open < 0.5f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(EdgeSwipeWidth)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var opened = false
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed || change.isConsumed) break
+                                val dragged = change.position.x - down.position.x
+                                if (!opened && dragged < -swipeThreshold) {
+                                    opened = true
+                                    onOpen()
+                                }
+                                if (opened) change.consume()
+                            }
+                        }
+                    }
+            )
+        }
     }
 }
 
@@ -184,11 +189,20 @@ private fun CleanStartPanel(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 24.dp),
+                .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Прокручивается только содержимое, кнопки и крестик закреплены внизу:
+            // так панель закрывается с любого экрана.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 24.dp, bottom = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -260,11 +274,18 @@ private fun CleanStartPanel(
                     textAlign = TextAlign.Center
                 )
             }
-            Spacer(Modifier.height(18.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                 OutlinedButton(
                     onClick = {
                         onClose()
@@ -299,15 +320,16 @@ private fun CleanStartPanel(
                         textAlign = TextAlign.Center
                     )
                 }
-            }
-            Spacer(Modifier.height(12.dp))
-            IconButton(onClick = onClose, modifier = Modifier.size(44.dp)) {
-                Icon(
-                    Icons.Outlined.Close,
-                    contentDescription = null,
-                    tint = OnPhoto,
-                    modifier = Modifier.size(28.dp)
-                )
+                }
+                Spacer(Modifier.height(8.dp))
+                IconButton(onClick = onClose, modifier = Modifier.size(44.dp)) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = OnPhoto,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
     }
