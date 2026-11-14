@@ -133,6 +133,7 @@ class VoiceSpeaker(
             _paused.value = false
             _positionMs.value = _durationMs.value
             markSpeaking(false)
+            store.clearListenPoint()
         }
     }
 
@@ -140,12 +141,25 @@ class VoiceSpeaker(
     private var lastPreview: String = ""
     private var lastText: String = ""
 
+    init {
+        // Прошлый запуск мог закончиться на паузе: возвращаем место, но не звук.
+        // Блок ниже объявлений lastText/lastPreview: их инициализаторы иначе
+        // затёрли бы восстановленный текст.
+        restoreListenPoint()
+    }
+
     /** Совпадает ли текст с тем, что сейчас прослушивается: иначе кнопка начнёт его заново. */
     fun matches(text: String): Boolean = lastText.isNotBlank() && lastText == text.trim()
 
     fun speak(text: String) {
         val clean = text.trim()
         if (clean.isBlank()) return
+        // Этот текст уже стоит на паузе (в том числе восстановленной после
+        // перезапуска приложения) — продолжаем с места остановки, а не с начала.
+        if (_paused.value && lastText == clean && chunks.isNotEmpty()) {
+            resume()
+            return
+        }
         lastText = clean
         lastPreview = clean.replace('\n', ' ').take(120)
         ensureReady()
@@ -157,6 +171,7 @@ class VoiceSpeaker(
         _durationMs.value = (chunks.sumOf { chunkSeconds(it, speed) } * 1000).toLong()
         _positionMs.value = 0L
         _paused.value = false
+        persistListenPoint()
         if (!_ready.value) {
             pending = clean
             return
@@ -171,6 +186,7 @@ class VoiceSpeaker(
         silenced()
         _paused.value = true
         markSpeaking(false)
+        persistListenPoint()
     }
 
     /** Продолжение с места паузы — с начала порции, на которой остановились. */
@@ -184,6 +200,7 @@ class VoiceSpeaker(
         if (!_ready.value) return
         _paused.value = false
         playFrom(chunkIndex)
+        persistListenPoint()
     }
 
     fun pauseOrResume() {
@@ -191,6 +208,33 @@ class VoiceSpeaker(
             _speaking.value -> pause()
             _paused.value -> resume()
         }
+    }
+
+    /**
+     * Возврат к месту паузы после перезапуска приложения: текст нарезается заново,
+     * позиция восстанавливается, но воспроизведение не стартует — человек сам
+     * нажмёт «продолжить» на панели прослушивания.
+     */
+    private fun restoreListenPoint() {
+        val point = store.readListenPoint() ?: return
+        val text = point.text.trim()
+        val spoken = stripForSpeech(text)
+        if (spoken.isBlank()) return
+        val parts = speechChunks(spoken)
+        if (parts.isEmpty()) return
+        lastText = text
+        lastPreview = text.replace('\n', ' ').take(120)
+        chunks = parts
+        chunkIndex = point.chunkIndex.coerceIn(0, parts.size - 1)
+        val duration = (parts.sumOf { chunkSeconds(it, speed) } * 1000).toLong()
+        _durationMs.value = duration
+        _positionMs.value = point.positionMs.coerceIn(0L, duration)
+        _paused.value = true
+    }
+
+    private fun persistListenPoint() {
+        if (chunks.isEmpty()) return
+        store.saveListenPoint(lastText, chunkIndex, _positionMs.value)
     }
 
     /** Перемотка на [delta] минут от текущей позиции: −1 — минута назад, 1 — вперёд. */
@@ -212,6 +256,7 @@ class VoiceSpeaker(
         chunkIndex = index
         chunkStartedAt = System.currentTimeMillis()
         _positionMs.value = (secondsBefore(chunks, index, speed) * 1000).toLong()
+        persistListenPoint()
         ensureReady()
         if (!_ready.value) return
         _paused.value = false
@@ -219,6 +264,13 @@ class VoiceSpeaker(
     }
 
     fun stop() {
+        reset()
+        // Прослушивание брошено, а не поставлено на паузу: возвращаться некуда.
+        store.clearListenPoint()
+    }
+
+    /** Глушит звук и забывает текст, но сохранённую точку прослушивания не трогает. */
+    private fun reset() {
         pending = null
         silenced()
         chunks = emptyList()
@@ -234,7 +286,7 @@ class VoiceSpeaker(
     }
 
     fun release() {
-        stop()
+        reset()
         tickerJob?.cancel()
         engine?.shutdown()
         engine = null
@@ -304,9 +356,14 @@ class VoiceSpeaker(
     private fun startTicker() {
         stopTicker()
         tickerJob = ticker.launch {
+            var ticks = 0
             while (true) {
                 delay(500)
                 syncPosition()
+                // Раз в пять секунд: если систему выгрузят процесс прямо во время
+                // чтения, прослушивание продолжится с последнего записанного места.
+                ticks += 1
+                if (ticks % 10 == 0) persistListenPoint()
             }
         }
     }

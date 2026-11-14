@@ -22,10 +22,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.GroupAdd
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -85,6 +88,7 @@ fun MessengerHubScreen(
     val challenges by viewModel.challenges.collectAsStateWithLifecycle()
     val openChallenges = challenges.filterNot { it.joined }
     var pinTarget by remember { mutableStateOf<MessengerChat?>(null) }
+    var actionsOpen by remember { mutableStateOf(false) }
     DisposableEffect(Unit) {
         viewModel.startHubPolling()
         onDispose { viewModel.stopHubPolling() }
@@ -93,20 +97,53 @@ fun MessengerHubScreen(
         containerColor = Sand,
         topBar = {
             TopAppBar(
-                title = { Text(MessengerRu.title, color = Forest) },
+                title = {
+                    Text(
+                        MessengerRu.title,
+                        color = Forest,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
                 navigationIcon = { AppNavIcon(onBack = onBack) },
                 actions = {
-                    IconButton(onClick = onBook) {
-                        Icon(Icons.AutoMirrored.Outlined.MenuBook, BookRu.title, tint = Forest)
-                    }
-                    IconButton(onClick = onProfile) {
-                        Icon(Icons.Outlined.AccountCircle, MessengerRu.profileTitle, tint = Forest)
-                    }
-                    IconButton(onClick = onMyQr) {
-                        Icon(Icons.Outlined.QrCode, MessengerRu.myQr, tint = Forest)
-                    }
-                    IconButton(onClick = onNewGroup) {
-                        Icon(Icons.Outlined.GroupAdd, MessengerRu.newGroup, tint = Forest)
+                    Box {
+                        IconButton(onClick = { actionsOpen = true }) {
+                            Icon(Icons.Outlined.MoreVert, MessengerRu.moreActions, tint = Forest)
+                        }
+                        DropdownMenu(
+                            expanded = actionsOpen,
+                            onDismissRequest = { actionsOpen = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(BookRu.title) },
+                                leadingIcon = {
+                                    Icon(Icons.AutoMirrored.Outlined.MenuBook, null, tint = Forest)
+                                },
+                                onClick = { actionsOpen = false; onBook() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(MessengerRu.profileTitle) },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.AccountCircle, null, tint = Forest)
+                                },
+                                onClick = { actionsOpen = false; onProfile() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(MessengerRu.myQr) },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.QrCode, null, tint = Forest)
+                                },
+                                onClick = { actionsOpen = false; onMyQr() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(MessengerRu.newGroup) },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.GroupAdd, null, tint = Forest)
+                                },
+                                onClick = { actionsOpen = false; onNewGroup() }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Sand.copy(alpha = 0.92f))

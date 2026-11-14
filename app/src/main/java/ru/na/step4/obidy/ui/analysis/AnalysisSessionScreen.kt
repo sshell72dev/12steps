@@ -765,7 +765,9 @@ internal fun QuestionBody(
         draft = initialDraft
         focus.clearFocus(force = true)
         keyboard?.hide()
-        voicePlugin?.stopSpeaking()
+        // Прослушивание этого же текста не бросаем: пауза, поставленная перед
+        // уходом из приложения, должна дожить до возврата на тот же вопрос.
+        voicePlugin?.takeIf { !it.speaker.matches(screen.question) }?.stopSpeaking()
     }
 
     fun send() {

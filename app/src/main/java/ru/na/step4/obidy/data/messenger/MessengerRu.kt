@@ -22,6 +22,7 @@ object MessengerRu {
     val myQr: String get() = I18n.t("messenger.myQr", "Мой QR")
     val scanQr: String get() = I18n.t("messenger.scanQr", "Сканировать")
     val newGroup: String get() = I18n.t("messenger.newGroup", "Новая группа")
+    val moreActions: String get() = I18n.t("messenger.moreActions", "Ещё")
     val myQrTitle: String get() = I18n.t("messenger.myQrTitle", "Ваш код")
     val myQrHint: String get() = I18n.t("messenger.myQrHint", "Пусть друг наведёт камеру в приложении. Код можно обновить.")
     val rotateQr: String get() = I18n.t("messenger.rotateQr", "Новый код")

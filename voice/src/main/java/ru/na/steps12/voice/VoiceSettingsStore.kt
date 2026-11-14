@@ -57,6 +57,45 @@ class VoiceSettingsStore(context: Context) {
         )
     }
 
+    /**
+     * Место, на котором остановилось прослушивание. Лежит в prefs, потому что
+     * система может выгрузить процесс, пока панель стоит на паузе: движок TTS
+     * тогда создаётся заново, и без этой записи текст пришлось бы начинать сначала.
+     */
+    fun readListenPoint(): ListenPoint? {
+        val text = prefs.getString(KEY_LISTEN_TEXT, "").orEmpty()
+        val savedAt = prefs.getLong(KEY_LISTEN_AT, 0L)
+        if (text.isBlank() || savedAt <= 0L) return null
+        if (System.currentTimeMillis() - savedAt > LISTEN_TTL_MS) {
+            clearListenPoint()
+            return null
+        }
+        return ListenPoint(
+            text = text,
+            chunkIndex = prefs.getInt(KEY_LISTEN_CHUNK, 0),
+            positionMs = prefs.getLong(KEY_LISTEN_POS, 0L)
+        )
+    }
+
+    fun saveListenPoint(text: String, chunkIndex: Int, positionMs: Long) {
+        if (text.isBlank()) return
+        prefs.edit()
+            .putString(KEY_LISTEN_TEXT, text)
+            .putInt(KEY_LISTEN_CHUNK, chunkIndex)
+            .putLong(KEY_LISTEN_POS, positionMs)
+            .putLong(KEY_LISTEN_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    fun clearListenPoint() {
+        prefs.edit()
+            .remove(KEY_LISTEN_TEXT)
+            .remove(KEY_LISTEN_CHUNK)
+            .remove(KEY_LISTEN_POS)
+            .remove(KEY_LISTEN_AT)
+            .apply()
+    }
+
     private fun read(): VoiceConfig = VoiceConfig(
         publicKey = prefs.getString(KEY_PUBLIC, "").orEmpty(),
         assistantId = prefs.getString(KEY_ASSISTANT, "").orEmpty(),
@@ -78,5 +117,19 @@ class VoiceSettingsStore(context: Context) {
         private const val KEY_VOICE = "voice_id"
         private const val KEY_SPEED = "speed"
         private const val KEY_OVERRIDE = "user_override"
+        private const val KEY_LISTEN_TEXT = "listen_text"
+        private const val KEY_LISTEN_CHUNK = "listen_chunk"
+        private const val KEY_LISTEN_POS = "listen_position"
+        private const val KEY_LISTEN_AT = "listen_saved_at"
+
+        /** Дольше суток точка прослушивания неактуальна — не воскрешаем панель. */
+        private const val LISTEN_TTL_MS = 24 * 60 * 60 * 1000L
     }
 }
+
+/** Сохранённое место прослушивания: текст, порция и миллисекунды от начала. */
+data class ListenPoint(
+    val text: String,
+    val chunkIndex: Int,
+    val positionMs: Long
+)

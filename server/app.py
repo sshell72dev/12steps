@@ -29,6 +29,7 @@ import psych
 import roles
 import translate
 import yookassa
+import book
 from plugins import voice as voice_plugin
 from plugins import messenger as messenger_plugin
 from plugins import backups as backups_plugin
@@ -863,6 +864,50 @@ def api_translate():
     if not parsed:
         return jsonify({"error": "bad_json"}), 502
     return jsonify({"items": parsed, "model": model, "target_language": target})
+
+
+@app.post("/api/v1/book/fix")
+def api_book_fix():
+    if not _api_ok():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    text = book.normalize_text(payload)
+    if not text.strip():
+        return jsonify({"edits": []})
+    if len(text) > 20000:
+        return jsonify({"error": "too_long"}), 400
+
+    api_key = db.get_setting("deepseek_api_key", "")
+    if not api_key:
+        return jsonify({"error": "not_configured"}), 503
+    model = _model_for_user(_payload_premium(payload))
+
+    language = str(payload.get("language") or "ru").strip() or "ru"
+    user_prompt = book.build_user_prompt(text, language)
+    system = roles.prompt_text("book.fix") or book.SYSTEM_PROMPT
+    try:
+        raw = _deepseek_chat(
+            api_key,
+            model,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=8192,
+            timeout=180,
+            thinking=False,
+        )
+    except Exception as exc:
+        return jsonify({"error": "upstream", "detail": str(exc)}), 502
+
+    edits = book.parse_edits(raw, text)
+    if edits is None:
+        return jsonify({"error": "bad_json"}), 502
+    result = {"edits": edits, "model": model}
+    if payload.get("admin"):
+        result["prompt"] = f"SYSTEM:\n{system}\n\nUSER:\n{user_prompt}"
+    return jsonify(result)
 
 
 @app.post("/api/v1/chat")

@@ -914,6 +914,7 @@ object UiSourceKeys {
         "messenger.myQr",
         "messenger.scanQr",
         "messenger.newGroup",
+        "messenger.moreActions",
         "messenger.myQrTitle",
         "messenger.myQrHint",
         "messenger.rotateQr",

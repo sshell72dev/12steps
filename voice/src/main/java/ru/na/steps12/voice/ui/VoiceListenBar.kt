@@ -6,9 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -16,25 +14,20 @@ import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.na.steps12.voice.VoicePlugin
 import ru.na.steps12.voice.VoiceRu
 
 /**
- * Панель прослушки: пауза, перемотка на минуту и вход с выбранной минуты.
+ * Панель прослушки: пауза и перемотка на минуту вперёд-назад.
  * У TTS нет своей шкалы времени — позиция считается по нарезанному тексту.
  */
 @Composable
@@ -51,7 +44,6 @@ fun VoiceListenBar(
     // на паузу кнопкой у текста, а минутами в ней перематывать нечего.
     val longEnough = duration >= MIN_LISTEN_BAR_MS
     if ((!speaking || !longEnough) && !paused) return
-    var minute by remember { mutableStateOf("") }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -89,20 +81,6 @@ fun VoiceListenBar(
                         contentDescription = VoiceRu.stop,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = minute,
-                    onValueChange = { input -> minute = input.filter { it.isDigit() }.take(3) },
-                    label = { Text(VoiceRu.minuteFrom) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.width(150.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                TextButton(onClick = { plugin.seekSpeakingMinute(minute.toIntOrNull() ?: 1) }) {
-                    Text(VoiceRu.minuteStart)
                 }
             }
         }

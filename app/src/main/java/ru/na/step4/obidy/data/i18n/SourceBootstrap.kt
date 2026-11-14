@@ -987,6 +987,7 @@ object SourceBootstrap {
         SourceCatalog.put("messenger.myQr", "Мой QR")
         SourceCatalog.put("messenger.scanQr", "Сканировать")
         SourceCatalog.put("messenger.newGroup", "Новая группа")
+        SourceCatalog.put("messenger.moreActions", "Ещё")
         SourceCatalog.put("messenger.myQrTitle", "Ваш код")
         SourceCatalog.put("messenger.myQrHint", "Пусть друг наведёт камеру в приложении. Код можно обновить.")
         SourceCatalog.put("messenger.rotateQr", "Новый код")
